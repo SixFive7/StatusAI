@@ -1,0 +1,31 @@
+{
+  "cwd": "C:/Users/you/Downloads",
+  "session_id": "a5c44785-50ec-4ccc-b3c9-cf26bbb7bb08",
+  "transcript_path": "C:/Users/you/.claude/projects/C--Users-you-Downloads/a5c44785-50ec-4ccc-b3c9-cf26bbb7bb08.jsonl",
+  "version": "2.1.227",
+  "exceeds_200k_tokens": false,
+  "model": { "id": "claude-opus-5", "display_name": "Opus 5 (1M context)" },
+  "workspace": { "current_dir": "C:/Users/you/Downloads", "project_dir": "C:/Users/you/Downloads" },
+  "output_style": { "name": "default" },
+  "cost": {
+    "total_cost_usd": 9.32,
+    "total_duration_ms": 2640000,
+    "total_api_duration_ms": 900000,
+    "total_lines_added": 220,
+    "total_lines_removed": 0
+  },
+  "context_window": {
+    "total_input_tokens": 340000,
+    "total_output_tokens": 17715,
+    "context_window_size": 1000000,
+    "used_percentage": 34.0,
+    "remaining_percentage": 66.0,
+    "current_usage": {
+      "input_tokens": 17,
+      "output_tokens": 17715,
+      "cache_creation_input_tokens": 310784,
+      "cache_read_input_tokens": 491282
+    }
+  },
+  "effort": { "level": "max" }
+}

@@ -1,0 +1,11 @@
+# build output
+bin/
+obj/
+publish/
+Releases/
+*.pdb
+
+# local caches / scratch
+*.bin
+*.bin.tmp
+*.user
