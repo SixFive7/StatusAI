@@ -33,7 +33,7 @@ get their own config rather than the shipped one.
 | prompt line | starship, via cship — includes RAM (`memory_usage`) and GPU (`custom.gpu`, shells out to `nvidia-smi` **every render**) |
 | model line | cship (`$cship.model $cship.effort $cship.context_bar`) + our meta segment (⏱ 📝 💸 💰) |
 | two token rows | this repo |
-| 5h / 7d / scoped rows, account line | this repo, from the OAuth usage endpoint |
+| 5h / 7d / scoped rows, account line | this repo, from the OAuth usage endpoint — see [limits.md](limits.md) |
 
 ## Update cadence
 
@@ -49,6 +49,12 @@ Four clocks, stacked:
 A 60 s refresh against a 50 s cache means an idle render almost always finds the cache stale, so the
 usage endpoint is hit roughly once a minute while a session is open. The cache only earns its keep
 during bursts. Setting the cache to ~70 s, or `refreshInterval` to 45, would make it actually cache.
+
+**The cache holds the fully rendered, ANSI-coloured string — not the underlying numbers.** That
+keeps a cache hit free of all formatting work, but it means a cached entry belongs to whichever
+build wrote it. On a machine with a live session that is the trap described in
+[development.md](development.md): a freshly built binary will happily serve a render produced by
+its predecessor.
 
 ## State
 

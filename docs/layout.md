@@ -31,6 +31,31 @@ row = 2 + Σcw + 8·pad  ≤  2 + Σcw + (avail - 4 - Σcw)  =  avail - 2
 
 Current rows measure 133.
 
+## The metric rows solve for their own bar width
+
+The 5h / 7d / scoped rows use a different mechanism from the token grid: everything except the two
+projection bars is known, so `RenderRows` solves for the bar length that exactly fills the
+terminal, and recomputes it every render.
+
+```
+fixedPart = 4 + 1 + 2 + 2·rowConst + wLeft + wRight + 2·(wNow + wReset + wTo100 + wProj)
+capBar    = clamp((term - 2 - fixedPart) / 2, 10, 30)
+```
+
+`rowConst` is 25 — the glyphs and spaces in a row outside the label and the four numeric columns.
+The `4 + 1 + 2` is host padding, our indent, and the column gap; the doubling is because
+`Compose()` puts two metric rows side by side (5h with the account line, 7d with the scoped row).
+
+**The consequence is the rule worth remembering: a metric row is laid out twice per line, so any
+field added to it costs twice its width in bar budget.** Add a five-character column and the bars
+lose ten characters between them. Widths are also maxima across rows, so one long value — a
+`2d03h` reset, a three-digit projection — silently shortens every bar on the line. This is why a
+design note for these rows is not finished until it states its character cost.
+
+Column widths are computed per render as the max needed across rows, so nothing is padded wider
+than the current values require, and the label widths are kept separate for the left column and
+the right so `5h` / `7d` never inherit the width of a longer scoped label like `Fable`.
+
 ## Number format
 
 **Four significant figures, scaled unit, always exactly six characters.** `0,202k` `9,444k` `240,7k`
@@ -90,6 +115,18 @@ target lies between two columns.
 Leading each token row with `│` — single-width box-drawing — makes character column and screen
 column the same number on every row, so the left edges coincide **by construction** rather than by
 measurement. It also brackets the two token rows as one block, distinct from the metric rows below.
+
+### Vetting a new glyph
+
+`Vis()` counts every non-escape character as exactly one column, so a double-width glyph anywhere
+in a metric row breaks `Compose()`'s two-column arithmetic silently — the right-hand column shifts
+and nothing errors.
+
+Every glyph currently drawn — `│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF,
+`○` U+25CB, `✗` U+2717 — is East-Asian-Ambiguous, which renders single-width in the terminals this
+targets. **Check any candidate against that class before using it**; anything Wide or Fullwidth is
+disqualified outright, and emoji are only safe in the token grid, where `iw[]` declares two columns
+per glyph explicitly.
 
 ## Icon vocabulary
 
