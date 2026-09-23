@@ -69,6 +69,10 @@ its predecessor.
 Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json`,
 `statusline-cache.json`.
 
+With `CSHIP_OFFLINE` set — a dev-loop switch, see [development.md](development.md#offline-beside-live-sessions)
+— none of the three is touched: the rows and the euro rate come from a file in that directory, and
+the token cache and the account files move into it.
+
 ## Portability
 
 The split is sharper than expected: **the token accounting is fully portable; the surrounding code

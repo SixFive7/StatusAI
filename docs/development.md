@@ -34,6 +34,11 @@ Set-ItemProperty -Path "HKCU:\Software\cshipUsage" -Name "ts" -Value "0"
 Then run immediately — a live Claude Code window is racing you for the same mutex, and if it wins,
 you get its render instead.
 
+That is a write to state every running session shares, and the test run that follows fetches and
+pushes a sample into the shared prediction history. When what is under test is the drawing rather
+than the fetch, skip all of it: the [offline render](#offline-beside-live-sessions) never reads the
+cache, so it has no trap to invalidate.
+
 ## Trap 2 — the binary is locked while the status line runs it
 
 Windows holds the image while the process runs, and it runs every 60 seconds for ~100 ms. A
@@ -59,13 +64,66 @@ so all three stay consistent.
 
 ## Testing a render
 
-The binary reads the status-line payload on stdin. `test/probe.json` holds a captured one; a
-minimal payload is enough when only the limit rows matter:
+The binary reads the status-line payload on stdin. `test/probe.json` holds a captured mid-session
+one.
+
+### Offline, beside live sessions
+
+`CSHIP_OFFLINE=<dir>` renders from that directory instead of the machine's shared state. The limit
+rows are drawn from `<dir>/rows.json` rather than the registry cache and the API, the euro rate
+comes from the same file, and `<dir>` stands in for the user profile — the account line reads
+`<dir>/.claude.json` and `<dir>/.claude/.credentials.json`, and the token cache is written under
+`<dir>/.claude/statusline-tokens/`. `HKCU\Software\cshipUsage` is neither read nor written, the usage
+lock is never taken, and nothing is fetched, so a dev build can run beside live sessions without
+serving their cached render or touching their history.
+
+`rows.json` holds what `RenderRows` is given — the output of the fetch, the window checks and the
+slope — so the forecast is an input and only the drawing is under test:
+
+```json
+{ "fx": 0.876,
+  "rows": [ { "label": "5h",    "pct": 22, "hrs": 3.383, "hasReset": true, "rate": 10.42, "gated": false, "sev": "normal"   },
+            { "label": "7d",    "pct": 89, "hrs": 57.08, "hasReset": true, "rate": 2.4,   "gated": false, "sev": "critical" },
+            { "label": "Fable", "pct": 24, "hrs": 57.08, "hasReset": true, "rate": 0,     "gated": false, "sev": "normal"   } ] }
+```
+
+Point the payload's `transcript_path` inside `<dir>` as well. cship keeps its own cache beside the
+transcript, in `<transcript dir>/cship/`, so that keeps its writes out of `~/.claude/projects` too.
+
+```powershell
+$env:CSHIP_OFFLINE = "<dir>"
+$out = Get-Content -Raw "<payload>.json" | & "<publish>\cship-usage.exe"
+Remove-Item Env:CSHIP_OFFLINE
+```
+
+**A payload is only a fixture if it is what Claude Code really sends.** A brand-new session, before
+its first response, looks like this — the three nulls are the point, see
+[layout.md](layout.md#no-messages-yet-is-a-zero-not-a-gap):
+
+```json
+{ "session_id": "<sid>", "transcript_path": "<dir>/projects/p/<sid>.jsonl", "cwd": "C:\\Users\\you",
+  "model": { "id": "claude-opus-5-5", "display_name": "Opus 5.5 (1M context)" },
+  "cost": { "total_cost_usd": 0, "total_duration_ms": 12000, "total_api_duration_ms": 0,
+            "total_lines_added": 0, "total_lines_removed": 0 },
+  "context_window": { "total_input_tokens": 0, "total_output_tokens": 0, "context_window_size": 1000000,
+                      "current_usage": null, "used_percentage": null, "remaining_percentage": null },
+  "exceeds_200k_tokens": false, "effort": { "level": "max" }, "thinking": { "enabled": true } }
+```
+
+The transcript that path names does not exist yet, and should not: Claude Code writes it at the first
+prompt.
+
+### Against the live binary
+
+A minimal payload is enough when only the limit rows matter. It renders a `⚠` row naming the fields
+it leaves out, which is correct for that payload:
 
 ```powershell
 $stdin = '{"transcript_path":"","cost":{"total_cost_usd":0,"total_duration_ms":0,"total_lines_added":0,"total_lines_removed":0}}'
 $out = $stdin | & "<path>\cship-usage.exe"
 ```
+
+### Checking the output
 
 **Check alignment on the stripped text, not the coloured output.** SGR escapes make every visual
 length wrong:

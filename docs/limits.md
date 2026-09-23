@@ -171,9 +171,12 @@ because the page argues for the design as though it were correct.
 ## Known gaps
 
 - **No captured usage payload.** `test/probe.json` is a status-line *stdin* payload; there is no
-  fixture for the OAuth usage response, so the limit rows cannot be rendered offline or
-  regression-tested. Capturing one — with the account identifiers scrubbed — is cheap and would
-  have made the rejected design above testable without touching a live account.
+  fixture for the OAuth usage response, so the fetch, the window checks and the slope cannot be run
+  offline or regression-tested. The drawing can: `CSHIP_OFFLINE` renders the rows from a `rows.json`
+  of exactly what `RenderRows` is given, without touching the registry or the API — see
+  [development.md](development.md#offline-beside-live-sessions). Capturing a usage response — with
+  the account identifiers scrubbed — is still cheap, and would have made the rejected design above
+  testable without touching a live account.
 - **`is_active`, `group` and `extra_usage` are parsed past and discarded.**
 - **Enterprise is unhandled**, not degraded: `Fetch()` requires `kind == "session"` and
   `weekly_all`, and returns false without them, so all three rows vanish with no diagnostic.

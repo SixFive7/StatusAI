@@ -23,7 +23,7 @@ string cshipOut = RunCship(stdin);
 // alongside every value that would otherwise render as 0. Nothing is inferred from the
 // value itself: cost 0 on a fresh session is real and must keep rendering as $0,00.
 double costUsd = 0; long durMs = 0; int add = 0, del = 0;
-bool haveCost = false, haveDur = false, haveCtx = false;
+bool haveCost = false, haveDur = false, haveCtx = false, noMessagesYet = false;
 string transcriptPath = "";
 string stdinErr = "";
 try {
@@ -36,8 +36,20 @@ try {
     }
     // Read only to tell "the field is missing" from "the field says 0" — the context bar
     // itself is drawn by cship from this same payload, not here.
+    //
+    // null is neither. Until the first API response of a context — every new session, and
+    // again after /clear — Claude Code sends used_percentage and current_usage as null: its
+    // documented "no messages yet". Both come from one lookup of the last response's usage
+    // (read in the 2.1.234 and 2.1.280 bundles), so they are null together or not at all,
+    // and that pair is a source honestly reporting nothing yet, like the cost of 0 above.
+    // Any other shape — no context_window, no used_percentage, a null beside a current_usage
+    // that holds a measurement, a value that is not a number — is still a missing source.
     if (d.RootElement.TryGetProperty("context_window", out var cw) && cw.ValueKind == JsonValueKind.Object
-        && cw.TryGetProperty("used_percentage", out var up) && up.ValueKind == JsonValueKind.Number) haveCtx = true;
+        && cw.TryGetProperty("used_percentage", out var up)) {
+        if (up.ValueKind == JsonValueKind.Number) haveCtx = true;
+        else noMessagesYet = up.ValueKind == JsonValueKind.Null
+            && cw.TryGetProperty("current_usage", out var cu) && cu.ValueKind == JsonValueKind.Null;
+    }
     if (d.RootElement.TryGetProperty("transcript_path", out var tp) && tp.ValueKind == JsonValueKind.String)
         transcriptPath = tp.GetString() ?? "";
 } catch (Exception ex) {
@@ -52,10 +64,17 @@ string acctLine = BuildAccount();
 // fault, so BuildTokens is told to stay quiet about a missing file that long. 30 s is
 // not a new threshold: BuildMeta rounds the duration to whole minutes, so this is the
 // same boundary as the ⏱ 0m being displayed while the exception applies. A duration the
-// payload never carried is not youth — it is a failed source in its own right, and a
-// missing transcript stays loud beside it.
+// payload never carried is not youth — it is a failed source in its own right, and buys
+// a missing transcript nothing.
+//
+// Youth alone is too short, though. Claude Code writes the transcript at the first prompt,
+// not at session start — every transcript's creation time is its first user record, on
+// 2.1.233/234 and 2.1.275–280 alike — so a session left open for more than 30 s before
+// anyone types has no file through no fault, and went red. While the payload says no
+// messages yet, a missing file is therefore expected at any age, duration or none; once a
+// context has been measured the file should exist, and past 30 s its absence is loud again.
 bool youngSession = haveDur && durMs <= 30000;
-var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession);
+var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession || noMessagesYet);
 
 // One ⚠ row for every source that failed, so a blank figure always has a stated reason.
 // A source that reported a genuine zero contributes nothing here.
@@ -67,9 +86,12 @@ if (stdinErr.Length == 0) {
     else if (!haveCost) warns.Add("cost — no cost.total_cost_usd in the payload");
     else if (!haveDur) warns.Add("duration — no cost.total_duration_ms in the payload");
     // cship draws the context bar from this field; with the field gone it draws an empty
-    // bar at 0%, which is byte-identical to a genuinely empty context. Saying so here is
-    // the only thing this repo can do about it — the bar is not ours to change.
-    if (!haveCtx) warns.Add("context — no context_window.used_percentage; the 0% bar is not real");
+    // bar at 0%, the same glyphs as a genuinely empty context and told apart only by colour
+    // (a number takes the bar's style, anything else the default foreground). Saying so here
+    // is the only thing this repo can do about it — the bar is not ours to change. "No
+    // messages yet" is that genuinely empty context: no response has been measured, so its
+    // 0% is the honest reading, and it says nothing.
+    if (!haveCtx && !noMessagesYet) warns.Add("context — no context_window.used_percentage; the 0% bar is not real");
 }
 if (tokenErr.Length > 0) warns.Add(tokenErr);
 
@@ -117,9 +139,11 @@ using (var os = Console.OpenStandardOutput())
 using (var w = new StreamWriter(os, new UTF8Encoding(false))) w.Write(string.Join("\n", lines));
 return;
 
-// Two columns when the terminal has room: the scoped row sits right of 5h and the
-// account right of 7d. Every metric row renders to the same visible width, so a
-// fixed gap keeps both columns aligned. Falls back to stacked when too narrow.
+// Two columns when the terminal has room: the account sits right of 5h and the scoped
+// row right of 7d. The two left-column rows render to one visible width, so a fixed gap
+// starts the right column at the same place on both lines; the right-hand row is as wide
+// as its own values need and nothing lines up after it. Falls back to stacked when too
+// narrow.
 static List<string> Compose(string usageRows, string acct, List<string> errs) {
     const int gap = 2;
     var rows = usageRows.Length > 0 ? new List<string>(usageRows.Split('\n')) : new List<string>();
@@ -160,6 +184,22 @@ static int Vis(string s) {
 static int TermWidth() =>
     int.TryParse(Environment.GetEnvironmentVariable("CSHIP_WIDTH"), out int w) && w > 40 ? w : 141;
 
+// CSHIP_OFFLINE names a directory to render from instead of the live machine, for the dev
+// loop. Everything the status line normally shares with every running session is swapped
+// for a file in it: the limit rows come from its rows.json rather than the registry cache
+// and the API, the euro rate from the same file, and it stands in for the user profile, so
+// the account line reads its .claude.json and the token cache lands in its .claude folder.
+// HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken, and
+// nothing is fetched — so a dev build run this way can neither serve a live session's
+// cached render nor push a sample into the prediction history every session shares, which
+// is what a plain test run on a live machine does.
+static string? Offline() {
+    string? d = Environment.GetEnvironmentVariable("CSHIP_OFFLINE");
+    return string.IsNullOrEmpty(d) ? null : d;
+}
+
+static string Home() => Offline() ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
 static string RunCship(string input) {
     try {
         var psi = new ProcessStartInfo {
@@ -180,6 +220,7 @@ static string RunCship(string input) {
 // is suspended and a loud error line is rendered — never an unguarded parallel fetch,
 // which would corrupt the prediction history.
 static (string rows, string err) GetUsage() {
+    if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     if (FreshVal(now) is string fresh) return (fresh, "");
     Mutex? mx = null; bool owned = false;
@@ -199,6 +240,38 @@ static (string rows, string err) GetUsage() {
         if (owned) { try { mx!.ReleaseMutex(); } catch { } }
         mx?.Dispose();
     }
+}
+
+// The rows RenderRows is given, as rows.json lists them: what comes out of the fetch, the
+// window checks and the slope. The forecast is therefore an input here, not recomputed from
+// a history — what this path exists to test is the drawing.
+//
+//   { "fx": 0.876,
+//     "rows": [ { "label": "5h", "pct": 22, "hrs": 3.38, "hasReset": true,
+//                 "rate": 10.4, "gated": false, "sev": "normal" }, … ] }
+static (string rows, string err) OfflineRows(string dir) {
+    try {
+        using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
+        var rows = new List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)>();
+        foreach (var r in d.RootElement.GetProperty("rows").EnumerateArray())
+            rows.Add((r.GetProperty("label").GetString() ?? "", r.GetProperty("pct").GetInt32(),
+                      r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
+                      r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
+                      r.GetProperty("sev").GetString() ?? ""));
+        // FetchAndRender's own precondition: without 5h and 7d there are no rows at all
+        if (rows.Count < 2) return ("", "offline — rows.json needs the 5h and 7d rows");
+        return (RenderRows(rows, 2), "");
+    } catch (Exception ex) {
+        // a broken fixture is loud, like every other failed source
+        return ("", "offline — rows.json unreadable: " + ex.GetType().Name + " " + Short(ex.Message));
+    }
+}
+
+static double OfflineFx(string dir) {
+    try {
+        using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
+        return d.RootElement.TryGetProperty("fx", out var f) && f.ValueKind == JsonValueKind.Number ? f.GetDouble() : 0;
+    } catch { return 0; }
 }
 
 static string LockName() {
@@ -315,7 +388,7 @@ static void WindowCheck(Lim lim, ref long storedRs, ref long vf, int lastPct, lo
 static (string uuid, string email) AccountInfo() {
     string uuid = "", email = "";
     try {
-        string p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json");
+        string p = Path.Combine(Home(), ".claude.json");
         using var fs = File.OpenRead(p);
         using var d = JsonDocument.Parse(fs);
         if (d.RootElement.TryGetProperty("oauthAccount", out var a) && a.ValueKind == JsonValueKind.Object) {
@@ -330,7 +403,7 @@ static (string uuid, string email) AccountInfo() {
 static string Plan() {
     string sub = "", tier = "";
     try {
-        string p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", ".credentials.json");
+        string p = Path.Combine(Home(), ".claude", ".credentials.json");
         using var fs = File.OpenRead(p);
         using var d = JsonDocument.Parse(fs);
         if (d.RootElement.TryGetProperty("claudeAiOauth", out var o) && o.ValueKind == JsonValueKind.Object) {
@@ -468,13 +541,12 @@ static string Bar(int pct, int padTo = 0, int cap = 15) {
 static string PctColor(int p) =>
     p >= 90 ? "\x1b[1;38;2;247;118;142m" : p >= 70 ? "\x1b[38;2;224;175;104m" : "\x1b[38;2;125;207;255m";
 
-// column widths are the max needed across rows this render, so rows stay
-// aligned while never padding wider than the current values require
 static string SevColor(string sev) =>
     sev == "critical" ? "\x1b[1;38;2;247;118;142m" : sev == "warning" ? "\x1b[38;2;224;175;104m" : "";
 
-// leftCount = rows that stack in the left column; labels only pad against the
-// rows they sit above, so "5h"/"7d" don't inherit the width of a longer scoped label
+// leftCount = rows that stack in the left column. Column widths are the max needed across
+// the rows of one column this render, so the rows that stack stay aligned while never
+// padding wider than the current values require.
 static string RenderRows(List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)> rows, int leftCount) {
     var d = rows.Select(r => {
         int now = Math.Clamp(r.pct, 0, 100);
@@ -498,24 +570,38 @@ static string RenderRows(List<(string label, int pct, double hrs, bool hasReset,
         } else to100 = now >= 100 ? "maxed" : "never";
         return (r.label, now, proj, reset: r.hasReset ? Hm(r.hrs) : NoData, to100, overshoot, r.sev);
     }).ToList();
-    int wLeft = 0, wRight = 0;
+    // Every width is per column — [0] the left, [1] the right — and never shared between
+    // the two. The left column's rows stack, 5h above 7d, so they have to agree to line up.
+    // The right column holds the scoped row alone, beside 7d, and a row beside another has
+    // nothing to line up with. The labels were always kept apart this way, so 5h / 7d never
+    // inherit the width of a longer label like Fable; the other five widths were shared,
+    // which aligned nothing and padded the lone right-hand row out to the widest value on
+    // the left. A 7d projecting 226% draws 22 cells, so Fable's 24% sat fourteen blank
+    // columns past the end of its own ten-cell bar, at the far end of the line, aligned with
+    // nothing.
+    int[] wLbl = new int[2], wNow = new int[2], wReset = new int[2], wTo100 = new int[2], wProj = new int[2];
     for (int i = 0; i < d.Count; i++) {
-        if (i < leftCount) wLeft = Math.Max(wLeft, d[i].label.Length);
-        else wRight = Math.Max(wRight, d[i].label.Length);
+        int c = i < leftCount ? 0 : 1;
+        wLbl[c] = Math.Max(wLbl[c], d[i].label.Length);
+        wNow[c] = Math.Max(wNow[c], d[i].now.ToString().Length);
+        wReset[c] = Math.Max(wReset[c], d[i].reset.Length);
+        wTo100[c] = Math.Max(wTo100[c], d[i].to100.Length);
+        wProj[c] = Math.Max(wProj[c], d[i].proj.ToString().Length);
     }
-    int wNow = d.Max(x => x.now.ToString().Length);
-    int wReset = d.Max(x => x.reset.Length);
-    int wTo100 = d.Max(x => x.to100.Length);
-    int wProj = d.Max(x => x.proj.ToString().Length);
 
-    // The now-bar's own width, computed across rows and padded to below exactly as the
+    // The now-bar's own width, computed per column and padded to below exactly as the
     // projection bar is. `now` is clamped to 0..100 above, so ceil(now/10) can never
     // exceed ten and capNowBar makes that a guarantee rather than an accident — an
     // eleventh cell here would shift everything to its right on that row alone, and
-    // Compose() lays two rows side by side assuming every row is the same visible width.
+    // Compose() lays two rows side by side assuming the left column's rows are one
+    // visible width.
     const int capNowBar = 10;
-    int wNowBar = 10;
-    foreach (var x in d) wNowBar = Math.Max(wNowBar, Math.Min(capNowBar, BarFill(x.now)));
+    int[] wNowBar = { 10, 10 };
+    for (int i = 0; i < d.Count; i++) {
+        int c = i < leftCount ? 0 : 1;
+        wNowBar[c] = Math.Max(wNowBar[c], Math.Min(capNowBar, BarFill(d[i].now)));
+    }
+    static int Wider(int[] w) => Math.Max(w[0], w[1]);
 
     // Spend whatever width is left on overshoot markers. A two-column line costs
     // indent + leftRow + gap + rightRow; everything but the projection bars is known
@@ -527,28 +613,37 @@ static string RenderRows(List<(string label, int pct, double hrs, bool hasReset,
     // Measured true value is 14 — nine spaces, ↻ → ⇢, two '%' — so 15 keeps the same
     // one-per-row conservatism the 25 had. It underfills by two columns and never
     // overflows.
+    //
+    // The solver still charges each of the five widths at the wider of the two columns —
+    // exactly the max across all rows it charged when they were shared — so capBar is what
+    // it always was, and so is the guarantee: a column's own widths can only be narrower.
     const int rowConst = 15;   // per-row glyphs/spaces outside label, numbers and bars
     int term = TermWidth();
     if (term <= 0) term = 138;
     // 4 = host padding, 1 = our indent, 2 = column gap
-    int fixedPart = 4 + 1 + 2 + rowConst * 2 + wLeft + wRight + 2 * (wNow + wReset + wTo100 + wProj + wNowBar);
+    int fixedPart = 4 + 1 + 2 + rowConst * 2 + wLbl[0] + wLbl[1]
+                  + 2 * (Wider(wNow) + Wider(wReset) + Wider(wTo100) + Wider(wProj) + Wider(wNowBar));
     int capBar = Math.Clamp((term - 2 - fixedPart) / 2, 10, 30);   // -2 = safety margin
     // max over both bars' fills, so the projection column is never padded narrower than
-    // something already drawn on the line
-    int wBar = 10;
-    foreach (var x in d) wBar = Math.Max(wBar, Math.Min(capBar, Math.Max(BarFill(x.now), BarFill(x.proj))));
+    // something already drawn on the line — per column, like every other width
+    int[] wBar = { 10, 10 };
+    for (int i = 0; i < d.Count; i++) {
+        int c = i < leftCount ? 0 : 1;
+        wBar[c] = Math.Max(wBar[c], Math.Min(capBar, Math.Max(BarFill(d[i].now), BarFill(d[i].proj))));
+    }
     string dim = "\x1b[38;2;110;115;141m", red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
     var outLines = new List<string>();
     for (int i = 0; i < d.Count; i++) {
         var x = d[i];
+        int c = i < leftCount ? 0 : 1;
         var sb = new StringBuilder();
-        string lbl = x.label.PadRight(i < leftCount ? wLeft : wRight);
+        string lbl = x.label.PadRight(wLbl[c]);
         string sevc = SevColor(x.sev);
         sb.Append(sevc.Length > 0 ? $"{sevc}{lbl}{rst}" : lbl);
-        sb.Append($" {Bar(x.now, wNowBar, capNowBar)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow)}%{rst}");
-        sb.Append($" \x1b[38;2;166;227;161m↻{rst} \x1b[38;2;198;246;193m{x.reset.PadRight(wReset)}{rst}");
-        sb.Append($" {(x.overshoot ? red : dim)}→ {x.to100.PadRight(wTo100)}{rst}");
-        sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar, capBar)} {(x.proj > 100 ? red : dim)}{x.proj.ToString().PadLeft(wProj)}%{rst}");
+        sb.Append($" {Bar(x.now, wNowBar[c], capNowBar)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow[c])}%{rst}");
+        sb.Append($" \x1b[38;2;166;227;161m↻{rst} \x1b[38;2;198;246;193m{x.reset.PadRight(wReset[c])}{rst}");
+        sb.Append($" {(x.overshoot ? red : dim)}→ {x.to100.PadRight(wTo100[c])}{rst}");
+        sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar[c], capBar)} {(x.proj > 100 ? red : dim)}{x.proj.ToString().PadLeft(wProj[c])}%{rst}");
         outLines.Add(sb.ToString());
     }
     return string.Join("\n", outLines);
@@ -595,6 +690,7 @@ static string Nl(string s) {
 // Cached for a day, so the network call happens at most once per day — and a missing or
 // stale rate drops the euro half of the figure rather than blocking the render.
 static double EurPerUsd() {
+    if (Offline() is string dir) return OfflineFx(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     double cached = 0;
     try {
@@ -650,7 +746,7 @@ static string Hm(double hours) {
 static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scopedName) {
     sess = null; week = null; scoped = null; scopedName = "";
     try {
-        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string home = Home();
         string credJson = File.ReadAllText(Path.Combine(home, ".claude", ".credentials.json"));
         string token;
         using (var cd = JsonDocument.Parse(credJson))
@@ -726,10 +822,11 @@ static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scop
 // them indistinguishable, so the failures now come back with a reason for the ⚠ row and
 // the genuine zero still comes back silent.
 //
-// `youngSession` buys exactly one of those four an exception, on the argument below: a
-// transcript that does not exist yet on a session seconds old is a race, not a fault. The
-// other three are not explained by youth and are never suppressed by it.
-static (List<string> lines, string err) BuildTokens(string transcriptPath, bool youngSession) {
+// `transcriptMayBeAbsent` buys exactly one of those four an exception, on the argument
+// below: a transcript that does not exist yet — on a session seconds old, or on one that
+// has had no prompt — is not a fault, because Claude Code only writes the file at the first
+// prompt. The other three are not explained by that and are never suppressed by it.
+static (List<string> lines, string err) BuildTokens(string transcriptPath, bool transcriptMayBeAbsent) {
     if (transcriptPath.Length == 0)
         return (new List<string>(), "tokens — no transcript_path in the payload");
     try {
@@ -745,16 +842,17 @@ static (List<string> lines, string err) BuildTokens(string transcriptPath, bool 
             foreach (var f in Directory.EnumerateFiles(subs, "agent-*.jsonl", SearchOption.AllDirectories)
                                        .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                 files.Add((f, false));   // nested workflow agents live deeper — recurse
-        // Nothing on disk to count — a fault at every age but one. The transcript may
-        // not exist yet on the opening renders of a brand-new session, so a session
-        // seconds old can be in this state with nothing wrong, and a red row on the first
-        // frame of every session is noise — noise being how a warning row stops being
-        // read at all. Below the 30-second mark this therefore renders exactly as a
-        // genuine zero does: silently, with an empty grid. Past that mark the file should
-        // be there, and its absence is stated as loudly as it was before.
+        // Nothing on disk to count — a fault, except before the first prompt. Claude Code
+        // writes the transcript when the first prompt is sent, so a brand-new session has
+        // no file for as long as it sits unused, with nothing wrong, and a red row on the
+        // first frame of every session is noise — noise being how a warning row stops being
+        // read at all. While the caller says the file may be absent — a session under 30 s
+        // old, or a payload reporting no messages yet — this therefore renders exactly as a
+        // genuine zero does: silently, with an empty grid. Otherwise the file should be
+        // there, and its absence is stated as loudly as it was before.
         if (files.Count == 0)
             return (new List<string>(),
-                    youngSession ? "" : "tokens — no transcript file '" + Short(transcriptPath) + "'");
+                    transcriptMayBeAbsent ? "" : "tokens — no transcript file '" + Short(transcriptPath) + "'");
 
         var st = TokLoad(sid);
         // A file shorter than its stored offset was rewritten rather than appended to.
@@ -875,8 +973,7 @@ static long TokHash(string s) {
 }
 
 static string TokPath(string sid) {
-    string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                              ".claude", "statusline-tokens");
+    string dir = Path.Combine(Home(), ".claude", "statusline-tokens");
     Directory.CreateDirectory(dir);
     return Path.Combine(dir, sid + ".bin");
 }

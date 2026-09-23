@@ -38,13 +38,17 @@ projection bars is known, so `RenderRows` solves for the bar length that exactly
 terminal, and recomputes it every render.
 
 ```
-fixedPart = 4 + 1 + 2 + 2·rowConst + wLeft + wRight + 2·(wNow + wReset + wTo100 + wProj + wNowBar)
+fixedPart = 4 + 1 + 2 + 2·rowConst + wLbl[0] + wLbl[1] + 2·(wNow + wReset + wTo100 + wProj + wNowBar)
 capBar    = clamp((term - 2 - fixedPart) / 2, 10, 30)
 ```
 
+Every width is kept per column — `[0]` the left, `[1]` the right; each of the five in the bracket is
+charged at the wider of the two, which is the max across all rows. See
+[widths are per column](#widths-are-per-column) below.
+
 `rowConst` is 15 — the glyphs and spaces in a row outside the label, the four numeric columns and
 the two bars. It was 25 and carried the now-bar's ten cells inside it; the now-bar is now the
-explicit `wNowBar` term, computed as a max across rows exactly as `wBar` is, so the constant drops
+explicit `wNowBar` term, computed as a max across its column exactly as `wBar` is, so the constant drops
 by ten and the total is unchanged. Both values are one higher than the measured truth (14, was 24),
 which underfills the line by two columns and can never overflow it.
 
@@ -59,13 +63,39 @@ The `4 + 1 + 2` is host padding, our indent, and the column gap; the doubling is
 
 **The consequence is the rule worth remembering: a metric row is laid out twice per line, so any
 field added to it costs twice its width in bar budget.** Add a five-character column and the bars
-lose ten characters between them. Widths are also maxima across rows, so one long value — a
-`2d03h` reset, a three-digit projection — silently shortens every bar on the line. This is why a
+lose ten characters between them. The budget also charges every width at its widest across both
+columns, so one long value — a `2d03h` reset, a three-digit projection — silently shortens every
+bar on the line. This is why a
 design note for these rows is not finished until it states its character cost.
 
-Column widths are computed per render as the max needed across rows, so nothing is padded wider
-than the current values require, and the label widths are kept separate for the left column and
-the right so `5h` / `7d` never inherit the width of a longer scoped label like `Fable`.
+### Widths are per column
+
+Column widths are computed per render as the max needed across the rows **of one column**, so
+nothing is padded wider than the current values require. The left column's rows stack — `5h` above
+`7d` — and have to agree to line up. The right column holds the scoped row alone, beside `7d`, and
+a row beside another has nothing to line up with.
+
+Only the labels used to be kept apart this way, so `5h` / `7d` never inherit the width of a longer
+label like `Fable`. The other five widths were shared across both columns, which aligned nothing
+and padded the lone right-hand row out to the widest value on the left. A `7d` projecting 226%
+draws 22 cells, so every row's projection bar was padded to 22, and `Fable`'s ten-cell bar was
+followed by fourteen blank columns before its `24%` — at the far end of the line, next to nothing.
+The same line before and after:
+
+```
+7d ●●●●●●●●●○ 89% ↻ 2d09h → 4h35m ⇢ ●●●●●●●●●●✗✗✗✗✗✗✗✗✗✗✗✗ 226%  Fable ●●●○○○○○○○ 24% ↻ 2d09h → never ⇢ ●●●○○○○○○○              24%
+7d ●●●●●●●●●○ 89% ↻ 2d09h → 4h35m ⇢ ●●●●●●●●●●✗✗✗✗✗✗✗✗✗✗✗✗ 226%  Fable ●●●○○○○○○○ 24% ↻ 2d09h → never ⇢ ●●●○○○○○○○ 24%
+```
+
+It was always so, but it only became conspicuous once the 7d horizon was uncapped and a steady
+weekly burn began projecting past 200%. In the left column the same padding is what puts `5h`'s
+`57%` exactly under `7d`'s `226%`, and that stays.
+
+**The budget is unchanged.** The solver still charges each width at the wider of the two columns,
+which is exactly the max across all rows it charged before, so `capBar` is what it always was, and
+so is the guarantee: a column's own widths can only be narrower than that, never wider. What the
+right-hand row stops spending is simply not spent. `Compose()` only needs the two left-column rows
+to be one width, which they still are, since the right column starts after them.
 
 ## Number format
 
@@ -197,22 +227,49 @@ height as a split one and reads far worse. A source that honestly reported *zero
 the row exists so that a blank figure is never indistinguishable from a real one.
 
 What can appear there: an unreadable payload; a missing `cost` block or either of its two figures; a
-missing `context_window.used_percentage`, since cship draws its context bar from that field and an
-empty bar is byte-identical to a genuinely empty context; a suspended usage fetch; any of the four
-ways the token walk can fail; and cship producing no output at all.
+missing `context_window.used_percentage`, since cship draws its context bar from that field and a
+missing one draws the same `○○○ 0%` as a genuinely empty context — only the colour differs, the
+bar's configured style for a number and the default foreground otherwise; a suspended usage fetch;
+any of the four ways the token walk can fail; and cship producing no output at all.
 
-**One exception, and only one.** A transcript file that does not exist yet is not reported while
-`total_duration_ms` is at or below 30 s. That is not a new threshold — `Hm()` rounds to whole
-minutes, so it is the same boundary as the `⏱ 0m` the meta segment is showing at the time. The
-transcript may not exist yet on the opening renders of a brand-new session, so a session seconds old
-can be in that state with nothing wrong — and a red row on the first frame of every session is how a
-warning row stops being read at all. Past 30 s the file should be there, and its absence is stated
-as loudly as ever.
+### "No messages yet" is a zero, not a gap
+
+Until the first API response of a context — every new session, and again after `/clear` — Claude
+Code sends `used_percentage`, `remaining_percentage` and `current_usage` all as `null`. That is its
+documented *no messages yet*, and in the bundle all three come from one lookup of the last response's
+usage (`if(!e)return{used:null,remaining:null}`, the same in 2.1.234 and 2.1.280), so they are null
+together or not at all. A payload in exactly that shape is a source honestly reporting nothing yet,
+like a `cost` of 0: no response has been measured, so cship's `0%` is the honest reading, and the
+row says nothing.
+
+Any other shape is still a missing source, at any age of session: no `context_window`, no
+`used_percentage` in it, a `null` beside a `current_usage` that holds a measurement, or a value that
+is not a number.
+
+The first version of this check treated the `null` as missing, so every new session opened with a red
+row until its first response. Its fixture for a genuine fresh session was `used_percentage: 0`,
+which Claude Code never sends — and cship draws `null`, `0` and an absent field as the same
+`○○○ 0%`, so a comparison of the visible text could not tell them apart. A fixture for this path has
+to be what the payload builder really emits, not a plausible stand-in.
+
+### The transcript is written at the first prompt
+
+Not at session start: every transcript's creation time is its first user record, measured on 2.1.233,
+2.1.234 and 2.1.275–2.1.280 alike. A session left open has no file for as long as nobody types, with
+nothing wrong.
+
+So a transcript file that does not exist is not reported while `total_duration_ms` is at or below
+30 s, **or** while the payload is in the *no messages yet* shape above, at any age. The 30 s is not a
+new threshold — `Hm()` rounds to whole minutes, so it is the same boundary as the `⏱ 0m` the meta
+segment is showing at the time — but on its own it was too short: a session left idle past it went
+red, because the file it expected by then is not written until someone types. Once a context has
+been measured the file should be there, and past 30 s its absence is stated as loudly as ever.
 
 The other three token failures — no `transcript_path`, an unusable one, an exception during the walk
-— are not explained by a young session and are never suppressed by one, at any age. Neither is a
-missing duration: a payload that never carried `total_duration_ms` is a failed source in its own
-right, so it counts as old and the transcript warning stands.
+— are not explained by a young or unprompted session and are never suppressed by one, at any age.
+Neither is a missing duration: a payload that never carried `total_duration_ms` is a failed source
+in its own right and counts as old, so beside it only the *no messages yet* shape keeps a missing
+transcript quiet.
 
 ## When there is no host line
 
