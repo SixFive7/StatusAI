@@ -70,15 +70,29 @@ one.
 ### Offline, beside live sessions
 
 `CSHIP_OFFLINE=<dir>` renders from that directory instead of the machine's shared state. The limit
-rows are drawn from `<dir>/rows.json` rather than the registry cache and the API, the euro rate
-comes from the same file, and `<dir>` stands in for the user profile — the account line reads
-`<dir>/.claude.json` and `<dir>/.claude/.credentials.json`, and the token cache is written under
-`<dir>/.claude/statusline-tokens/`. `HKCU\Software\cshipUsage` is neither read nor written, the usage
-lock is never taken, and nothing is fetched, so a dev build can run beside live sessions without
-serving their cached render or touching their history.
+rows are drawn from `<dir>/usage.json` and `<dir>/rows.json` rather than the registry cache and the
+API, the euro rate comes from `rows.json`, and `<dir>` stands in for the user profile — the account
+line reads `<dir>/.claude.json` and `<dir>/.claude/.credentials.json`, and the token cache is
+written under `<dir>/.claude/statusline-tokens/`. `HKCU\Software\cshipUsage` is neither read nor
+written, the usage lock is never taken, and nothing is fetched, so a dev build can run beside live
+sessions without serving their cached render or touching their history.
 
-`rows.json` holds what `RenderRows` is given — the output of the fetch, the window checks and the
-slope — so the forecast is an input and only the drawing is under test:
+**With a `usage.json`** — a usage API response, verbatim or edited — the binary parses it with the
+same `ParseUsage()` as a live fetch, so every meter, the product breakdown and the on-credit alarm
+are under test. `rows.json` then supplies what a live fetch would take from the registry: the clock
+to measure the resets against, the scoped meter already being followed, and the forecast inputs by
+label. Which meters get a trend is the same `Tracked()` decision a live fetch makes; a tracked
+meter the forecast leaves out is drawn gated.
+
+```json
+{ "fx": 0.876, "now": "2026-09-23T20:14:20Z", "sn": "Fable",
+  "forecast": { "5h":    { "rate": 28.8,   "gated": false },
+                "7d":    { "rate": 6.7039, "gated": false },
+                "Fable": { "rate": 0,      "gated": false } } }
+```
+
+**Without one**, `rows.json` holds what `RenderRows` is given — the output of the fetch, the window
+checks and the slope — and there is no breakdown and no credit state to draw:
 
 ```json
 { "fx": 0.876,
@@ -86,6 +100,14 @@ slope — so the forecast is an input and only the drawing is under test:
             { "label": "7d",    "pct": 89, "hrs": 57.08, "hasReset": true, "rate": 2.4,   "gated": false, "sev": "critical" },
             { "label": "Fable", "pct": 24, "hrs": 57.08, "hasReset": true, "rate": 0,     "gated": false, "sev": "normal"   } ] }
 ```
+
+A row may add `"trend": false` for a meter no history series follows. Either way the forecast is an
+input, so the window checks and the slope are not under test.
+
+**Keep the hours exact when comparing builds.** A `usage.json` and a `rows.json` that are meant to
+draw the same rows must agree on the hours to each reset to the last bit: .NET's `TotalHours` is
+`(double)ticks / TicksPerHour`, so derive `hrs` as integer ticks over 36 000 000 000, not from
+floating-point seconds, or a rounding step can land on the other side of a minute.
 
 Point the payload's `transcript_path` inside `<dir>` as well. cship keeps its own cache beside the
 transcript, in `<transcript dir>/cship/`, so that keeps its writes out of `~/.claude/projects` too.

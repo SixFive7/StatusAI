@@ -93,7 +93,7 @@ docs/      architecture, accounting rules, layout rules
 | [docs/architecture.md](docs/architecture.md) | components, the render chain, data sources, portability |
 | [docs/accounting.md](docs/accounting.md) | how tokens and tool calls are counted, the traps, verification |
 | [docs/layout.md](docs/layout.md) | the grid, number formatting, alignment, width budgets |
-| [docs/limits.md](docs/limits.md) | the OAuth usage endpoint, the limit rows, the projection, one rejected design |
+| [docs/limits.md](docs/limits.md) | the OAuth usage endpoint, the limit rows, the product breakdown, the on-credit alarm, the projection, one rejected design |
 | [docs/development.md](docs/development.md) | build, deploy and test on a live machine |
 | [docs/templates/](docs/templates/) | house style for visual documentation |
 | [PLAN.md](PLAN.md) | packaging, Velopack auto-update, install surface, landmines |

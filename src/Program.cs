@@ -67,9 +67,9 @@ try {
     stdinErr = "payload unreadable — " + ex.GetType().Name;
 }
 
-var (usageRows, usageErr) = GetUsage();
+var (usage, usageErr) = GetUsage();
 string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
-string acctLine = BuildAccount();
+var (acctLine, signedIn) = BuildAccount();
 // On a session seconds old the transcript may not exist yet, which is a race and not a
 // fault, so BuildTokens is told to stay quiet about a missing file that long. 30 s is
 // not a new threshold: BuildMeta rounds the duration to whole minutes, so this is the
@@ -115,12 +115,16 @@ for (int i = lines.Count - 1; i >= 0; i--) if (lines[i].Trim().Length > 0) { idx
 if (idx < 0) warns.Add("cship — no output; its prompt and model lines are missing");
 
 var warnLines = WarnRows(warns);
+// Being on credit is not a failed source but an alarm, so it never shares a row with one:
+// its own row, last, under every other reason.
+if (usage.Cr.Length > 0) warnLines.Add(AlarmRow(usage.Cr));
 
 // Every row of the block opens with a single-width glyph — the token rows with their
 // │ rule, the metric rows with 5h/7d — so one indent serves them all and column 1 is
-// column 1 on every line.
+// column 1 on every line. The breakdown belongs to an account: with nobody signed in there
+// is no account line to hang it on.
 var block = new List<string>(tokenLines);
-block.AddRange(Compose(usageRows, acctLine, warnLines));
+block.AddRange(Compose(usage.Val, acctLine, signedIn ? usage.Bd : "", warnLines));
 if (idx >= 0) {
     lines[idx] = "\x1b[0m" + lines[idx];
     if (metaLine.Length > 0) lines[idx] += "   " + metaLine;
@@ -149,33 +153,62 @@ using (var os = Console.OpenStandardOutput())
 using (var w = new StreamWriter(os, new UTF8Encoding(false))) w.Write(string.Join("\n", lines));
 return;
 
-// Two columns when the terminal has room: the account sits right of 5h and the scoped
-// row right of 7d. The two left-column rows render to one visible width, so a fixed gap
-// starts the right column at the same place on both lines; the right-hand row is as wide
-// as its own values need and nothing lines up after it. Falls back to stacked when too
-// narrow.
-static List<string> Compose(string usageRows, string acct, List<string> errs) {
+// Two columns when the terminal has room. The left column is 5h over 7d. The right column
+// is the account beside 5h, then every further meter, one per line from beside 7d down —
+// the scoped rows, then anything else the server sends. The two left-column rows render to
+// one visible width and the right column's rows share their own, so a fixed gap starts the
+// right column at the same place on every line and its rows line up with each other. Falls
+// back to stacked when too narrow.
+//
+// The product breakdown takes no part in that decision: it rides after the account only in
+// whatever room the layout leaves, so it can never push the rows into the stacked layout.
+static List<string> Compose(string usageRows, string acct, string bd, List<string> errs) {
     const int gap = 2;
     var rows = usageRows.Length > 0 ? new List<string>(usageRows.Split('\n')) : new List<string>();
     var block = new List<string>();
+    int term = TermWidth();
     if (rows.Count >= 2) {
         int rowW = Vis(rows[0]);
-        int rightW = Math.Max(rows.Count > 2 ? Vis(rows[2]) : 0, acct.Length > 0 ? Vis(acct) + 1 : 0);
-        int term = TermWidth();
+        int rightW = acct.Length > 0 ? Vis(acct) + 1 : 0;
+        for (int i = 2; i < rows.Count; i++) rightW = Math.Max(rightW, Vis(rows[i]));
         if (term == 0 || 1 + rowW + gap + rightW <= term - 4) {
             string pad = new string(' ', gap);
-            string right0 = acct, right1 = rows.Count > 2 ? rows[2] : "";
-            block.Add(rows[0] + (right0.Length > 0 ? pad + right0 : ""));
-            block.Add(rows[1] + (right1.Length > 0 ? pad + right1 : ""));
-            for (int i = 3; i < rows.Count; i++) block.Add(rows[i]);
+            string acctLine = acct.Length > 0
+                ? WithBreakdown(acct, bd, term == 0 ? int.MaxValue : term - 4 - (1 + rowW + gap)) : "";
+            block.Add(rows[0] + (acctLine.Length > 0 ? pad + acctLine : ""));
+            block.Add(rows[1] + (rows.Count > 2 ? pad + rows[2] : ""));
+            // a meter past the third goes under the scoped row, in the right column
+            for (int i = 3; i < rows.Count; i++) block.Add(new string(' ', rowW) + pad + rows[i]);
             block.AddRange(errs);
             return block;
         }
     }
     block.AddRange(rows);
-    if (acct.Length > 0) block.Add(acct);
+    if (acct.Length > 0) block.Add(WithBreakdown(acct, bd, term == 0 ? int.MaxValue : term - 4 - 1));
     block.AddRange(errs);
     return block;
+}
+
+// The product breakdown after the account, in whole entries or not at all: every entry
+// while they all fit, then without the 0% ones, then none — never wrapped, never cut inside
+// an entry. `room` is what the line has left for the account; the account is charged as
+// Compose charges it, Vis + 1, so the line passes the test the layout was decided by.
+static string WithBreakdown(string acct, string bd, int room) {
+    if (bd.Length == 0) return acct;
+    const string dim = "\x1b[38;2;110;115;141m", txt = "\x1b[38;2;169;177;214m", rst = "\x1b[0m";
+    var all = new List<(string label, string pct)>();
+    foreach (var part in bd.Split(';', StringSplitOptions.RemoveEmptyEntries)) {
+        int k = part.LastIndexOf('=');
+        if (k > 0) all.Add((part.Substring(0, k), part.Substring(k + 1)));
+    }
+    string sep = $" {dim}·{rst} ";
+    foreach (bool zeros in new[] { true, false }) {
+        var shown = all.Where(e => zeros || e.pct != "0").ToList();
+        if (shown.Count == 0) continue;
+        string tail = sep + string.Join(sep, shown.Select(e => $"{txt}{e.label} {e.pct}%{rst}"));
+        if (Vis(acct) + 1 + Vis(tail) <= room) return acct + tail;
+    }
+    return acct;
 }
 
 // visible width: strip SGR escapes; every glyph used in a metric row is single-width
@@ -196,9 +229,10 @@ static int TermWidth() =>
 
 // CSHIP_OFFLINE names a directory to render from instead of the live machine, for the dev
 // loop. Everything the status line normally shares with every running session is swapped
-// for a file in it: the limit rows come from its rows.json rather than the registry cache
-// and the API, the euro rate from the same file, and it stands in for the user profile, so
-// the account line reads its .claude.json and the token cache lands in its .claude folder.
+// for a file in it: the limit rows come from its usage.json and rows.json rather than the
+// registry cache and the API, the euro rate from rows.json, and it stands in for the user
+// profile, so the account line reads its .claude.json and the token cache lands in its
+// .claude folder.
 // HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken, and
 // nothing is fetched — so a dev build run this way can neither serve a live session's
 // cached render nor push a sample into the prediction history every session shares, which
@@ -229,51 +263,87 @@ static string RunCship(string input) {
 // different security context can never deny us access. If the lock still fails, fetching
 // is suspended and a loud error line is rendered — never an unguarded parallel fetch,
 // which would corrupt the prediction history.
-static (string rows, string err) GetUsage() {
+static (Cached c, string err) GetUsage() {
     if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    if (FreshVal(now) is string fresh) return (fresh, "");
+    if (FreshVal(now) is Cached fresh) return (fresh, "");
     Mutex? mx = null; bool owned = false;
     try {
         mx = new Mutex(false, LockName());
         try { owned = mx.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
     } catch (Exception ex) {
         mx?.Dispose();
-        return (AnyVal() ?? "", LockError(ex));
+        return (AnyVal() ?? Cached.None, LockError(ex));
     }
     try {
-        if (!owned) return (AnyVal() ?? "", "");
+        if (!owned) return (AnyVal() ?? Cached.None, "");
         now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (FreshVal(now) is string fresh2) return (fresh2, "");
-        return (FetchAndRender(now) ?? AnyVal() ?? "", "");
+        if (FreshVal(now) is Cached fresh2) return (fresh2, "");
+        return (FetchAndRender(now) ?? AnyVal() ?? Cached.None, "");
     } finally {
         if (owned) { try { mx!.ReleaseMutex(); } catch { } }
         mx?.Dispose();
     }
 }
 
-// The rows RenderRows is given, as rows.json lists them: what comes out of the fetch, the
-// window checks and the slope. The forecast is therefore an input here, not recomputed from
-// a history — what this path exists to test is the drawing.
+// What GetUsage returns, from files instead of the machine. Two fixture shapes.
+//
+// usage.json beside rows.json: a usage response, run through the same ParseUsage as a live
+// fetch at rows.json's "now", so the hours to each reset are fixed, with the forecast inputs
+// a live fetch takes from the history given in rows.json by label. Which meters have a
+// trend is decided by the same Tracked() a live fetch uses, with "sn" as the scoped meter
+// already being followed; a tracked meter the forecast leaves out is gated.
+//
+//   { "fx": 0.876, "now": "2026-09-23T20:14:20Z", "sn": "Fable",
+//     "forecast": { "5h": { "rate": 28.8, "gated": false }, … } }
+//
+// rows.json alone: the rows RenderRows is given, as it lists them — what comes out of the
+// fetch, the window checks and the slope — with no breakdown and no credit state:
 //
 //   { "fx": 0.876,
 //     "rows": [ { "label": "5h", "pct": 22, "hrs": 3.38, "hasReset": true,
 //                 "rate": 10.4, "gated": false, "sev": "normal" }, … ] }
-static (string rows, string err) OfflineRows(string dir) {
+//
+// plus an optional "trend": false for a meter no history series follows. Either way the
+// forecast is an input, not recomputed from a history — what this path exists to test is
+// the parse and the drawing.
+static (Cached c, string err) OfflineRows(string dir) {
     try {
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
-        var rows = new List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)>();
-        foreach (var r in d.RootElement.GetProperty("rows").EnumerateArray())
-            rows.Add((r.GetProperty("label").GetString() ?? "", r.GetProperty("pct").GetInt32(),
-                      r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
-                      r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
-                      r.GetProperty("sev").GetString() ?? ""));
-        // FetchAndRender's own precondition: without 5h and 7d there are no rows at all
-        if (rows.Count < 2) return ("", "offline — rows.json needs the 5h and 7d rows");
-        return (RenderRows(rows, 2), "");
+        var root = d.RootElement;
+        string usagePath = Path.Combine(dir, "usage.json");
+        if (File.Exists(usagePath)) {
+            var utc = root.TryGetProperty("now", out var nw) && nw.ValueKind == JsonValueKind.String
+                      && DateTimeOffset.TryParse(nw.GetString(), out var at) ? at : DateTimeOffset.UtcNow;
+            using var ud = JsonDocument.Parse(File.ReadAllText(usagePath));
+            var u = ParseUsage(ud.RootElement, utc);
+            if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters");
+            var (iS, iW, iF) = Tracked(u.Meters, Str(root, "sn"));
+            var fc = root.TryGetProperty("forecast", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
+            var rows = new List<RowIn>();
+            for (int i = 0; i < u.Meters.Count; i++) {
+                var m = u.Meters[i];
+                bool trend = i == iS || i == iW || i == iF;
+                double rate = 0; bool gated = true;
+                if (trend && fc.ValueKind == JsonValueKind.Object && fc.TryGetProperty(m.Label, out var e)) {
+                    rate = e.GetProperty("rate").GetDouble(); gated = e.GetProperty("gated").GetBoolean();
+                }
+                rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, trend, m.Lim.Sev));
+            }
+            return (new Cached(RenderRows(rows, 2), u.Bd, u.Cr), "");
+        }
+        var list = new List<RowIn>();
+        foreach (var r in root.GetProperty("rows").EnumerateArray())
+            list.Add(new RowIn(r.GetProperty("label").GetString() ?? "", r.GetProperty("pct").GetInt32(),
+                               r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
+                               r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
+                               !(r.TryGetProperty("trend", out var tr) && tr.ValueKind == JsonValueKind.False),
+                               r.GetProperty("sev").GetString() ?? ""));
+        if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows");
+        return (new Cached(RenderRows(list, 2), "", ""), "");
     } catch (Exception ex) {
         // a broken fixture is loud, like every other failed source
-        return ("", "offline — rows.json unreadable: " + ex.GetType().Name + " " + Short(ex.Message));
+        return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message));
     }
 }
 
@@ -319,6 +389,15 @@ static List<string> WarnRows(List<string> reasons) {
     return outp;
 }
 
+// The on-credit alarm: red like every ⚠ row, to the same budget, but always a row of its
+// own and never joined by · — it is not a source that failed, it is usage being billed
+// that the plan should have covered.
+static string AlarmRow(string reason) {
+    const string red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
+    int budget = TermWidth() - 6;   // 4 host padding, 1 indent, 1 safety
+    return red + "⚠ " + Short(reason, budget - 2) + rst;
+}
+
 // A reason has to fit on a status line. Exception text can carry a whole path — a runaway
 // directory junction produced a 33 KB one under test, which tore the line apart — and a
 // transcript_path is routinely past 100 characters. Head and tail are kept because the
@@ -331,28 +410,37 @@ static string Short(string s, int max = 64) {
     return s.Length <= max ? s : s.Substring(0, max - 13) + "…" + s.Substring(s.Length - 12);
 }
 
-static string? FreshVal(long now) {
+// val is the rendered rows; bd and cr are the breakdown and the credit alarm the same fetch
+// produced, cached beside them so that a cache hit draws everything a fetch would. A value
+// written by a build that had neither reads as none of either until the next fetch.
+static Cached? FreshVal(long now) {
     try {
         using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
         if (rk?.GetValue("ts") is string ts && rk.GetValue("val") is string v
-            && long.TryParse(ts, out long t) && now - t < 50) return v;
+            && long.TryParse(ts, out long t) && now - t < 50)
+            return new Cached(v, rk.GetValue("bd") as string ?? "", rk.GetValue("cr") as string ?? "");
     } catch { }
     return null;
 }
 
-static string? AnyVal() {
-    try { using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage"); return rk?.GetValue("val") as string; } catch { }
+static Cached? AnyVal() {
+    try {
+        using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
+        if (rk?.GetValue("val") is string v)
+            return new Cached(v, rk.GetValue("bd") as string ?? "", rk.GetValue("cr") as string ?? "");
+    } catch { }
     return null;
 }
 
-static string? FetchAndRender(long now) {
-    if (!Fetch(out var sess, out var week, out var scoped, out string scopedName)
-        || sess is null || week is null) return null;
+static Cached? FetchAndRender(long now) {
+    if (!Fetch(out var u) || u is null) return null;
     string acct = AccountInfo().uuid;
     var hist = LoadHist();
     string oldAcct = RegStr("acct"), oldName = RegStr("sn");
     long vfS = RegLong("vfS"), vfW = RegLong("vfW"), vfF = RegLong("vfF");
     long rsS = RegLong("rsS"), rsW = RegLong("rsW"), rsF = RegLong("rsF");
+    var (iS, iW, iF) = Tracked(u.Meters, oldName);
+    string scopedName = iF >= 0 ? u.Meters[iF].Label : "";
 
     if (acct.Length > 0 && oldAcct.Length > 0 && acct != oldAcct) {
         hist.Clear(); vfS = vfW = vfF = now;   // account switch: the whole series is foreign
@@ -360,30 +448,43 @@ static string? FetchAndRender(long now) {
     // the scoped limit tracks a different model than before: its series is foreign too
     if (scopedName.Length > 0 && oldName.Length > 0 && scopedName != oldName) vfF = now;
     var last = hist.Count > 0 ? hist[^1] : (t: 0L, s: -1, w: -1, f: -1);
-    WindowCheck(sess.Value, ref rsS, ref vfS, last.s, now);
-    WindowCheck(week.Value, ref rsW, ref vfW, last.w, now);
-    if (scoped is Lim slim) WindowCheck(slim, ref rsF, ref vfF, last.f, now);
+    if (iS >= 0) WindowCheck(u.Meters[iS].Lim, ref rsS, ref vfS, last.s, now);
+    if (iW >= 0) WindowCheck(u.Meters[iW].Lim, ref rsW, ref vfW, last.w, now);
+    if (iF >= 0) WindowCheck(u.Meters[iF].Lim, ref rsF, ref vfF, last.f, now);
 
-    int s = sess.Value.Pct, w = week.Value.Pct, f = scoped?.Pct ?? -1;
+    // a series whose meter the server did not send this time records -1, which Slope skips
+    int s = iS >= 0 ? u.Meters[iS].Lim.Pct : -1, w = iW >= 0 ? u.Meters[iW].Lim.Pct : -1,
+        f = iF >= 0 ? u.Meters[iF].Lim.Pct : -1;
     if (!(hist.Count > 0 && last.t == now && last.s == s && last.w == w && last.f == f))
         hist.Add((now, s, w, f));
     hist = hist.Where(h => now - h.t <= 3600 && h.t <= now).ToList();
 
-    double rateS = Slope(hist, 0, vfS, out bool gS);
-    double rateW = Slope(hist, 1, vfW, out bool gW);
-    bool gF = true; double rateF = 0;
-    if (scoped is not null) rateF = Slope(hist, 2, vfF, out gF);
-
-    var rows = new List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)> {
-        ("5h", s, sess.Value.Hours, sess.Value.HasReset, rateS, gS, sess.Value.Sev),
-        ("7d", w, week.Value.Hours, week.Value.HasReset, rateW, gW, week.Value.Sev)
-    };
-    if (scoped is Lim sc)
-        rows.Add((scopedName.Length > 0 ? scopedName : "scoped", sc.Pct, sc.Hours, sc.HasReset, rateF, gF, sc.Sev));
-    string val = RenderRows(rows, 2);
+    // one row per meter, in the server's order; a meter no series follows has no trend
+    var rows = new List<RowIn>();
+    for (int i = 0; i < u.Meters.Count; i++) {
+        var m = u.Meters[i];
+        int which = i == iS ? 0 : i == iW ? 1 : i == iF ? 2 : -1;
+        double rate = 0; bool gated = true;
+        if (which >= 0) rate = Slope(hist, which, which == 0 ? vfS : which == 1 ? vfW : vfF, out gated);
+        rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, which >= 0, m.Lim.Sev));
+    }
+    var c = new Cached(RenderRows(rows, 2), u.Bd, u.Cr);
     Save(acct.Length > 0 ? acct : oldAcct, scopedName.Length > 0 ? scopedName : oldName,
-         rsS, rsW, rsF, vfS, vfW, vfF, hist, val, now);
-    return val;
+         rsS, rsW, rsF, vfS, vfW, vfF, hist, c, now);
+    return c;
+}
+
+// The history holds three series — the session, weekly_all and one scoped meter — so at
+// most three rows have a trend. The scoped series stays with the meter it has been
+// following for as long as the server still sends it, and otherwise takes the highest, as
+// the single scoped row always did; every other meter is drawn without one.
+static (int s, int w, int f) Tracked(List<Meter> m, string trackedName) {
+    int s = m.FindIndex(x => x.Kind == "session"), w = m.FindIndex(x => x.Kind == "weekly_all");
+    int f = trackedName.Length > 0 ? m.FindIndex(x => x.Kind == "weekly_scoped" && x.Label == trackedName) : -1;
+    if (f < 0)
+        for (int i = 0; i < m.Count; i++)
+            if (m[i].Kind == "weekly_scoped" && (f < 0 || m[i].Lim.Pct > m[f].Lim.Pct)) f = i;
+    return (s, w, f);
 }
 
 // A metric's history is only usable within one account+window. resets_at moving to a new
@@ -439,15 +540,15 @@ static string Multiplier(string tier) {
     return "";
 }
 
-static string BuildAccount() {
+static (string line, bool signedIn) BuildAccount() {
     string dim = "\x1b[38;2;110;115;141m", txt = "\x1b[38;2;169;177;214m", rst = "\x1b[0m";
     string email = AccountInfo().email;
-    if (email.Length == 0) return $"{dim}👤 not signed in{rst}";
+    if (email.Length == 0) return ($"{dim}👤 not signed in{rst}", false);
     var sb = new StringBuilder();
     sb.Append($"👤 {txt}{email}{rst}");
     string plan = Plan();
     if (plan.Length > 0) sb.Append($" {dim}· {plan}{rst}");
-    return sb.ToString();
+    return (sb.ToString(), true);
 }
 
 static List<(long t, int s, int w, int f)> LoadHist() {
@@ -471,7 +572,7 @@ static string RegStr(string name) {
 static long RegLong(string name) => long.TryParse(RegStr(name), out long v) ? v : 0;
 
 static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, long vfS, long vfW, long vfF,
-                 List<(long t, int s, int w, int f)> hist, string val, long now) {
+                 List<(long t, int s, int w, int f)> hist, Cached c, long now) {
     try {
         using var rk = Registry.CurrentUser.CreateSubKey(@"Software\cshipUsage");
         rk.SetValue("acct", acct);
@@ -479,7 +580,9 @@ static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, l
         rk.SetValue("rsS", rsS.ToString()); rk.SetValue("rsW", rsW.ToString()); rk.SetValue("rsF", rsF.ToString());
         rk.SetValue("vfS", vfS.ToString()); rk.SetValue("vfW", vfW.ToString()); rk.SetValue("vfF", vfF.ToString());
         rk.SetValue("hist", string.Join(";", hist.Select(h => $"{h.t}:{h.s}:{h.w}:{h.f}")));
-        rk.SetValue("val", val);
+        rk.SetValue("val", c.Val);
+        rk.SetValue("bd", c.Bd);
+        rk.SetValue("cr", c.Cr);
         rk.SetValue("ts", now.ToString());   // freshness gate: must be the last write
     } catch { }
 }
@@ -557,41 +660,45 @@ static string SevColor(string sev) =>
 // leftCount = rows that stack in the left column. Column widths are the max needed across
 // the rows of one column this render, so the rows that stack stay aligned while never
 // padding wider than the current values require.
-static string RenderRows(List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)> rows, int leftCount) {
+static string RenderRows(List<RowIn> rows, int leftCount) {
     var d = rows.Select(r => {
-        int now = Math.Clamp(r.pct, 0, 100);
-        double rate = Math.Min(r.rate, 40);
-        bool burning = !r.gated && rate > 0.5;
+        int now = Math.Clamp(r.Pct, 0, 100);
+        double rate = Math.Min(r.Rate, 40);
+        // a meter no history series follows has no rate at all, so it is never burning
+        bool burning = r.Trend && !r.Gated && rate > 0.5;
         // Project to the row's own reset, uncapped. An 8h ceiling made ⇢ mean "at reset"
         // on the 5h row and "in 8 hours" on the 7d row — one glyph, two meanings, one line
         // apart — so a red "hits 100% in 2d19h" could sit beside a calm ⇢ 20%.
-        double horizon = r.hrs;
+        double horizon = r.Hrs;
         // Without a reset time there is no horizon, so there is no forecast to make: the
         // bar shows the current value and asserts nothing about where it is heading.
-        int proj = burning && r.hasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
+        int proj = burning && r.HasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
         // The → colour: 0 dim, 1 red, 2 forest.
         string to100; int tone = 0;
-        if (r.gated) to100 = "early";   // not enough same-window data for an honest trend yet
+        // No series, no trend: the source of every forecast here reported nothing for this
+        // meter, which is what — means everywhere else. The bar holds its current value.
+        if (!r.Trend) to100 = NoData;
+        else if (r.Gated) to100 = "early";   // not enough same-window data for an honest trend yet
         else if (burning && now < 100) {
             double h = (100 - now) / rate;
             // Tested against the row's own reset. Red: 100% arrives before the window resets.
             // Forest: the reset comes first, so at this pace the window never runs out — the
             // time is kept and the colour says it is harmless. Neither is asserted when we do
             // not know when the window resets; the time then stays dim.
-            if (r.hasReset) tone = h < r.hrs ? 1 : 2;
+            if (r.HasReset) tone = h < r.Hrs ? 1 : 2;
             to100 = Hm(h);
         } else to100 = now >= 100 ? "maxed" : "never";
-        return (r.label, now, proj, reset: r.hasReset ? Hm(r.hrs) : NoData, to100, tone, r.sev);
+        return (label: r.Label, now, proj, reset: r.HasReset ? Hm(r.Hrs) : NoData, to100, tone, sev: r.Sev);
     }).ToList();
     // Every width is per column — [0] the left, [1] the right — and never shared between
-    // the two. The left column's rows stack, 5h above 7d, so they have to agree to line up.
-    // The right column holds the scoped row alone, beside 7d, and a row beside another has
-    // nothing to line up with. The labels were always kept apart this way, so 5h / 7d never
-    // inherit the width of a longer label like Fable; the other five widths were shared,
-    // which aligned nothing and padded the lone right-hand row out to the widest value on
-    // the left. A 7d projecting 226% draws 22 cells, so Fable's 24% sat fourteen blank
-    // columns past the end of its own ten-cell bar, at the far end of the line, aligned with
-    // nothing.
+    // the two. Each column's rows stack — 5h above 7d on the left, the scoped row and every
+    // meter after it on the right — so within a column they have to agree to line up; a row
+    // beside another has nothing to line up with. The labels were always kept apart this
+    // way, so 5h / 7d never inherit the width of a longer label like Fable; the other five
+    // widths were shared, which aligned nothing and padded the right-hand row out to the
+    // widest value on the left. A 7d projecting 226% draws 22 cells, so Fable's 24% sat
+    // fourteen blank columns past the end of its own ten-cell bar, at the far end of the
+    // line, aligned with nothing.
     int[] wLbl = new int[2], wNow = new int[2], wReset = new int[2], wTo100 = new int[2], wProj = new int[2];
     for (int i = 0; i < d.Count; i++) {
         int c = i < leftCount ? 0 : 1;
@@ -756,8 +863,8 @@ static string Hm(double hours) {
     return h > 0 ? $"{h}h{m:D2}m" : $"{m}m";
 }
 
-static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scopedName) {
-    sess = null; week = null; scoped = null; scopedName = "";
+static bool Fetch(out Usage? u) {
+    u = null;
     try {
         string home = Home();
         string credJson = File.ReadAllText(Path.Combine(home, ".claude", ".credentials.json"));
@@ -776,42 +883,159 @@ static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scop
         using (var rs = resp.Content.ReadAsStream())
         using (var sr = new StreamReader(rs, Encoding.UTF8)) body = sr.ReadToEnd();
         using var doc = JsonDocument.Parse(body);
-        var root = doc.RootElement;
-        var utc = DateTimeOffset.UtcNow;
-        if (root.TryGetProperty("limits", out var limits) && limits.ValueKind == JsonValueKind.Array) {
-            foreach (var lim in limits.EnumerateArray()) {
-                string kind = lim.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
-                int pct = lim.TryGetProperty("percent", out var pc) ? (int)pc.GetDouble() : 0;
-                // resets_at is null on weekly_scoped, so "no reset time" is a state the
-                // payload really does report and not a parse failure — carried on as a
-                // flag rather than as an hrs of 0, which reads as "resets right now"
-                double hrs = 0; long rsu = 0; bool hasReset = false;
-                if (lim.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
-                    && DateTimeOffset.TryParse(ra.GetString(), out var rdt)) {
-                    hrs = Math.Max(0, (rdt - utc).TotalHours); rsu = rdt.ToUnixTimeSeconds();
-                    hasReset = true;
-                }
-                string sev = lim.TryGetProperty("severity", out var sv) ? sv.GetString() ?? "" : "";
-                string model = "";
-                if (lim.TryGetProperty("scope", out var sc) && sc.ValueKind == JsonValueKind.Object
-                    && sc.TryGetProperty("model", out var mo) && mo.ValueKind == JsonValueKind.Object
-                    && mo.TryGetProperty("display_name", out var dn)) model = dn.GetString() ?? "";
-                var l = new Lim(pct, hrs, hasReset, rsu, sev);
-                if (kind == "session") sess = l;
-                else if (kind == "weekly_all") week = l;
-                // one scoped row is displayed; if several ever appear, the highest wins
-                else if (kind == "weekly_scoped" && (scoped is null || pct > scoped.Value.Pct)) {
-                    scoped = l; scopedName = model;
-                }
+        u = ParseUsage(doc.RootElement, DateTimeOffset.UtcNow);
+        return u.Meters.Count > 0;
+    } catch { return false; }
+}
+
+// Everything this binary draws from the usage response, measured against `utc`. Pure: the
+// live fetch and the offline render both come through here, so a fixture exercises the
+// same parse. A meter that cannot be read throws, and the fetch falls back to the cache as
+// it always has; the breakdown and the credit state are read leniently instead, because a
+// shape change there must not cost the meters.
+static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
+    var u = new Usage();
+    if (root.TryGetProperty("limits", out var limits) && limits.ValueKind == JsonValueKind.Array) {
+        // every meter, in the server's order: nothing it sends is dropped
+        foreach (var lim in limits.EnumerateArray()) {
+            string kind = lim.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
+            int pct = lim.TryGetProperty("percent", out var pc) ? (int)pc.GetDouble() : 0;
+            // resets_at is a time on every kind in the 2026-08-15 and 2026-09-23 responses,
+            // weekly_scoped included, but on 2026-08-18 weekly_scoped at 0% sent null, three
+            // samples running. So "no reset time" is a state a payload can report — the
+            // legacy shape below never has one — and it is carried as a flag rather than as
+            // an hrs of 0, which reads as "resets right now"
+            double hrs = 0; long rsu = 0; bool hasReset = false;
+            if (lim.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
+                && DateTimeOffset.TryParse(ra.GetString(), out var rdt)) {
+                hrs = Math.Max(0, (rdt - utc).TotalHours); rsu = rdt.ToUnixTimeSeconds();
+                hasReset = true;
             }
-            return sess is not null && week is not null;
+            string sev = lim.TryGetProperty("severity", out var sv) ? sv.GetString() ?? "" : "";
+            u.Meters.Add(new Meter(kind, MeterLabel(kind, lim), new Lim(pct, hrs, hasReset, rsu, sev)));
         }
+    } else {
         // the legacy shape carries utilization but no reset time, so both rows are
         // genuinely unknown here rather than resetting in zero minutes
-        sess = new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, false, 0, "");
-        week = new Lim((int)root.GetProperty("seven_day").GetProperty("utilization").GetDouble(), 0, false, 0, "");
-        return true;
-    } catch { return false; }
+        u.Meters.Add(new Meter("session", "5h",
+            new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, false, 0, "")));
+        u.Meters.Add(new Meter("weekly_all", "7d",
+            new Lim((int)root.GetProperty("seven_day").GetProperty("utilization").GetDouble(), 0, false, 0, "")));
+    }
+    u.Bd = Breakdown(root);
+    u.Cr = Credit(root, u.Meters);
+    return u;
+}
+
+// 5h and 7d for the two the rows have always been, and the scope's name for the rest — the
+// model it is for, else the surface — falling back to the kind itself, so a meter this
+// binary has never seen is drawn under the only name it has rather than dropped.
+static string MeterLabel(string kind, JsonElement lim) {
+    if (kind == "session") return "5h";
+    if (kind == "weekly_all") return "7d";
+    string name = "";
+    if (lim.TryGetProperty("scope", out var sc) && sc.ValueKind == JsonValueKind.Object)
+        foreach (string part in new[] { "model", "surface" })
+            if (name.Length == 0 && sc.TryGetProperty(part, out var p) && p.ValueKind == JsonValueKind.Object)
+                name = Clean(Str(p, "display_name"));
+    if (name.Length > 0) return name;
+    return kind == "weekly_scoped" ? "scoped" : kind.Length > 0 ? Clean(kind) : "limit";
+}
+
+// seven_day_breakdown.rows[]: each product's share of this week's usage, in whole percents
+// that sum to 100 — its window_started_at is exactly seven days before weekly_all's
+// resets_at. Cached as "CC=99;Chat=0;Cowork=1", already cut to what may be shown: the three
+// products it has always listed, even at 0%, and "Other" or anything unrecognised only while
+// it is above 0.
+static string Breakdown(JsonElement root) {
+    try {
+        if (!root.TryGetProperty("seven_day_breakdown", out var b) || b.ValueKind != JsonValueKind.Object
+            || !b.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array) return "";
+        var parts = new List<string>();
+        foreach (var r in rows.EnumerateArray()) {
+            if (r.ValueKind != JsonValueKind.Object || !r.TryGetProperty("percent", out var p)
+                || p.ValueKind != JsonValueKind.Number) continue;
+            string key = Str(r, "key"), name = Str(r, "display_name");
+            int pct = (int)Math.Round(p.GetDouble(), MidpointRounding.AwayFromZero);
+            string label = (key, name) switch {
+                ("claude_code", _) or (_, "Claude Code") => "CC",
+                ("chat", _) or (_, "Chats") => "Chat",
+                ("cowork", _) or (_, "Cowork") => "Cowork",
+                _ => ""
+            };
+            if (label.Length == 0) {
+                if (pct == 0) continue;
+                label = Clean(name.Length > 0 ? name : key);
+                if (label.Length == 0) continue;
+            }
+            parts.Add(label.Replace(';', ',').Replace('=', '-') + "=" + pct);
+        }
+        return string.Join(";", parts);
+    } catch { return ""; }
+}
+
+// Usage billed beyond the plan, which the plan exists to prevent — so an alarm, not a
+// figure. Two ways in: money already spent this period (spend.used.amount_minor or
+// extra_usage.used_credits above 0), or a limit at 100% while credits are switched on
+// (spend.enabled or extra_usage.is_enabled), the moment further usage starts to bill.
+//
+// The amount is spend.used where it has one — minor units, with the exponent and currency
+// beside them — and otherwise extra_usage.used_credits, read as minor units too with
+// decimal_places as the exponent: in the August response extra_usage.monthly_limit was 1000
+// where spend.limit.amount_minor was 1000 at exponent 2, and no non-zero used_credits has been
+// seen to confirm it.
+static string Credit(JsonElement root, List<Meter> meters) {
+    try {
+        bool on = false, haveSpend = false, haveCredits = false;
+        double spendMinor = 0, credits = 0; int spendExp = 2, creditExp = 2;
+        string spendCur = "", creditCur = "";
+        if (root.TryGetProperty("spend", out var sp) && sp.ValueKind == JsonValueKind.Object) {
+            on |= sp.TryGetProperty("enabled", out var en) && en.ValueKind == JsonValueKind.True;
+            if (sp.TryGetProperty("used", out var used) && used.ValueKind == JsonValueKind.Object
+                && used.TryGetProperty("amount_minor", out var am) && am.ValueKind == JsonValueKind.Number) {
+                spendMinor = am.GetDouble(); haveSpend = true;
+                spendCur = Str(used, "currency");
+                if (used.TryGetProperty("exponent", out var ex) && ex.ValueKind == JsonValueKind.Number
+                    && ex.TryGetInt32(out int e)) spendExp = e;
+            }
+        }
+        if (root.TryGetProperty("extra_usage", out var xu) && xu.ValueKind == JsonValueKind.Object) {
+            on |= xu.TryGetProperty("is_enabled", out var en) && en.ValueKind == JsonValueKind.True;
+            if (xu.TryGetProperty("used_credits", out var uc) && uc.ValueKind == JsonValueKind.Number) {
+                credits = uc.GetDouble(); haveCredits = true;
+                creditCur = Str(xu, "currency");
+                if (xu.TryGetProperty("decimal_places", out var dp) && dp.ValueKind == JsonValueKind.Number
+                    && dp.TryGetInt32(out int e)) creditExp = e;
+            }
+        }
+        var maxed = meters.Where(m => m.Lim.Pct >= 100).Select(m => m.Label).ToList();
+        bool billing = on && maxed.Count > 0;
+        if (spendMinor <= 0 && credits <= 0 && !billing) return "";
+        string amount = spendMinor > 0 || (credits <= 0 && haveSpend) ? Money(spendMinor, spendExp, spendCur)
+                      : haveCredits ? Money(credits, creditExp, creditCur) : "no amount reported";
+        return billing
+            ? $"on credit — {string.Join(", ", maxed)} at 100% with usage credits on; {amount} spent so far this period"
+            : $"on credit — {amount} spent beyond the plan this period";
+    } catch { return ""; }
+}
+
+// Minor units at their own exponent, in the nl-NL notation of every other figure here. The
+// currencies the meta segment already draws a sign for get it; anything else its code.
+static string Money(double minor, int exp, string cur) {
+    exp = Math.Clamp(exp, 0, 6);
+    string n = Nl((minor / Math.Pow(10, exp)).ToString("N" + exp, CultureInfo.InvariantCulture));
+    return cur switch { "USD" => "$" + n, "EUR" => "€" + n, "" => n, _ => n + " " + Clean(cur) };
+}
+
+static string Str(JsonElement o, string name) =>
+    o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+
+// A string from the server is drawn straight into the terminal, so none of it may act on the
+// terminal: control characters — ESC and the row separator among them — become spaces.
+static string Clean(string s) {
+    var sb = new StringBuilder(s.Length);
+    foreach (char ch in s) sb.Append(char.IsControl(ch) ? ' ' : ch);
+    return sb.ToString().Trim();
 }
 
 // ───────────────────────── session token accounting ─────────────────────────
@@ -1135,7 +1359,29 @@ sealed class TokState {
 }
 
 // HasReset is carried explicitly rather than inferred from Hours or ResetsUnix being 0.
-// The API returns resets_at: null for weekly_scoped, and the legacy five_hour/seven_day
-// fallback shape has no reset time at all — both used to arrive as Hours 0, which the
-// rows rendered as "↻ 0m", an assertion that the window resets this instant.
+// The legacy five_hour/seven_day fallback shape has no reset time at all, and on 2026-08-18
+// the API sent resets_at: null for weekly_scoped at 0% (it sends a time there at 47% on
+// 2026-09-23) — both used to arrive as Hours 0, which the rows rendered as "↻ 0m", an
+// assertion that the window resets this instant.
 record struct Lim(int Pct, double Hours, bool HasReset, long ResetsUnix, string Sev);
+
+// One meter as the server sent it: its kind, the label it is drawn under, its numbers.
+record struct Meter(string Kind, string Label, Lim Lim);
+
+// What one fetch yields: every meter in the server's order, and beside them the product
+// breakdown (Bd, "CC=99;Chat=0;Cowork=1") and the on-credit alarm (Cr, or ""), each already
+// reduced to what the screen shows.
+sealed class Usage {
+    public readonly List<Meter> Meters = new();
+    public string Bd = "", Cr = "";
+}
+
+// What the registry caches from one fetch: the rendered rows, plus the breakdown and the
+// credit alarm, which are laid out per render because where they fit depends on the render.
+sealed record Cached(string Val, string Bd, string Cr) {
+    public static readonly Cached None = new("", "", "");
+}
+
+// One row's drawing inputs. Trend is false for a meter no history series follows, which has
+// no rate to be gated or burning with.
+record struct RowIn(string Label, int Pct, double Hrs, bool HasReset, double Rate, bool Gated, bool Trend, string Sev);

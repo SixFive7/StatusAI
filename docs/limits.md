@@ -1,7 +1,7 @@
 # Limits
 
-The three limit rows: where the numbers come from, how the projection is built, and one design
-that was shipped and reverted.
+The limit rows: where the numbers come from, how the projection is built, what else the response
+carries that is drawn, and one design that was shipped and reverted.
 
 ## The endpoint
 
@@ -17,8 +17,9 @@ path is a bare `catch` that leaves the rows rendering their last cached value.
 
 ### None of it comes from stdin
 
-Every figure in these three rows is the OAuth response and the registry cache, and the account line
-beside them is `~/.claude.json` and `.credentials.json`. Nothing here reads the status-line payload.
+Every figure in these rows is the OAuth response and the registry cache, and so are the product
+breakdown and the on-credit alarm; the account line beside them is `~/.claude.json` and
+`.credentials.json`. Nothing here reads the status-line payload.
 
 That is what makes them the load-bearing part of a degraded render. A payload malformed enough to
 silence cship — and with it the prompt line, the model line and the token rows — leaves these rows
@@ -27,9 +28,10 @@ is no host line to insert it into. See [layout.md](layout.md#when-there-is-no-ho
 
 ## Response shape
 
-Two shapes ship in the same payload. `Fetch()` prefers the `limits` array and falls back to the
-legacy top-level `five_hour` / `seven_day` objects, which carry `utilization` but no reset time —
-so on the fallback path every row shows a reset of `—` and no projection is possible.
+Two shapes ship in the same payload. `ParseUsage()` prefers the `limits` array and falls back to
+the legacy top-level `five_hour` / `seven_day` objects, which carry `utilization` but no reset
+time — so on the fallback path every row shows a reset of `—` and no projection is possible. The
+live fetch and the offline render both parse through it, so a fixture exercises the same code.
 
 ```jsonc
 {
@@ -48,7 +50,13 @@ so on the fallback path every row shows a reset of `—` and no projection is po
                    "currency": "EUR", "disabled_reason": "out_of_credits", … },
   "spend": { "used": { "amount_minor": 0, "currency": "EUR", "exponent": 2 },
              "limit": { "amount_minor": 1000, … }, "percent": 0, "enabled": false, … },
-  "member_dashboard_available": false
+  "member_dashboard_available": false,
+  // from 2026-09-23 on (the switched-to account):
+  "seven_day_breakdown": { "as_of": "…", "window_started_at": "2026-09-21T07:00:00.037784+00:00",
+    "rows": [ { "key": "claude_code", "display_name": "Claude Code", "percent": 99 },
+              { "key": "chat",        "display_name": "Chats",       "percent": 0 },
+              { "key": "cowork",      "display_name": "Cowork",      "percent": 1 },
+              { "key": "other",       "display_name": "Other",       "percent": 0 } ] }
 }
 ```
 
@@ -59,12 +67,73 @@ so on the fallback path every row shows a reset of `—` and no projection is po
 plans and surfaces this account does not have. Do not add rows for them speculatively — read
 `limits[]`, which only contains what actually applies.
 
-`kind` values seen in the wild: `session`, `weekly_all`, `weekly_scoped`. `Fetch()` hard-requires
-the first two, which is why Enterprise (monthly credits instead) loses all three rows. Only one
-scoped row is displayed; if several ever appear the highest percentage wins.
+`kind` values seen in the wild: `session`, `weekly_all`, `weekly_scoped`.
 
-`severity` drives the label colour through `SevColor` — `normal` plain, `warning` amber,
-`critical` bold red.
+### Every meter is drawn
+
+Every entry in `limits[]` gets a row, in the order the server sends them. Nothing is dropped: a
+fourth meter, a second scoped one or a kind this binary has never seen used to vanish without a
+trace, because only the session, `weekly_all` and the highest `weekly_scoped` were read.
+
+- **Labels.** `session` is `5h` and `weekly_all` is `7d`, as always. Every other meter is named by
+  its scope — `scope.model.display_name`, else `scope.surface.display_name` — and failing both, by
+  its kind: `scoped` for a `weekly_scoped`, the kind itself for anything else. Names are drawn with
+  every control character replaced, so nothing the server sends can act on the terminal.
+- **Where they go.** The first two meters are the left column, as 5h over 7d. The third sits right
+  of 7d as the scoped row always has, and every one after it goes on a line of its own beneath it
+  in the right column; see [layout.md](layout.md#more-than-three-meters).
+- **Colours.** `severity` drives the label colour through `SevColor` — `normal` plain, `warning`
+  amber, `critical` bold red — for every meter alike.
+- **Trends.** The history holds three series: the session, `weekly_all` and one scoped meter, so at
+  most three rows have a trend. The scoped series stays with the meter it has been following
+  (`sn`) for as long as the server still sends it, and otherwise takes the highest, as the single
+  scoped row always did. Any other meter is drawn with `→ —` and its bar at its current value:
+  `—` is the sentinel for a source that reported nothing, and the source of every forecast here —
+  the history — has nothing for it.
+- **No longer required.** `Fetch()` used to return nothing unless both the session and
+  `weekly_all` were present, so an account without them lost every row; any non-empty `limits[]`
+  is now drawn. A series whose meter is absent from one response records `-1`, which the slope
+  skips.
+
+Today's three meters render exactly as they did before; the change shows only when a response
+carries more.
+
+### The product breakdown
+
+`seven_day_breakdown.rows[]` is each product's share of this week's usage: whole percents that sum
+to 100, over a window whose `window_started_at` is exactly seven days before `weekly_all`'s
+`resets_at` (21 Sep 07:00 against 28 Sep 07:00 in the first capture). It is drawn after the account
+as `CC 99% · Chat 0% · Cowork 1%`: Claude Code is `CC` and Chats is `Chat`, those two and Cowork
+always, and `Other` or a product this binary does not know only while it is above 0%. How it fits
+the width is in [layout.md](layout.md#the-account-line-and-the-breakdown).
+
+### On credit
+
+Being billed beyond the plan should never happen, so it raises a red `⚠` row of its own, last in the
+block, with the amount spent. It fires on either of two conditions:
+
+- **Money spent this period:** `spend.used.amount_minor` or `extra_usage.used_credits` above 0 —
+  `⚠ on credit — $12,40 spent beyond the plan this period`.
+- **A limit at 100% while credits are on** (`spend.enabled` or `extra_usage.is_enabled`): usage
+  from then on bills — `⚠ on credit — 5h at 100% with usage credits on; $0,00 spent so far this
+  period`.
+
+The amount is `spend.used` when it has one — minor units with their own `exponent` and `currency`
+— and otherwise `extra_usage.used_credits`, read as minor units too with `decimal_places` as the
+exponent. That second reading is an inference: in the August response `extra_usage.monthly_limit`
+was 1000 where `spend.limit.amount_minor` was 1000 at exponent 2, and no non-zero `used_credits` has
+been seen to confirm it. `USD` and `EUR` get their sign, as in the meta segment; any other currency
+its code.
+
+**Switched on and being spent are separate fields.** `spend.enabled` and `extra_usage.is_enabled` say
+credits are on; `spend.used.amount_minor` and `extra_usage.used_credits` say money has been spent
+this period. The response has no field for "billing right now" — that is inferred from a limit at
+100% while credits are on. The 2026-09-23 response also carries `extra_usage.user_disabled: true`,
+`credits_ever_enabled: true`, `spend_limit_reached`, `can_toggle` and `can_purchase_credits`, so a
+softer "credits are on" notice could be told apart from the alarm without guessing.
+
+The breakdown and the alarm are cached beside the rendered rows — registry values `bd` and `cr` —
+because a cache hit does not fetch and must still draw them.
 
 ### `is_active` is reported and unused
 
@@ -109,9 +178,10 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   no new word, where replacing the time with `never`, a `↻ first` marker or `—` would each have
   changed what the column means. A row with no reset time has nothing to test against and stays
   dim, as do `early`, `maxed` and `never`. The same rule holds on every row — 5h, 7d, scoped.
-- **No reset time** is its own state, carried as `Lim.HasReset`. `weekly_scoped` returns
-  `resets_at: null` and the legacy `five_hour` / `seven_day` shape has no reset at all; both used
-  to arrive as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant.
+- **No reset time** is its own state, carried as `Lim.HasReset`. On 2026-08-18 `weekly_scoped` at
+  0% returned `resets_at: null`, three samples running — the 08-15 and 09-23 responses carry a time
+  there — and the legacy `five_hour` / `seven_day` shape has no reset at all; both used to arrive
+  as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant.
   They now render `↻ —`, and while a row is in that state its projection is suppressed and its
   `→` is neither red nor forest — there is no deadline to test against.
 
@@ -122,7 +192,7 @@ A series is only meaningful within one account and one window. `WindowCheck` dis
 impossible organically inside a window, so it means the window rolled. An account switch clears
 `hist` outright.
 
-That last one is visible in practice: switch accounts and all three rows immediately read
+That last one is visible in practice: switch accounts and every row with a trend immediately reads
 `→ early`, because the whole series was foreign and was thrown away. It is correct behaviour and
 not a bug report.
 
@@ -177,13 +247,12 @@ because the page argues for the design as though it were correct.
 
 ## Known gaps
 
-- **No captured usage payload.** `test/probe.json` is a status-line *stdin* payload; there is no
-  fixture for the OAuth usage response, so the fetch, the window checks and the slope cannot be run
-  offline or regression-tested. The drawing can: `CSHIP_OFFLINE` renders the rows from a `rows.json`
-  of exactly what `RenderRows` is given, without touching the registry or the API — see
-  [development.md](development.md#offline-beside-live-sessions). Capturing a usage response — with
-  the account identifiers scrubbed — is still cheap, and would have made the rejected design above
-  testable without touching a live account.
-- **`is_active`, `group` and `extra_usage` are parsed past and discarded.**
-- **Enterprise is unhandled**, not degraded: `Fetch()` requires `kind == "session"` and
-  `weekly_all`, and returns false without them, so all three rows vanish with no diagnostic.
+- **The history cannot be run offline.** `CSHIP_OFFLINE` takes a usage response through the same
+  `ParseUsage()` as a live fetch and draws it, and `test/probe.json` is a status-line *stdin* payload
+  — but the forecast inputs come from the fixture, so the window checks and the slope cannot be
+  regression-tested. See [development.md](development.md#offline-beside-live-sessions).
+- **`is_active` and `group` are parsed past and discarded.**
+- **A fourth meter has no trend.** Only three series are kept, so a meter past them draws `→ —`.
+  None has been seen yet.
+- **Enterprise is untested.** Every meter it sends is now drawn, under its scope name or its kind,
+  but only a session, a `weekly_all` and one `weekly_scoped` can carry a trend.

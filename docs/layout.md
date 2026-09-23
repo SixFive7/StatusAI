@@ -33,9 +33,9 @@ Current rows measure 133.
 
 ## The metric rows solve for their own bar width
 
-The 5h / 7d / scoped rows use a different mechanism from the token grid: everything except the two
-projection bars is known, so `RenderRows` solves for the bar length that exactly fills the
-terminal, and recomputes it every render.
+The limit rows — 5h, 7d, the scoped row and any meter after it — use a different mechanism from the
+token grid: everything except the two projection bars is known, so `RenderRows` solves for the bar
+length that exactly fills the terminal, and recomputes it every render.
 
 ```
 fixedPart = 4 + 1 + 2 + 2·rowConst + wLbl[0] + wLbl[1] + 2·(wNow + wReset + wTo100 + wProj + wNowBar)
@@ -72,8 +72,8 @@ design note for these rows is not finished until it states its character cost.
 
 Column widths are computed per render as the max needed across the rows **of one column**, so
 nothing is padded wider than the current values require. The left column's rows stack — `5h` above
-`7d` — and have to agree to line up. The right column holds the scoped row alone, beside `7d`, and
-a row beside another has nothing to line up with.
+`7d` — and have to agree to line up; so do the right column's, the scoped row and every meter under
+it. A row beside another has nothing to line up with.
 
 Only the labels used to be kept apart this way, so `5h` / `7d` never inherit the width of a longer
 label like `Fable`. The other five widths were shared across both columns, which aligned nothing
@@ -96,6 +96,44 @@ which is exactly the max across all rows it charged before, so `capBar` is what 
 so is the guarantee: a column's own widths can only be narrower than that, never wider. What the
 right-hand row stops spending is simply not spent. `Compose()` only needs the two left-column rows
 to be one width, which they still are, since the right column starts after them.
+
+### More than three meters
+
+Every meter the server sends gets a row (see [limits.md](limits.md#every-meter-is-drawn)). The first
+two are the left column; the third sits right of `7d`; each one after it takes a line of its own in
+the right column, under the one before, with the left column left blank:
+
+```
+5h ●●●○○○○○○○ 29% ↻ 3h36m → 2h28m ⇢ ●●●●●●●●●●✗✗✗✗         133%  👤 another@example.com · Max 20 · CC 99% · Chat 0% · Cowork 1%
+7d ●●●●●●○○○○ 54% ↻ 4d10h → 6h52m ⇢ ●●●●●●●●●●✗✗✗✗✗✗✗✗✗✗✗✗ 300%  Fable  ●●●●●○○○○○ 47% ↻ 4d10h → never ⇢ ●●●●●○○○○○ 47%
+                                                                 Cowork ●●○○○○○○○○ 12% ↻ 4d10h → —     ⇢ ●●○○○○○○○○ 12%
+```
+
+The cost is one line per extra meter, and the right column's widths — `Cowork` against `Fable`
+here — which the solver charges like any other. The two-column test counts every right-hand row as
+well as the account, so a long enough label takes the block to the stacked layout rather than past
+the edge. Stacked, every meter is a row of its own, in order.
+
+## The account line and the breakdown
+
+The account sits right of `5h`, and after it the product breakdown — each product's share of this
+week's usage, in the account's text colour, `·` dim between them:
+
+```
+👤 another@example.com · Max 20 · CC 99% · Chat 0% · Cowork 1%
+```
+
+**It takes no part in the layout decision.** The two-column test is made on the account alone, so
+the breakdown can never push the rows into the stacked layout. It then gets whatever room that line
+has left — `term − 4` minus the left column and the gap, or `term − 5` stacked — in whole entries or
+not at all: every entry while they all fit, then without the 0% ones, then none. It never wraps and
+is never cut inside an entry. The account is charged as the layout test charges it, one column
+wide of the truth, so the line always passes the test the layout was decided by.
+
+At the default 141 columns and the 2026-09-23 figures that leaves 71 columns for the account line:
+the whole breakdown fits beside an address of up to 27 characters (`another@example.com` is 19,
+with 9 columns to spare), the breakdown without its 0% entries up to 37, and past that none.
+
 
 ## Number format
 
@@ -170,9 +208,9 @@ it**; anything Wide or Fullwidth is disqualified outright, and emoji are only sa
 grid, where `iw[]` declares two columns per glyph explicitly.
 
 `—` is the one sentinel for *this source reported nothing at all*, as distinct from a source that
-reported zero: the `↻` column when the payload carried no `resets_at`, `⏱` / `💰` when the payload
-carried no `cost` block, and the marker opening the standalone render below, where the source that
-reported nothing is cship itself. It is never wider than the value it replaces, so no column it
+reported zero: the `↻` column when the payload carried no `resets_at`, the `→` column of a meter no
+history series follows, `⏱` / `💰` when the payload carried no `cost` block, and the marker opening
+the standalone render below, where the source that reported nothing is cship itself. It is never wider than the value it replaces, so no column it
 appears in can grow. `…` only ever appears inside a truncated `⚠` reason.
 
 ## Icon vocabulary
@@ -224,7 +262,7 @@ WCAG ratio against each.
 | `#A6E3A1` green | `↻`, added lines | 13,16 | 10,44 | 12,10 |
 | `#C6F6C1` light green | the reset time | 16,16 | 12,83 | 14,86 |
 | `#6E738D` dim | empty cells, `→` otherwise, `⇢`, `·`, the plan, the token grid's main scope and `│` | 4,19 | 3,33 | 3,85 |
-| `#A9B1D6` text | the account, the meta figures | 9,27 | 7,35 | 8,52 |
+| `#A9B1D6` text | the account and its breakdown, the meta figures | 9,27 | 7,35 | 8,52 |
 | `#B4BEFE` lavender | `⏱`, the token grid's sub scope | 10,93 | 8,68 | 10,05 |
 
 **Forest is the only one chosen against these grounds.** It is X11 `forestgreen` `#228B22` — hue
@@ -262,6 +300,12 @@ missing `context_window.used_percentage`, since cship draws its context bar from
 missing one draws the same `○○○ 0%` as a genuinely empty context — only the colour differs, the
 bar's configured style for a number and the default foreground otherwise; a suspended usage fetch;
 any of the four ways the token walk can fail; and cship producing no output at all.
+
+**Being on credit has a row of its own**, always last and never joined to the others by `·`: it is
+not a source that failed but usage being billed that the plan should have covered, with the amount
+spent in it — `⚠ on credit — $12,40 spent beyond the plan this period`. What triggers it is in
+[limits.md](limits.md#on-credit). Same red, same budget, and cut the same way as any other reason
+if the terminal is too narrow for it.
 
 ### "No messages yet" is a zero, not a gap
 
