@@ -15,11 +15,21 @@ User-Agent: claude-code/<version>
 Undocumented, like everything else this project reads. Three-second timeout, and every failure
 path is a bare `catch` that leaves the rows rendering their last cached value.
 
+### None of it comes from stdin
+
+Every figure in these three rows is the OAuth response and the registry cache, and the account line
+beside them is `~/.claude.json` and `.credentials.json`. Nothing here reads the status-line payload.
+
+That is what makes them the load-bearing part of a degraded render. A payload malformed enough to
+silence cship — and with it the prompt line, the model line and the token rows — leaves these rows
+completely intact, which is why the block is now emitted on its own rather than dropped when there
+is no host line to insert it into. See [layout.md](layout.md#when-there-is-no-host-line).
+
 ## Response shape
 
 Two shapes ship in the same payload. `Fetch()` prefers the `limits` array and falls back to the
 legacy top-level `five_hour` / `seven_day` objects, which carry `utilization` but no reset time —
-so on the fallback path every row shows a reset of `0m` and no projection is possible.
+so on the fallback path every row shows a reset of `—` and no projection is possible.
 
 ```jsonc
 {
@@ -80,9 +90,23 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   single stray step that window invalidation missed. **Gated** until at least 4 samples span at
   least 10 minutes; until then the row shows `early` rather than a guess.
 - **Rate** is clamped to 40 %/h, and a row only counts as burning above 0,5 %/h.
-- **Horizon** is `min(hours to this row's own reset, 8h)`.
+- **Horizon** is the hours to this row's own reset, uncapped. It used to carry a `min(…, 8h)`
+  ceiling, which made `⇢` mean *at reset* on the 5h row and *in 8 hours* on the 7d row — one glyph
+  with two meanings a line apart, so a red "hits 100% in 2d19h" could sit beside a calm `⇢ 20%`.
+  The consequence of removing it is that a 7d row burning steadily now saturates the 300% cap,
+  which is the honest reading: at this rate the week is gone.
 - **Projection** is `now + rate × horizon`, capped at 300%. Bars past 100% switch from `●` to `✗`.
+- **Bar fill** is `ceil(pct/10)`, not a round. Rounding stood still across the only boundary that
+  matters — everything from 95% to 104% drew ten identical `●`, and `✗` needed 105% to appear.
+  Ceiling over-reports every bar by design (31% draws 4 of 10) and was chosen deliberately: over-
+  project rather than hide a crossing. It also aligns the bar's colour zones with `PctColor`'s
+  thresholds, which rounding had offset by five points.
 - **ETA** is `(100 − now) / rate`, flagged as an overshoot when it lands before the row's reset.
+- **No reset time** is its own state, carried as `Lim.HasReset`. `weekly_scoped` returns
+  `resets_at: null` and the legacy `five_hour` / `seven_day` shape has no reset at all; both used
+  to arrive as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant.
+  They now render `↻ —`, and while a row is in that state its projection is suppressed and its
+  overshoot test is not evaluated — there is no deadline to test against.
 
 ### History invalidation
 

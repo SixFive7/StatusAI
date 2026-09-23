@@ -38,11 +38,22 @@ projection bars is known, so `RenderRows` solves for the bar length that exactly
 terminal, and recomputes it every render.
 
 ```
-fixedPart = 4 + 1 + 2 + 2·rowConst + wLeft + wRight + 2·(wNow + wReset + wTo100 + wProj)
+fixedPart = 4 + 1 + 2 + 2·rowConst + wLeft + wRight + 2·(wNow + wReset + wTo100 + wProj + wNowBar)
 capBar    = clamp((term - 2 - fixedPart) / 2, 10, 30)
 ```
 
-`rowConst` is 25 — the glyphs and spaces in a row outside the label and the four numeric columns.
+`rowConst` is 15 — the glyphs and spaces in a row outside the label, the four numeric columns and
+the two bars. It was 25 and carried the now-bar's ten cells inside it; the now-bar is now the
+explicit `wNowBar` term, computed as a max across rows exactly as `wBar` is, so the constant drops
+by ten and the total is unchanged. Both values are one higher than the measured truth (14, was 24),
+which underfills the line by two columns and can never overflow it.
+
+`wNowBar` is always 10 in practice: `now` is clamped to 0..100 and the fill is `ceil(pct/10)`, so
+ten cells is the ceiling, and `capNowBar` makes that a guarantee rather than an accident. It is a
+term rather than a constant so that an eleventh cell would cost bar budget instead of silently
+shifting everything to its right on one row — which is what `Compose()`'s two-column arithmetic
+cannot survive.
+
 The `4 + 1 + 2` is host padding, our indent, and the column gap; the doubling is because
 `Compose()` puts two metric rows side by side (5h with the account line, 7d with the scoped row).
 
@@ -123,10 +134,16 @@ in a metric row breaks `Compose()`'s two-column arithmetic silently — the righ
 and nothing errors.
 
 Every glyph currently drawn — `│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF,
-`○` U+25CB, `✗` U+2717 — is East-Asian-Ambiguous, which renders single-width in the terminals this
-targets. **Check any candidate against that class before using it**; anything Wide or Fullwidth is
-disqualified outright, and emoji are only safe in the token grid, where `iw[]` declares two columns
-per glyph explicitly.
+`○` U+25CB, `✗` U+2717, `—` U+2014, `…` U+2026 — is East-Asian-Ambiguous, which renders
+single-width in the terminals this targets. **Check any candidate against that class before using
+it**; anything Wide or Fullwidth is disqualified outright, and emoji are only safe in the token
+grid, where `iw[]` declares two columns per glyph explicitly.
+
+`—` is the one sentinel for *this source reported nothing at all*, as distinct from a source that
+reported zero: the `↻` column when the payload carried no `resets_at`, `⏱` / `💰` when the payload
+carried no `cost` block, and the marker opening the standalone render below, where the source that
+reported nothing is cship itself. It is never wider than the value it replaces, so no column it
+appears in can grow. `…` only ever appears inside a truncated `⚠` reason.
 
 ## Icon vocabulary
 
@@ -168,3 +185,60 @@ euro rate was the last field that could grow it.
 
 The euro figure is a conversion of Anthropic's **client-side list-price estimate**, and on a
 subscription plan that isn't what anyone is billed. It is a relative-effort gauge, not an invoice.
+
+With no host line to sit on, the segment becomes the first row of the block instead — see
+[when there is no host line](#when-there-is-no-host-line).
+
+## The ⚠ row
+
+Every source that failed states why, in red, at the foot of the block: one row while the reasons fit
+on it joined by `·`, one row each once they do not, because a wrapped status line costs the same
+height as a split one and reads far worse. A source that honestly reported *zero* says nothing —
+the row exists so that a blank figure is never indistinguishable from a real one.
+
+What can appear there: an unreadable payload; a missing `cost` block or either of its two figures; a
+missing `context_window.used_percentage`, since cship draws its context bar from that field and an
+empty bar is byte-identical to a genuinely empty context; a suspended usage fetch; any of the four
+ways the token walk can fail; and cship producing no output at all.
+
+**One exception, and only one.** A transcript file that does not exist yet is not reported while
+`total_duration_ms` is at or below 30 s. That is not a new threshold — `Hm()` rounds to whole
+minutes, so it is the same boundary as the `⏱ 0m` the meta segment is showing at the time. The
+transcript may not exist yet on the opening renders of a brand-new session, so a session seconds old
+can be in that state with nothing wrong — and a red row on the first frame of every session is how a
+warning row stops being read at all. Past 30 s the file should be there, and its absence is stated
+as loudly as ever.
+
+The other three token failures — no `transcript_path`, an unusable one, an exception during the walk
+— are not explained by a young session and are never suppressed by one, at any age. Neither is a
+missing duration: a payload that never carried `total_duration_ms` is a failed source in its own
+right, so it counts as old and the transcript warning stands.
+
+## When there is no host line
+
+The block is normally *inserted*: cship's stdout is split, the meta segment is appended to its last
+non-empty line, and our rows go in beneath it. When cship returns nothing there is no line to append
+to and nowhere to insert, and skipping the insert — which is what this did — printed **nothing at
+all**. An empty status line is the one output indistinguishable from the binary being uninstalled,
+crashed, or never run, and it arrived at the worst possible moment: cship parses the same stdin we
+do, so a malformed payload silences both of us at once and takes the diagnostic with it.
+
+The block is now emitted on its own instead. Almost nothing in it comes from stdin — the limit rows
+are the registry cache and the API, the account line is the credentials file — so what is genuinely
+lost is the two token rows and the four meta figures, each of which already degrades to a sentinel
+with a stated reason.
+
+Two layout consequences:
+
+- **The meta segment has no host line to ride on**, so it takes the first row of the block and opens
+  with `—`, the sentinel for a source that reported nothing at all — here, cship. Single-width, so
+  this row's left edge lands on column 1 exactly as `│` and `5h` do, by construction and not by
+  measurement. If the segment is empty because cost and duration both genuinely read zero, the row
+  is not drawn at all.
+- **The width budget is unchanged.** The four columns of host padding are Claude Code's, not
+  cship's, and the indent is still ours. Indent + marker + space costs 3 columns, putting the meta
+  segment's measured worst case at 133 of 137 — the same width the token grid is built to.
+
+**cship being *absent* is a different case and takes a different path.** `RunCship`'s `catch`
+returns the raw stdin, which is a non-empty line, so the block is inserted beneath the echoed JSON
+exactly as usual. Standalone happens only when cship ran and said nothing.

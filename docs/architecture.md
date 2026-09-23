@@ -14,7 +14,9 @@ Claude Code  ──stdin JSON──▶  cship-usage.exe  ──stdin──▶  c
 
 `cship-usage` reads the status-line payload on stdin, pipes it through `cship`, takes its stdout,
 appends the meta segment to the last non-empty line, and inserts the token rows and limit rows
-beneath it.
+beneath it. If `cship` returns nothing — which is what it does with a payload it cannot parse —
+there is no line to append to, and the block is emitted on its own with the meta segment on its
+first row rather than dropped; see [layout.md](layout.md#when-there-is-no-host-line).
 
 **`cship` must be co-located with `cship-usage`.** Windows searches the calling executable's own
 directory before PATH. If `cship` isn't found, the failure path is `catch { return input; }`, which

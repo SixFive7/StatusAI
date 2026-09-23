@@ -6,43 +6,111 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
 
+// `—` U+2014, the one sentinel for "this source reported nothing at all", as opposed to a
+// source that reported zero. East-Asian Ambiguous, like every other glyph drawn in a
+// metric row, so it is one column wide there and Vis()'s assumption holds. It is also
+// never wider than the value it replaces, so no column it appears in can grow.
+// A compile-time constant, so the static local functions below can use it.
+const string NoData = "—";
+
 string stdin;
 using (var s = Console.OpenStandardInput())
 using (var r = new StreamReader(s, Encoding.UTF8)) stdin = r.ReadToEnd();
 
 string cshipOut = RunCship(stdin);
 
+// A missing source and a genuine zero are the same number, so presence is tracked
+// alongside every value that would otherwise render as 0. Nothing is inferred from the
+// value itself: cost 0 on a fresh session is real and must keep rendering as $0,00.
 double costUsd = 0; long durMs = 0; int add = 0, del = 0;
+bool haveCost = false, haveDur = false, haveCtx = false;
 string transcriptPath = "";
+string stdinErr = "";
 try {
     using var d = JsonDocument.Parse(stdin);
     if (d.RootElement.TryGetProperty("cost", out var c) && c.ValueKind == JsonValueKind.Object) {
-        if (c.TryGetProperty("total_cost_usd", out var v1)) costUsd = v1.GetDouble();
-        if (c.TryGetProperty("total_duration_ms", out var v2)) durMs = v2.GetInt64();
-        if (c.TryGetProperty("total_lines_added", out var v3)) add = v3.GetInt32();
-        if (c.TryGetProperty("total_lines_removed", out var v4)) del = v4.GetInt32();
+        if (c.TryGetProperty("total_cost_usd", out var v1) && v1.ValueKind == JsonValueKind.Number) { costUsd = v1.GetDouble(); haveCost = true; }
+        if (c.TryGetProperty("total_duration_ms", out var v2) && v2.ValueKind == JsonValueKind.Number) { durMs = v2.GetInt64(); haveDur = true; }
+        if (c.TryGetProperty("total_lines_added", out var v3) && v3.ValueKind == JsonValueKind.Number) add = v3.GetInt32();
+        if (c.TryGetProperty("total_lines_removed", out var v4) && v4.ValueKind == JsonValueKind.Number) del = v4.GetInt32();
     }
+    // Read only to tell "the field is missing" from "the field says 0" — the context bar
+    // itself is drawn by cship from this same payload, not here.
+    if (d.RootElement.TryGetProperty("context_window", out var cw) && cw.ValueKind == JsonValueKind.Object
+        && cw.TryGetProperty("used_percentage", out var up) && up.ValueKind == JsonValueKind.Number) haveCtx = true;
     if (d.RootElement.TryGetProperty("transcript_path", out var tp) && tp.ValueKind == JsonValueKind.String)
         transcriptPath = tp.GetString() ?? "";
-} catch { }
+} catch (Exception ex) {
+    // this used to be a bare catch, and every downstream zero then looked like a real zero
+    stdinErr = "payload unreadable — " + ex.GetType().Name;
+}
 
 var (usageRows, usageErr) = GetUsage();
-string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd());
+string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
 string acctLine = BuildAccount();
-var tokenLines = BuildTokens(transcriptPath);
+// On a session seconds old the transcript may not exist yet, which is a race and not a
+// fault, so BuildTokens is told to stay quiet about a missing file that long. 30 s is
+// not a new threshold: BuildMeta rounds the duration to whole minutes, so this is the
+// same boundary as the ⏱ 0m being displayed while the exception applies. A duration the
+// payload never carried is not youth — it is a failed source in its own right, and a
+// missing transcript stays loud beside it.
+bool youngSession = haveDur && durMs <= 30000;
+var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession);
 
+// One ⚠ row for every source that failed, so a blank figure always has a stated reason.
+// A source that reported a genuine zero contributes nothing here.
+var warns = new List<string>();
+if (stdinErr.Length > 0) warns.Add(stdinErr);
+if (usageErr.Length > 0) warns.Add(usageErr);
+if (stdinErr.Length == 0) {
+    if (!haveCost && !haveDur) warns.Add("cost, duration — no cost block in the payload");
+    else if (!haveCost) warns.Add("cost — no cost.total_cost_usd in the payload");
+    else if (!haveDur) warns.Add("duration — no cost.total_duration_ms in the payload");
+    // cship draws the context bar from this field; with the field gone it draws an empty
+    // bar at 0%, which is byte-identical to a genuinely empty context. Saying so here is
+    // the only thing this repo can do about it — the bar is not ours to change.
+    if (!haveCtx) warns.Add("context — no context_window.used_percentage; the 0% bar is not real");
+}
+if (tokenErr.Length > 0) warns.Add(tokenErr);
+
+// The host line is located before the ⚠ rows are laid out, so its absence can add a
+// reason of its own to them. idx < 0 means every line cship returned was blank, which is
+// exactly what cship does with a payload it cannot parse — and a payload that cannot be
+// parsed is the case where a diagnostic is worth the most.
 var lines = new List<string>(cshipOut.Replace("\r\n", "\n").Split('\n'));
 int idx = -1;
 for (int i = lines.Count - 1; i >= 0; i--) if (lines[i].Trim().Length > 0) { idx = i; break; }
+if (idx < 0) warns.Add("cship — no output; its prompt and model lines are missing");
+
+var warnLines = WarnRows(warns);
+
+// Every row of the block opens with a single-width glyph — the token rows with their
+// │ rule, the metric rows with 5h/7d — so one indent serves them all and column 1 is
+// column 1 on every line.
+var block = new List<string>(tokenLines);
+block.AddRange(Compose(usageRows, acctLine, warnLines));
 if (idx >= 0) {
     lines[idx] = "\x1b[0m" + lines[idx];
     if (metaLine.Length > 0) lines[idx] += "   " + metaLine;
-    // Every inserted row now opens with a single-width glyph — the token rows with their
-    // │ rule, the metric rows with 5h/7d — so one indent serves them all and column 1 is
-    // column 1 on every line.
-    var block = new List<string>(tokenLines);
-    block.AddRange(Compose(usageRows, acctLine, usageErr));
     lines.InsertRange(idx + 1, block.Select(l => "\x1b[0m " + l));
+} else {
+    // No host line to insert into. Emitting the block on its own is worth it because
+    // almost none of it comes from stdin: the limit rows are the registry cache and the
+    // API, the account line is the credentials file, and only the token rows and the meta
+    // figures are lost — each of them already degrading to a sentinel with a stated
+    // reason. Skipping the insert instead, as this did, printed nothing whatsoever, which
+    // is the one output indistinguishable from the binary being uninstalled or dead.
+    //
+    // The meta segment normally rides on the host line, so here it takes the first row of
+    // the block and opens with the — sentinel: the host line is a source that reported
+    // nothing at all, which is exactly what that glyph means everywhere else. It is
+    // single-width, so this row's left edge lands on column 1 like every other row's, and
+    // indent + marker + space costs 3 of the 137 columns against the meta segment's
+    // measured worst case of 130.
+    lines.Clear();
+    if (metaLine.Length > 0)
+        lines.Add("\x1b[0m \x1b[38;2;110;115;141m" + NoData + "\x1b[0m " + metaLine);
+    lines.AddRange(block.Select(l => "\x1b[0m " + l));
 }
 lines.RemoveAll(l => l.Trim().Length == 0);
 using (var os = Console.OpenStandardOutput())
@@ -52,7 +120,7 @@ return;
 // Two columns when the terminal has room: the scoped row sits right of 5h and the
 // account right of 7d. Every metric row renders to the same visible width, so a
 // fixed gap keeps both columns aligned. Falls back to stacked when too narrow.
-static List<string> Compose(string usageRows, string acct, string err) {
+static List<string> Compose(string usageRows, string acct, List<string> errs) {
     const int gap = 2;
     var rows = usageRows.Length > 0 ? new List<string>(usageRows.Split('\n')) : new List<string>();
     var block = new List<string>();
@@ -66,13 +134,13 @@ static List<string> Compose(string usageRows, string acct, string err) {
             block.Add(rows[0] + (right0.Length > 0 ? pad + right0 : ""));
             block.Add(rows[1] + (right1.Length > 0 ? pad + right1 : ""));
             for (int i = 3; i < rows.Count; i++) block.Add(rows[i]);
-            if (err.Length > 0) block.Add(err);
+            block.AddRange(errs);
             return block;
         }
     }
     block.AddRange(rows);
     if (acct.Length > 0) block.Add(acct);
-    if (err.Length > 0) block.Add(err);
+    block.AddRange(errs);
     return block;
 }
 
@@ -140,6 +208,8 @@ static string LockName() {
     return @"Global\cshipUsage.fetch." + sid + (adm ? ".adm" : ".std");
 }
 
+// Returns the bare reason; WarnRows does the ⚠ and the colour, so the lock failure shares
+// one row with every other failed source rather than owning a line of its own.
 static string LockError(Exception ex) {
     string why = ex switch {
         WaitHandleCannotBeOpenedException => "the lock name is occupied by a foreign kernel object that is not a mutex",
@@ -147,7 +217,35 @@ static string LockError(Exception ex) {
         IOException => "the usage lock could not be opened due to an I/O error",
         _ => "unexpected " + ex.GetType().Name + " while opening the usage lock"
     };
-    return "\x1b[1;38;2;247;118;142m⚠ usage tracking suspended — " + why + "\x1b[0m";
+    return "usage tracking suspended — " + why;
+}
+
+// A failed source must never be indistinguishable from a source that honestly reported
+// nothing, so every reason is stated. They share one row separated by · while they fit —
+// a single reason then renders exactly as the lock error always has — and take a row each
+// once they do not, because a wrapped status line costs the same height as a split one
+// and reads far worse.
+static List<string> WarnRows(List<string> reasons) {
+    const string red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
+    var outp = new List<string>();
+    if (reasons.Count == 0) return outp;
+    string one = string.Join(" · ", reasons);
+    int budget = TermWidth() - 6;   // 4 host padding, 1 indent, 1 safety
+    if (2 + one.Length <= budget) { outp.Add(red + "⚠ " + one + rst); return outp; }
+    foreach (var r in reasons) outp.Add(red + "⚠ " + Short(r, budget - 2) + rst);
+    return outp;
+}
+
+// A reason has to fit on a status line. Exception text can carry a whole path — a runaway
+// directory junction produced a 33 KB one under test, which tore the line apart — and a
+// transcript_path is routinely past 100 characters. Head and tail are kept because the
+// identifying part of a path is its end and the identifying part of a message is its
+// start. `…` U+2026 is East-Asian Ambiguous, so it is one column like every other glyph
+// here.
+static string Short(string s, int max = 64) {
+    if (max < 16) max = 16;   // TermWidth() floors at 41, so this only guards a future caller
+    s = s.Replace('\n', ' ').Replace('\r', ' ');
+    return s.Length <= max ? s : s.Substring(0, max - 13) + "…" + s.Substring(s.Length - 12);
 }
 
 static string? FreshVal(long now) {
@@ -193,12 +291,12 @@ static string? FetchAndRender(long now) {
     bool gF = true; double rateF = 0;
     if (scoped is not null) rateF = Slope(hist, 2, vfF, out gF);
 
-    var rows = new List<(string label, int pct, double hrs, double rate, bool gated, string sev)> {
-        ("5h", s, sess.Value.Hours, rateS, gS, sess.Value.Sev),
-        ("7d", w, week.Value.Hours, rateW, gW, week.Value.Sev)
+    var rows = new List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)> {
+        ("5h", s, sess.Value.Hours, sess.Value.HasReset, rateS, gS, sess.Value.Sev),
+        ("7d", w, week.Value.Hours, week.Value.HasReset, rateW, gW, week.Value.Sev)
     };
     if (scoped is Lim sc)
-        rows.Add((scopedName.Length > 0 ? scopedName : "scoped", sc.Pct, sc.Hours, rateF, gF, sc.Sev));
+        rows.Add((scopedName.Length > 0 ? scopedName : "scoped", sc.Pct, sc.Hours, sc.HasReset, rateF, gF, sc.Sev));
     string val = RenderRows(rows, 2);
     Save(acct.Length > 0 ? acct : oldAcct, scopedName.Length > 0 ? scopedName : oldName,
          rsS, rsW, rsF, vfS, vfW, vfF, hist, val, now);
@@ -336,9 +434,23 @@ static string ZoneColor(int oneBasedBullet) {
     return "\x1b[38;2;125;207;255m";
 }
 
+// Ceiling, not rounding. Rounding made a bar stand still across the only boundary that
+// matters: everything from 95% to 104% drew ten identical ●, so crossing 100 changed
+// nothing and the ✗ overflow glyph needed 105% before it appeared. Ceiling lights a cell
+// as soon as its tenth is entered, so 101% is visibly eleven cells and the first is an ✗.
+// It over-reports every bar by design — 31% draws 4 of 10 where it drew 3 — which is the
+// accepted trade: over-project rather than hide a crossing.
+//
+// Shared by Bar() and by the width solver in RenderRows, which must agree exactly: the
+// solver pads a bar to a width it computes from this number, so two formulas would let
+// the pad and the bar disagree and shift the second column.
+static int BarFill(int pct) {
+    int f = (int)Math.Ceiling(pct / 10.0);
+    return f < 0 ? 0 : f;
+}
+
 static string Bar(int pct, int padTo = 0, int cap = 15) {
-    int fill = (int)Math.Round(pct / 10.0, MidpointRounding.AwayFromZero);
-    if (fill < 0) fill = 0;
+    int fill = BarFill(pct);
     int len = Math.Min(cap, Math.Max(10, fill));
     var sb = new StringBuilder();
     string cur = "";
@@ -363,21 +475,28 @@ static string SevColor(string sev) =>
 
 // leftCount = rows that stack in the left column; labels only pad against the
 // rows they sit above, so "5h"/"7d" don't inherit the width of a longer scoped label
-static string RenderRows(List<(string label, int pct, double hrs, double rate, bool gated, string sev)> rows, int leftCount) {
+static string RenderRows(List<(string label, int pct, double hrs, bool hasReset, double rate, bool gated, string sev)> rows, int leftCount) {
     var d = rows.Select(r => {
         int now = Math.Clamp(r.pct, 0, 100);
         double rate = Math.Min(r.rate, 40);
         bool burning = !r.gated && rate > 0.5;
-        double horizon = Math.Min(r.hrs, 8.0);
-        int proj = burning ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
+        // Project to the row's own reset, uncapped. An 8h ceiling made ⇢ mean "at reset"
+        // on the 5h row and "in 8 hours" on the 7d row — one glyph, two meanings, one line
+        // apart — so a red "hits 100% in 2d19h" could sit beside a calm ⇢ 20%.
+        double horizon = r.hrs;
+        // Without a reset time there is no horizon, so there is no forecast to make: the
+        // bar shows the current value and asserts nothing about where it is heading.
+        int proj = burning && r.hasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
         string to100; bool overshoot = false;
         if (r.gated) to100 = "early";   // not enough same-window data for an honest trend yet
         else if (burning && now < 100) {
             double h = (100 - now) / rate;
-            overshoot = h < r.hrs;
+            // an overshoot is "100% arrives before the window resets" — untestable, and
+            // never asserted, when we do not know when the window resets
+            overshoot = r.hasReset && h < r.hrs;
             to100 = Hm(h);
         } else to100 = now >= 100 ? "maxed" : "never";
-        return (r.label, now, proj, reset: Hm(r.hrs), to100, overshoot, r.sev);
+        return (r.label, now, proj, reset: r.hasReset ? Hm(r.hrs) : NoData, to100, overshoot, r.sev);
     }).ToList();
     int wLeft = 0, wRight = 0;
     for (int i = 0; i < d.Count; i++) {
@@ -389,21 +508,35 @@ static string RenderRows(List<(string label, int pct, double hrs, double rate, b
     int wTo100 = d.Max(x => x.to100.Length);
     int wProj = d.Max(x => x.proj.ToString().Length);
 
+    // The now-bar's own width, computed across rows and padded to below exactly as the
+    // projection bar is. `now` is clamped to 0..100 above, so ceil(now/10) can never
+    // exceed ten and capNowBar makes that a guarantee rather than an accident — an
+    // eleventh cell here would shift everything to its right on that row alone, and
+    // Compose() lays two rows side by side assuming every row is the same visible width.
+    const int capNowBar = 10;
+    int wNowBar = 10;
+    foreach (var x in d) wNowBar = Math.Max(wNowBar, Math.Min(capNowBar, BarFill(x.now)));
+
     // Spend whatever width is left on overshoot markers. A two-column line costs
-    // indent + leftRow + gap + rightRow; everything but the two bars is known here,
-    // so solve for the bar length that exactly fills the terminal. Recomputed each
+    // indent + leftRow + gap + rightRow; everything but the projection bars is known
+    // here, so solve for the bar length that exactly fills the terminal. Recomputed each
     // render, so a wider reset/eta column shrinks the bars instead of wrapping.
-    const int rowConst = 25;   // per-row glyphs/spaces outside label + numeric columns
+    //
+    // rowConst was 25 and carried the now-bar's ten cells inside it; the now-bar is now
+    // an explicit term, so the constant drops by exactly ten and the total is unchanged.
+    // Measured true value is 14 — nine spaces, ↻ → ⇢, two '%' — so 15 keeps the same
+    // one-per-row conservatism the 25 had. It underfills by two columns and never
+    // overflows.
+    const int rowConst = 15;   // per-row glyphs/spaces outside label, numbers and bars
     int term = TermWidth();
     if (term <= 0) term = 138;
     // 4 = host padding, 1 = our indent, 2 = column gap
-    int fixedPart = 4 + 1 + 2 + rowConst * 2 + wLeft + wRight + 2 * (wNow + wReset + wTo100 + wProj);
+    int fixedPart = 4 + 1 + 2 + rowConst * 2 + wLeft + wRight + 2 * (wNow + wReset + wTo100 + wProj + wNowBar);
     int capBar = Math.Clamp((term - 2 - fixedPart) / 2, 10, 30);   // -2 = safety margin
+    // max over both bars' fills, so the projection column is never padded narrower than
+    // something already drawn on the line
     int wBar = 10;
-    foreach (var x in d) {
-        int fill = (int)Math.Round(x.proj / 10.0, MidpointRounding.AwayFromZero);
-        wBar = Math.Max(wBar, Math.Min(capBar, Math.Max(10, fill)));
-    }
+    foreach (var x in d) wBar = Math.Max(wBar, Math.Min(capBar, Math.Max(BarFill(x.now), BarFill(x.proj))));
     string dim = "\x1b[38;2;110;115;141m", red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
     var outLines = new List<string>();
     for (int i = 0; i < d.Count; i++) {
@@ -412,7 +545,7 @@ static string RenderRows(List<(string label, int pct, double hrs, double rate, b
         string lbl = x.label.PadRight(i < leftCount ? wLeft : wRight);
         string sevc = SevColor(x.sev);
         sb.Append(sevc.Length > 0 ? $"{sevc}{lbl}{rst}" : lbl);
-        sb.Append($" {Bar(x.now)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow)}%{rst}");
+        sb.Append($" {Bar(x.now, wNowBar, capNowBar)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow)}%{rst}");
         sb.Append($" \x1b[38;2;166;227;161m↻{rst} \x1b[38;2;198;246;193m{x.reset.PadRight(wReset)}{rst}");
         sb.Append($" {(x.overshoot ? red : dim)}→ {x.to100.PadRight(wTo100)}{rst}");
         sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar, capBar)} {(x.proj > 100 ? red : dim)}{x.proj.ToString().PadLeft(wProj)}%{rst}");
@@ -421,18 +554,28 @@ static string RenderRows(List<(string label, int pct, double hrs, double rate, b
     return string.Join("\n", outLines);
 }
 
-static string BuildMeta(double cost, long durMs, int add, int del, double eurRate) {
-    if (durMs <= 0 && cost <= 0) return "";
+// haveCost / haveDur say whether the payload carried the field at all. A figure whose
+// source is missing renders as — rather than as 0: the whole point of the meta segment is
+// that a small number means a cheap session, and a silent 0 for "the field wasn't there"
+// says exactly the opposite of the truth. A present 0 still renders $0,00, unchanged.
+static string BuildMeta(double cost, long durMs, int add, int del, double eurRate, bool haveCost, bool haveDur) {
+    // suppressed only when both sources genuinely reported nothing; an absent source has
+    // something to say and says it
+    if (durMs <= 0 && cost <= 0 && haveCost && haveDur) return "";
     double hours = durMs / 3600000.0;
     var sb = new StringBuilder();
     const string txt = "\x1b[38;2;169;177;214m", dim = "\x1b[38;2;110;115;141m", rst = "\x1b[0m";
-    sb.Append($"\x1b[38;2;180;190;254m⏱ {Hm(hours)}{rst}");
+    sb.Append($"\x1b[38;2;180;190;254m⏱ {(haveDur ? Hm(hours) : NoData)}{rst}");
     if (add > 0 || del > 0) sb.Append($"   📝 \x1b[38;2;166;227;161m+{add}{rst} \x1b[38;2;247;118;142m-{del}{rst}");
     if (hours > 0.02) {
-        sb.Append($"   {txt}💸 ${Nl((cost / hours).ToString("N2"))}");
-        if (eurRate > 0) sb.Append($"{dim}/{txt}€{Nl((cost / hours * eurRate).ToString("N2"))}");
-        sb.Append($"/h{rst}");
+        if (!haveCost) sb.Append($"   {txt}💸 {NoData}/h{rst}");
+        else {
+            sb.Append($"   {txt}💸 ${Nl((cost / hours).ToString("N2"))}");
+            if (eurRate > 0) sb.Append($"{dim}/{txt}€{Nl((cost / hours * eurRate).ToString("N2"))}");
+            sb.Append($"/h{rst}");
+        }
     }
+    if (!haveCost) { sb.Append($"   {txt}💰 {NoData}{rst}"); return sb.ToString(); }
     sb.Append($"   {txt}💰 ${Nl(cost.ToString("N2"))}{rst}");
     if (eurRate > 0) sb.Append($"{dim}/{txt}€{Nl((cost * eurRate).ToString("N2"))}{rst}");
     return sb.ToString();
@@ -530,17 +673,21 @@ static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scop
             foreach (var lim in limits.EnumerateArray()) {
                 string kind = lim.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
                 int pct = lim.TryGetProperty("percent", out var pc) ? (int)pc.GetDouble() : 0;
-                double hrs = 0; long rsu = 0;
+                // resets_at is null on weekly_scoped, so "no reset time" is a state the
+                // payload really does report and not a parse failure — carried on as a
+                // flag rather than as an hrs of 0, which reads as "resets right now"
+                double hrs = 0; long rsu = 0; bool hasReset = false;
                 if (lim.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
                     && DateTimeOffset.TryParse(ra.GetString(), out var rdt)) {
                     hrs = Math.Max(0, (rdt - utc).TotalHours); rsu = rdt.ToUnixTimeSeconds();
+                    hasReset = true;
                 }
                 string sev = lim.TryGetProperty("severity", out var sv) ? sv.GetString() ?? "" : "";
                 string model = "";
                 if (lim.TryGetProperty("scope", out var sc) && sc.ValueKind == JsonValueKind.Object
                     && sc.TryGetProperty("model", out var mo) && mo.ValueKind == JsonValueKind.Object
                     && mo.TryGetProperty("display_name", out var dn)) model = dn.GetString() ?? "";
-                var l = new Lim(pct, hrs, rsu, sev);
+                var l = new Lim(pct, hrs, hasReset, rsu, sev);
                 if (kind == "session") sess = l;
                 else if (kind == "weekly_all") week = l;
                 // one scoped row is displayed; if several ever appear, the highest wins
@@ -550,8 +697,10 @@ static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scop
             }
             return sess is not null && week is not null;
         }
-        sess = new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, 0, "");
-        week = new Lim((int)root.GetProperty("seven_day").GetProperty("utilization").GetDouble(), 0, 0, "");
+        // the legacy shape carries utilization but no reset time, so both rows are
+        // genuinely unknown here rather than resetting in zero minutes
+        sess = new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, false, 0, "");
+        week = new Lim((int)root.GetProperty("seven_day").GetProperty("utilization").GetDouble(), 0, false, 0, "");
         return true;
     } catch { return false; }
 }
@@ -570,12 +719,24 @@ static bool Fetch(out Lim? sess, out Lim? week, out Lim? scoped, out string scop
 // fresh session is nil; the tail of the corpus runs to hundreds of MB, which is what
 // the per-render byte budget below is for.
 
-static List<string> BuildTokens(string transcriptPath) {
-    if (transcriptPath.Length == 0) return new List<string>();
+// Returns the rows and, separately, why there are none. Four of the five ways this
+// produces nothing are failures of the source — no path, an unusable path, no files on
+// disk, an exception — and only the fifth, a grand total of zero in TokRender, is a
+// session that honestly has not spent a token yet. Rendering both as an absent row made
+// them indistinguishable, so the failures now come back with a reason for the ⚠ row and
+// the genuine zero still comes back silent.
+//
+// `youngSession` buys exactly one of those four an exception, on the argument below: a
+// transcript that does not exist yet on a session seconds old is a race, not a fault. The
+// other three are not explained by youth and are never suppressed by it.
+static (List<string> lines, string err) BuildTokens(string transcriptPath, bool youngSession) {
+    if (transcriptPath.Length == 0)
+        return (new List<string>(), "tokens — no transcript_path in the payload");
     try {
         string dir = Path.GetDirectoryName(transcriptPath) ?? "";
         string sid = Path.GetFileNameWithoutExtension(transcriptPath);
-        if (dir.Length == 0 || sid.Length == 0) return new List<string>();
+        if (dir.Length == 0 || sid.Length == 0)
+            return (new List<string>(), "tokens — unusable transcript_path '" + Short(transcriptPath) + "'");
 
         var files = new List<(string path, bool main)>();
         if (File.Exists(transcriptPath)) files.Add((transcriptPath, true));
@@ -584,7 +745,16 @@ static List<string> BuildTokens(string transcriptPath) {
             foreach (var f in Directory.EnumerateFiles(subs, "agent-*.jsonl", SearchOption.AllDirectories)
                                        .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                 files.Add((f, false));   // nested workflow agents live deeper — recurse
-        if (files.Count == 0) return new List<string>();
+        // Nothing on disk to count — a fault at every age but one. The transcript may
+        // not exist yet on the opening renders of a brand-new session, so a session
+        // seconds old can be in this state with nothing wrong, and a red row on the first
+        // frame of every session is noise — noise being how a warning row stops being
+        // read at all. Below the 30-second mark this therefore renders exactly as a
+        // genuine zero does: silently, with an empty grid. Past that mark the file should
+        // be there, and its absence is stated as loudly as it was before.
+        if (files.Count == 0)
+            return (new List<string>(),
+                    youngSession ? "" : "tokens — no transcript file '" + Short(transcriptPath) + "'");
 
         var st = TokLoad(sid);
         // A file shorter than its stored offset was rewritten rather than appended to.
@@ -604,8 +774,13 @@ static List<string> BuildTokens(string transcriptPath) {
 
         bool truncated = TokScan(files, st);
         TokSave(sid, st);
-        return TokRender(st, truncated);
-    } catch { return new List<string>(); }
+        // TokRender returns nothing when the grand total is zero. That is the one genuine
+        // zero of the five, so it comes back with no reason attached.
+        return (TokRender(st, truncated), "");
+    } catch (Exception ex) {
+        // was a bare catch: the walk could fail on every file and the rows just vanished
+        return (new List<string>(), "tokens — walk failed: " + ex.GetType().Name + " " + Short(ex.Message));
+    }
 }
 
 // Parses at most `budget` new bytes per render and records how far it got, so a huge
@@ -849,4 +1024,8 @@ sealed class TokState {
     public readonly long[] Sub = new long[5];
 }
 
-record struct Lim(int Pct, double Hours, long ResetsUnix, string Sev);
+// HasReset is carried explicitly rather than inferred from Hours or ResetsUnix being 0.
+// The API returns resets_at: null for weekly_scoped, and the legacy five_hour/seven_day
+// fallback shape has no reset time at all — both used to arrive as Hours 0, which the
+// rows rendered as "↻ 0m", an assertion that the window resets this instant.
+record struct Lim(int Pct, double Hours, bool HasReset, long ResetsUnix, string Sev);
