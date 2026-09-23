@@ -165,6 +165,8 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   The consequence of removing it is that a 7d row burning steadily now saturates the 300% cap,
   which is the honest reading: at this rate the week is gone.
 - **Projection** is `now + rate × horizon`, capped at 300%. Bars past 100% switch from `●` to `✗`.
+  `→` and `⇢` share this one pace; taking `⇢` from the window's average instead was replayed and
+  rejected — see [below](#rejected-a-window-average-projection-option-c).
 - **Bar fill** is `ceil(pct/10)`, not a round. Rounding stood still across the only boundary that
   matters — everything from 95% to 104% drew ten identical `●`, and `✗` needed 105% to appear.
   Ceiling over-reports every bar by design (31% draws 4 of 10) and was chosen deliberately: over-
@@ -244,6 +246,51 @@ output. Two things are worth carrying forward anyway:
 The visual treatment is preserved as a documentation style example in
 [templates/weekly-wall.html](templates/weekly-wall.html) — which carries its own correction band,
 because the page argues for the design as though it were correct.
+
+## Rejected: a window-average projection (option c)
+
+**Status: proposed, replayed against a week of use, rejected on 2026-09-23. Never implemented.**
+
+Recorded here because the reading that prompted it will recur, and the fix looks obvious.
+
+**The observation.** At 19:57 on 2026-09-23 the 7d row read 89%, a red `→ 4h35m` and `⇢ 226%`.
+Both came from one number: the 60-minute pace, 2,40 %/h, stretched over the 57 hours to the
+Saturday 05:00 reset, nights included. The hour behind it ran at three times the week's average and
+was the ninth busiest of 111.
+
+**What was proposed.** Keep `→` on the 60-minute pace, and take `⇢` on the weekly rows — 7d and
+scoped — from the window's own average: `now + now ÷ elapsed × hours to reset`, with
+`elapsed = 168 h − hours to reset`, because the API sends only `resets_at`. It would project only
+when that adds at least one point by the reset — the 0,5 %/h test switches the projection on all at
+once, 27% to 85% within an hour in the replay — and show the current value for a window's first 12
+hours. The 5h row would not change. At 19:57 that is `⇢ 135%` on 7d instead of 226%, and `⇢ 36%` on
+Fable instead of 24%. The worst-case width is unchanged: same solver, same 300% cap, same bar cap.
+
+**What the replay showed.** The week from 2026-09-19 05:00 to 2026-09-23 20:03 was replayed minute
+by minute: the meter reconstructed from this machine's usage and the registry's real samples, read
+as whole percents every 60 seconds, through the binary's own slope, gate, clamp, rounding and cap.
+
+- **Steadier.** Today's `⇢` stood 50 points or more from where it was an hour earlier in 22% of
+  minutes and sat pinned at 300% for 9% of the week; c's never moved more than 16 points in an hour.
+- **More accurate.** Extended 6, 12 and 24 hours ahead, c missed by 3,8 / 6,9 / 14,2 points on
+  average against today's 4,8 / 10,5 / 23,0 — today did worse than assuming no further use at 12
+  and 24 hours — and c never forecast a 100% that did not come, where today forecast ten.
+- **Slower to react.** An hour of heavy use moved c's `⇢` by a median of 6 points, and after use
+  stopped for good it would have kept forecasting an overshoot for about 40 hours.
+- **Biased by the shape of the week.** The week started quiet and ended busy, so the average lagged
+  it and c under-forecast at every horizon. A week with its busy days first flips the sign.
+- **Two answers on one row.** With `→` on one pace and `⇢` on another, the two disagreed 39% of the
+  time: a red countdown beside a `⇢` under 100% (`→ 15h13m ⇢ 76%`, Monday 17:00), or `→ never`
+  beside a `⇢` over it (`→ never ⇢ 128%`, all Tuesday night).
+
+**The decision.** The user kept the current behaviour: one pace, the last 60 minutes, for both `→`
+and `⇢`.
+
+**What to keep.** Judge any future forecast change the same way: replay whole-percent samples at the
+binary's own cadence, and backtest against "no change" as well as against the current method — a
+forecast that loses to "no change" is not earning its place. The replay, the backtest and every
+option as it was drawn are in [limits-decisions.html](limits-decisions.html), under its own
+correction band.
 
 ## Known gaps
 
