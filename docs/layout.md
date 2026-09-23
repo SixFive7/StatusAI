@@ -207,6 +207,37 @@ triangles work because orientation *is* the glyph.
 necessity. Every icon is default-emoji-presentation — no variation selectors — so width and colour
 are guaranteed by the codepoint alone.
 
+## Palette
+
+Every colour is a literal in `Program.cs`, and a doc that shows one the binary does not draw is
+describing something that does not exist. The ground is Windows Terminal's default Campbell
+`#0C0C0C` — the Claude Code profile sets no scheme — under a wallpaper at 10% opacity, which can
+lift it to `#242424` where the image is white; the docs' pane ground is `#16161E`. Contrast is the
+WCAG ratio against each.
+
+| colour | where | Campbell | lightest wallpaper | `#16161E` |
+|---|---|---|---|---|
+| `#7DCFFF` cyan | bar cells 1–7, percentages under 70; bold, the token-grid totals | 11,40 | 9,05 | 10,48 |
+| `#E0AF68` amber | bar cells 8–9, percentages 70–89, `warning` labels | 9,78 | 7,76 | 8,99 |
+| `#F7768E` red | bold: bar cells 10+ and `✗`, percentages 90+, `critical` labels, `→` when 100% lands before the reset, projections past 100%, `⚠` rows; plain: removed lines | 7,39 | 5,87 | 6,80 |
+| `#28A428` forest | `→` when the row's own reset comes before 100% would | 5,99 | 4,75 | 5,51 |
+| `#A6E3A1` green | `↻`, added lines | 13,16 | 10,44 | 12,10 |
+| `#C6F6C1` light green | the reset time | 16,16 | 12,83 | 14,86 |
+| `#6E738D` dim | empty cells, `→` otherwise, `⇢`, `·`, the plan, the token grid's main scope and `│` | 4,19 | 3,33 | 3,85 |
+| `#A9B1D6` text | the account, the meta figures | 9,27 | 7,35 | 8,52 |
+| `#B4BEFE` lavender | `⏱`, the token grid's sub scope | 10,93 | 8,68 | 10,05 |
+
+**Forest is the only one chosen against these grounds.** It is X11 `forestgreen` `#228B22` — hue
+120°, saturation 61% — lifted from 34% to 40% lightness, because `#228B22` itself is 4,10:1 on the
+docs' ground and 3,54:1 where the wallpaper is lightest; 40% is the first step at 4,5:1 on all
+three. It has to read as more of a green than the two already on the row, not as a third pastel:
+CIELAB chroma 76 against the 41 of `↻`'s `#A6E3A1`, and ΔE2000 21,7 from it and 27,3 from the
+reset time's `#C6F6C1`. The screenshot this was checked against draws the ground at `#1B1B1B` on
+the median and `#222222` at the 99th percentile, between the table's first two columns.
+
+Dim is the one colour under 4,5:1 on every ground, which is one more reason a `→` worth reading no
+longer uses it.
+
 ## Meta segment
 
 Order: `⏱ duration` · `📝 +added -removed` · `💸 rate` · `💰 cost`, dollars and euros separated by a

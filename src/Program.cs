@@ -13,6 +13,16 @@ using Microsoft.Win32;
 // A compile-time constant, so the static local functions below can use it.
 const string NoData = "—";
 
+// #28A428, forest green: the → time when the row's own reset comes before 100% would, so
+// this window cannot run out at the current pace — harmless, where red is not. X11
+// forestgreen #228B22 is 4,10:1 on the docs' #16161E and 3,54:1 where the 10%-opacity
+// wallpaper is lightest, so it keeps that hue (120°) and saturation (61%) and is lifted from
+// 34% to 40% lightness, the first step at 4,5:1 on every ground this terminal can show:
+// 5,99 on Campbell #0C0C0C, 4,75 on the lightest wallpaper #242424, 5,51 on #16161E. Chroma
+// 76 against the 41 of ↻'s #A6E3A1, and ΔE2000 21,7 from it and 27,3 from the reset time's
+// #C6F6C1, so it reads as a greener, stronger green than either rather than a third shade.
+const string Forest = "\x1b[38;2;40;164;40m";
+
 string stdin;
 using (var s = Console.OpenStandardInput())
 using (var r = new StreamReader(s, Encoding.UTF8)) stdin = r.ReadToEnd();
@@ -559,16 +569,19 @@ static string RenderRows(List<(string label, int pct, double hrs, bool hasReset,
         // Without a reset time there is no horizon, so there is no forecast to make: the
         // bar shows the current value and asserts nothing about where it is heading.
         int proj = burning && r.hasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
-        string to100; bool overshoot = false;
+        // The → colour: 0 dim, 1 red, 2 forest.
+        string to100; int tone = 0;
         if (r.gated) to100 = "early";   // not enough same-window data for an honest trend yet
         else if (burning && now < 100) {
             double h = (100 - now) / rate;
-            // an overshoot is "100% arrives before the window resets" — untestable, and
-            // never asserted, when we do not know when the window resets
-            overshoot = r.hasReset && h < r.hrs;
+            // Tested against the row's own reset. Red: 100% arrives before the window resets.
+            // Forest: the reset comes first, so at this pace the window never runs out — the
+            // time is kept and the colour says it is harmless. Neither is asserted when we do
+            // not know when the window resets; the time then stays dim.
+            if (r.hasReset) tone = h < r.hrs ? 1 : 2;
             to100 = Hm(h);
         } else to100 = now >= 100 ? "maxed" : "never";
-        return (r.label, now, proj, reset: r.hasReset ? Hm(r.hrs) : NoData, to100, overshoot, r.sev);
+        return (r.label, now, proj, reset: r.hasReset ? Hm(r.hrs) : NoData, to100, tone, r.sev);
     }).ToList();
     // Every width is per column — [0] the left, [1] the right — and never shared between
     // the two. The left column's rows stack, 5h above 7d, so they have to agree to line up.
@@ -642,7 +655,7 @@ static string RenderRows(List<(string label, int pct, double hrs, bool hasReset,
         sb.Append(sevc.Length > 0 ? $"{sevc}{lbl}{rst}" : lbl);
         sb.Append($" {Bar(x.now, wNowBar[c], capNowBar)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow[c])}%{rst}");
         sb.Append($" \x1b[38;2;166;227;161m↻{rst} \x1b[38;2;198;246;193m{x.reset.PadRight(wReset[c])}{rst}");
-        sb.Append($" {(x.overshoot ? red : dim)}→ {x.to100.PadRight(wTo100[c])}{rst}");
+        sb.Append($" {(x.tone == 1 ? red : x.tone == 2 ? Forest : dim)}→ {x.to100.PadRight(wTo100[c])}{rst}");
         sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar[c], capBar)} {(x.proj > 100 ? red : dim)}{x.proj.ToString().PadLeft(wProj[c])}%{rst}");
         outLines.Add(sb.ToString());
     }

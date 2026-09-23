@@ -101,12 +101,19 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   Ceiling over-reports every bar by design (31% draws 4 of 10) and was chosen deliberately: over-
   project rather than hide a crossing. It also aligns the bar's colour zones with `PctColor`'s
   thresholds, which rounding had offset by five points.
-- **ETA** is `(100 − now) / rate`, flagged as an overshoot when it lands before the row's reset.
+- **ETA** is `(100 − now) / rate`, and its colour says where it lands against the row's own reset:
+  **red** when 100% comes first — the window runs out before it resets — and **forest green**
+  `#28A428` when the reset comes first, so at this pace this window never runs out. The time is
+  kept either way, because it still says what the pace is. It used to be dim in the second case,
+  which made the one reassuring reading on the row look like the others; forest cost no width and
+  no new word, where replacing the time with `never`, a `↻ first` marker or `—` would each have
+  changed what the column means. A row with no reset time has nothing to test against and stays
+  dim, as do `early`, `maxed` and `never`. The same rule holds on every row — 5h, 7d, scoped.
 - **No reset time** is its own state, carried as `Lim.HasReset`. `weekly_scoped` returns
   `resets_at: null` and the legacy `five_hour` / `seven_day` shape has no reset at all; both used
   to arrive as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant.
   They now render `↻ —`, and while a row is in that state its projection is suppressed and its
-  overshoot test is not evaluated — there is no deadline to test against.
+  `→` is neither red nor forest — there is no deadline to test against.
 
 ### History invalidation
 
