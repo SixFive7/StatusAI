@@ -61,9 +61,8 @@ Windows 11's Smart App Control blocks it where it is on; there is no installer o
   what an unsigned program meets on Windows, and what to do when something is missing; its block
   checks that cship starts. The README's steps link it. `5dc4ac7`
 - The README and the guides say only what the code and the transcripts bear out: the sub-agents'
-  28%, 78% and 98% are sourced in [accounting.md](docs/reference/accounting.md), a claim about the
-  build session that could not be checked is gone, and the one failure that raises no row, a usage
-  fetch, is named. `fba03ea`
+  28%, 78% and 98% are sourced in [accounting.md](docs/reference/accounting.md), and the one failure
+  that raises no row, a usage fetch, is named. `fba03ea`
 - Every docs page opens with a way back to the README and the docs index. `38df644`
 - The [README](README.md) is a landing page: what the status line does, a tour of its parts with a
   figure each, and how to get it. `562812e`

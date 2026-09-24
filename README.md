@@ -146,5 +146,5 @@ which GitHub shows as source, so download it and open it in a browser.
 ---
 
 <sub>StatusAI is built on [cship](https://github.com/stephenleo/cship) (Apache-2.0) and, for the
-optional prompt line, [starship](https://starship.rs) (ISC). It was built in Claude Code. No licence
-has been chosen for StatusAI itself yet.</sub>
+optional prompt line, [starship](https://starship.rs) (ISC). No licence has been chosen for StatusAI
+itself yet.</sub>
