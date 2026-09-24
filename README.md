@@ -13,7 +13,13 @@
 
 </div>
 
-<img src="docs/assets/hero.png" width="1146" alt="StatusAI in a terminal. The model line: Opus 5 at max effort, its context 34% full, 44 minutes in, 220 lines added, $12,71 an hour and $9,32 so far. Two rows of token counts for the main conversation, its sub-agents and the whole tree. The 5-hour, weekly and Fable limit rows, beside the account you@example.com on Max 20, with this week split CC 99%, Chat 0%, Cowork 1%.">
+<div align="center">
+
+<a href="docs/guide/reading-the-status-line.md"><img src="docs/assets/hero.png" width="1146" alt="StatusAI in a terminal. The model line: Opus 5 at max effort, its context 34% full, 44 minutes in, 220 lines added, $12,71 an hour and $9,32 so far. Two rows of token counts for the main conversation, its sub-agents and the whole tree. The 5-hour, weekly and Fable limit rows, beside the account you@example.com on Max 20, with this week split CC 99%, Chat 0%, Cowork 1%."></a>
+
+**[Reading the status line](docs/guide/reading-the-status-line.md)**
+
+</div>
 
 ## Why you'll like it
 
