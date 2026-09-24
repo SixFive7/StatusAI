@@ -14,9 +14,10 @@
     3. Run tests/Test-Renders.ps1 against that exe, in the same PowerShell as this script, with
        its scratch under <OutDir>. Refuse if any render differs, or if the cship it would render
        with is not the pinned download, byte for byte.
-    4. Stage cship-usage.exe, cship.toml and starship.toml (from config/) and a plain-text ASCII
-       README.txt in <OutDir>/StatusAI-<version>-win-x64/, and zip them in that order at the root
-       of StatusAI-<version>-win-x64.zip. The zip is written with System.IO.Compression, so entry
+    4. Stage cship-usage.exe, cship.toml and starship.toml (from config/), a plain-text ASCII
+       README.txt, LICENSE as LICENSE.txt, and THIRD-PARTY-NOTICES.txt in
+       <OutDir>/StatusAI-<version>-win-x64/, and zip them in that order at the root of
+       StatusAI-<version>-win-x64.zip. The zip is written with System.IO.Compression, so entry
        names use forward slashes (Compress-Archive under Windows PowerShell 5.1 writes
        backslashes), and every entry is dated the day of the CHANGELOG heading. The zip is read
        back and every entry checked against its source by SHA-256.
@@ -177,6 +178,11 @@ In this zip
   starship.toml    optional: the configuration of starship, for a prompt line
                    above the model line.
   README.txt       this file.
+  LICENSE.txt      the MIT License, which StatusAI is under.
+  THIRD-PARTY-NOTICES.txt
+                   the licences of the .NET runtime compiled into
+                   cship-usage.exe, and of cship and starship, whose own
+                   configuration the two .toml files are based on.
 
 cship-usage.exe runs on top of cship {CSHIP}, which is not in this zip. Download
 it from cship's own release:
@@ -214,7 +220,8 @@ missing, and how to uninstall:
 Do not run cship's own installer or "cship uninstall": both delete the
 statusLine setting.
 
-cship is licensed under Apache-2.0: https://github.com/stephenleo/cship
+StatusAI is licensed under the MIT License, in LICENSE.txt. cship is licensed
+under Apache-2.0: https://github.com/stephenleo/cship
 '@
 
 $NotesFooter = @'
@@ -338,7 +345,9 @@ function Invoke-Main {
     $readme = Fill $ReadmeTemplate @{ VERSION = $Version; SITE = $Site; CSHIP = $CshipVersion; URL = $CshipUrl; SHA = $CshipSha256; GUIDE = $GuideUrl }
     if ($readme -match '[^\x00-\x7F]') { throw 'README.txt is not ASCII.' }
     WriteText (Join-Path $stage 'README.txt') ($readme + "`n")
-    $files = @('cship-usage.exe', 'cship.toml', 'starship.toml', 'README.txt')
+    Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
+    Copy-Item -LiteralPath (Join-Path $root 'THIRD-PARTY-NOTICES.txt') -Destination (Join-Path $stage 'THIRD-PARTY-NOTICES.txt')
+    $files = @('cship-usage.exe', 'cship.toml', 'starship.toml', 'README.txt', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt')
     if (-not $stamp) { $stamp = [DateTimeOffset]::new((Get-Item -LiteralPath $exe).LastWriteTime) }
 
     # ------------------------------------------------------------------ zip, then read it back

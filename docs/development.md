@@ -149,7 +149,7 @@ tests against it with that same cship, byte for byte the download, and writes to
 
 | file | holds |
 |---|---|
-| `StatusAI-1.0.0-win-x64.zip` | `cship-usage.exe`, `cship.toml` and `starship.toml` from `config/`, and a plain-text `README.txt`, at the root of the zip |
+| `StatusAI-1.0.0-win-x64.zip` | `cship-usage.exe`, `cship.toml` and `starship.toml` from `config/`, a plain-text `README.txt`, `LICENSE` as `LICENSE.txt`, and `THIRD-PARTY-NOTICES.txt`, at the root of the zip |
 | `StatusAI-1.0.0-win-x64.zip.sha256` | the zip's SHA-256, one line as `sha256sum` writes it |
 | `notes-v1.0.0.md` | the release page's text: the version's CHANGELOG section with its links pointed at the tag, and a footer pointing at the install guide |
 
