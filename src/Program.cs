@@ -805,7 +805,6 @@ static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, l
         rk.SetValue("ig", c.Ig);
         rk.SetValue("fail", "0");   // a good fetch clears the count, as AfterFetch has it
         rk.SetValue("why", "");
-        rk.DeleteValue("val", false);
         rk.SetValue("ts", now.ToString());   // freshness gate: must be the last write
     } catch { }
 }
