@@ -31,8 +31,8 @@ Claude Code's status line payload has no cumulative token figure at all, and eve
 expose covers the main conversation only. Sub-agent turns are not in the main transcript — every
 child, at any depth, writes its own file under `<session>/subagents/`.
 
-Measured across three real sessions, sub-agents were **28 %, 78 % and 98 %** of total consumption.
-On the session StatusAI was built in, the main transcript was **8 %** of the tokens spent.
+Measured across three real sessions, sub-agents were **28%, 78% and 98%** of total consumption;
+[accounting.md](../reference/accounting.md#what-the-sub-agents-spend) has the figures.
 
 Any status line that reads only `transcript_path` is therefore showing you a rounding error.
 StatusAI walks the whole tree. How it counts, and why the obvious ways double-count, is in
@@ -48,7 +48,7 @@ StatusAI appends the meta segment to it:
 
 <img src="../assets/meta.png" width="530" alt="The meta segment: 44 minutes, 220 lines added and none removed, $12,71 or €11,02 an hour, $9,32 or €8,08 so far.">
 
-| | shows |
+| segment | shows |
 |---|---|
 | `⏱ 44m` | how long the session has run |
 | `📝 +220 -0` | lines added and removed, once there are any |
@@ -156,11 +156,15 @@ instance; the limit rows need one.
 
 ## When a row says ⚠
 
-A figure that could not be read never looks like a real zero. Every source that failed is named in
-a **red** `⚠` row at the foot of the block — a payload that cannot be read, a missing cost or
-context figure, a transcript that should exist and does not, a usage fetch that is suspended, cship
-printing nothing — and the figure itself reads `—`. A brand-new session, before its first reply,
-is not a failure and says nothing.
+A figure that could not be read never looks like a real zero. A source that failed is named in a
+**red** `⚠` row at the foot of the block — a payload that cannot be read, a missing cost or context
+figure, a transcript that should exist and does not, a usage fetch that is suspended, cship printing
+nothing — and the figure itself reads `—`. A brand-new session, before its first reply, is not a
+failure and says nothing.
+
+One failure is quiet for now: a usage fetch that fails — offline, say — raises no row. The limit
+rows then keep showing the last good fetch exactly as it was drawn, its countdowns frozen, or are
+left out if there has been none.
 
 Two more rows can appear there, and neither is a failure:
 

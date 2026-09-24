@@ -163,7 +163,7 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
 - **Slope** is Theil-Sen — the median of all pairwise slopes — chosen because it shrugs off a
   single stray step that window invalidation missed. **Gated** until at least 4 samples span at
   least 10 minutes; until then the row shows `early` rather than a guess.
-- **Rate** is clamped to 40 %/h, and a row only counts as burning above 0,5 %/h.
+- **Rate** is clamped to 40%/h, and a row only counts as burning above 0,5%/h.
 - **Horizon** is the hours to this row's own reset, uncapped. It used to carry a `min(…, 8h)`
   ceiling, which made `⇢` mean *at reset* on the 5h row and *in 8 hours* on the 7d row — one glyph
   with two meanings a line apart, so a red "hits 100% in 2d19h" could sit beside a calm `⇢ 20%`.
@@ -220,6 +220,10 @@ not a bug report.
   [render tests](../development.md#the-render-tests) pin that parse and the drawing — but the
   forecast inputs come from the fixture, so the window checks and the slope cannot be
   regression-tested. See [development.md](../development.md#offline-beside-live-sessions).
+- **A failed fetch is silent.** The rows keep drawing the last good fetch's render, its countdowns
+  frozen at the time of that fetch, and no `⚠` row says so; with no fetch ever made there are no
+  rows. Claude Code's payload has since gained `rate_limits.five_hour` and `rate_limits.seven_day`,
+  a used percentage and a reset time each, which nothing here reads.
 - **`is_active` and `group` are parsed past and discarded.**
 - **A new meter is not drawn until its code is reviewed.** Only the session, `weekly_all` and one
   model-scoped `weekly_scoped` are; anything else is named in the amber `⚠` row instead — see

@@ -18,7 +18,8 @@ docs/       guide/ for using it, reference/ for how it works, design/ for why, a
 ## Build
 
 .NET 10 SDK (developed against 10.0.302; 10.0.401 builds it too), NativeAOT, `net10.0-windows`,
-x64.
+x64. NativeAOT links with the C++ toolchain, so it also needs Visual Studio 2022 or later with the
+*Desktop development with C++* workload.
 
 ```bash
 cd src && dotnet publish -c Release -r win-x64

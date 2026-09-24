@@ -17,14 +17,14 @@
 
 - **It counts the whole tree.** The token figures Claude Code hands a status line cover the main
   conversation only, and every sub-agent writes a transcript of its own. StatusAI reads all of them,
-  at any depth, and counts each API response exactly once. On three real sessions the sub-agents
-  were 28 %, 78 % and 98 % of the tokens.
+  at any depth, and counts each API response exactly once. In three real sessions the sub-agents
+  spent 28%, 78% and 98% of the tokens.
 - **It sees your limits coming.** Every limit says how soon it reaches 100% at the pace of the last
   hour — red when that is before it resets, forest green when the reset comes first — and where it
   will stand when it does reset.
-- **It never passes off a gap as a number.** A figure it could not read shows `—`, and a red row
-  says which source failed and why.
-- **It stays out of the way.** One native `.exe` with no runtime to install, and every Claude Code
+- **It never shows a missing figure as a zero.** A figure it could not read shows `—` instead, and
+  a red row says which source failed and why.
+- **It stays out of the way.** One native `.exe` that needs no .NET installed, and every Claude Code
   session you have open shares a single usage fetch.
 
 ## A tour
@@ -69,9 +69,9 @@ down.
 
 <img src="docs/assets/warnings.png" width="754" alt="Three warning rows under a limit row. In red: tokens — no transcript_path in the payload. In amber: the usage API sent a meter this status line ignores. In red: on credit — $12,40 spent beyond the plan this period.">
 
-A source that fails gets a red `⚠` row that names it, instead of a zero that looks real. An amber
-row appears when Anthropic's usage API sends a limit StatusAI does not draw yet, and a red alarm,
-always last, if your usage is ever billed beyond your plan.
+A figure that could not be read gets a red `⚠` row naming its source and why, instead of a zero
+that looks real. An amber row appears when Anthropic's usage API sends a limit StatusAI does not
+draw yet, and a red alarm, always last, if your usage is ever billed beyond your plan.
 
 ### One fetch for all your sessions
 
@@ -135,6 +135,5 @@ which GitHub shows as source: download it and open it in a browser.
 ---
 
 <sub>StatusAI is built on [cship](https://github.com/stephenleo/cship) (Apache-2.0) and, for the
-optional prompt line, [starship](https://starship.rs) (ISC). It was built in Claude Code; in the
-session it was built in, the main conversation spent 8 % of the tokens and its sub-agents the
-rest.</sub>
+optional prompt line, [starship](https://starship.rs) (ISC). It was built in Claude Code. No licence
+has been chosen for StatusAI itself yet.</sub>

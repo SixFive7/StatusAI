@@ -99,7 +99,7 @@ file. The accounting needs no changes.
 | move it to… | what breaks | fix |
 |---|---|---|
 | Linux / macOS | registry, mutex naming, TFM | ~an hour |
-| a different terminal width | `TermWidth()` defaults to 141; `CSHIP_WIDTH` overrides it, set by hand | have the installer set it |
+| a different terminal width | `TermWidth()` defaults to 141; `CSHIP_WIDTH` overrides it, set by hand | read `COLUMNS`, which Claude Code sets to its terminal's width |
 | a terminal rendering emoji single-width | the grid — `iw[]` declares 4 columns per 2-emoji block | one array |
 | a machine without a Nerd Font | cship/starship glyphs, **not** the token rows | see below |
 | an API-key-only account | the limit rows and the account line | nothing — degrades |
@@ -109,7 +109,7 @@ file. The accounting needs no changes.
 
 **The binary itself uses no Nerd Font glyphs** — only emoji plus `│ ● ○ ✗ ↻ → ⇢ · — … ⚠`. All 45
 patched codepoints in the prompt line come from starship's config, and cship's model line adds two
-more. Dropping starship removes ~90 % of the font requirement.
+more. Dropping starship removes ~90% of the font requirement.
 
 ## Build
 

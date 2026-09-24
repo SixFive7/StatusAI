@@ -8,7 +8,12 @@ first.
 Terminal width comes from `TermWidth()` — `CSHIP_WIDTH` if set, otherwise a hardcoded **141**.
 Claude Code spawns the status line detached, so the attached console reports a phantom 120×30 and OS
 detection is unusable. 141 is a measured value for one machine; anyone else has to set
-`CSHIP_WIDTH` by hand, in the `env` of Claude Code's `settings.json`, until an installer does it.
+`CSHIP_WIDTH` by hand, in the `env` of Claude Code's `settings.json`.
+
+Claude Code does pass the width another way: since 2.1.153 it sets `COLUMNS` and `LINES` to its
+terminal's size before it runs the command, and its
+[status line documentation](https://code.claude.com/docs/en/statusline) says to read those.
+`TermWidth()` does not read them yet.
 
 ```
 141  terminal
@@ -233,7 +238,7 @@ frames in one cell. The arrow was also redundant there: it only ever distinguish
 output, and never varied in the cache columns.
 
 **Orientation must be the whole glyph, not a detail inside it.** 📥/📤 failed because direction lived
-in a ~3-pixel arrow inside two otherwise identical trays — 95 % of the glyph was noise. Solid
+in a ~3-pixel arrow inside two otherwise identical trays — 95% of the glyph was noise. Solid
 triangles work because orientation *is* the glyph.
 
 **No coloured up/down emoji pair has different hues**, so the triangle sets are orientation-only by

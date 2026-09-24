@@ -21,6 +21,18 @@ inside child transcripts — it is a marker within them, not a way to find child
 None of this is documented by Anthropic. It was established empirically and it can change without
 notice; see *Fragility* below.
 
+## What the sub-agents spend
+
+The three sessions of the table in the next section, split with `Split-MainVsTree.ps1` on their
+transcripts, which were still on disk on 2026-09-24. These are the 28%, 78% and 98% the README and
+the guide quote:
+
+| session | main | sub-agents | tree | sub-agents' share |
+|---|---|---|---|---|
+| 66419393 | 38.727.133 | 15.222.671 | 53.949.804 | 28,2% |
+| 6bef827e | 63.097.290 | 225.881.243 | 288.978.533 | 78,2% |
+| 005d13b6 | 4.246.927 | 204.686.388 | 208.933.315 | 98,0% |
+
 ## The two duplication traps
 
 Both were measured, not theorised.
@@ -151,7 +163,7 @@ Hence the scripts. Run them after any Claude Code upgrade.
 ## Known undercount
 
 Upstream issue [#84223](https://github.com/anthropics/claude-code/issues/84223): sub-agent
-transcripts often never receive their final cumulative `usage` record, missing on roughly 20 % of
+transcripts often never receive their final cumulative `usage` record, missing on roughly 20% of
 requests and leaving only an early snapshot with `output_tokens: 1`. Any transcript-derived total is
 therefore a **floor**, undercounting sub-agent output by up to about two thirds.
 
@@ -160,4 +172,4 @@ launches never write usage into the parent transcript at all — which is precis
 child files directly is the correct approach.
 
 A cheap self-check: price the counted tokens and compare against the tree-aware
-`cost.total_cost_usd`. That ratio was running at about 93 % when last measured.
+`cost.total_cost_usd`. That ratio was running at about 93% when last measured.
