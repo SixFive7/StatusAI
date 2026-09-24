@@ -522,7 +522,9 @@ function checkPages() {
 function index(report) {
   const rows = report.map(r => `| [${r.id}.png](${r.id}.png) | ${r.shows} | ${[...r.src.map(s => /^[\w-]+\.w\d+$/.test(s) ? `\`${s}\``
     : `[${path.basename(s)}](${path.relative(__dirname, path.join(ROOT, s)).replace(/\\/g, '/')})`), ...(r.from ? [r.from] : [])].join(', ')} | ${r.w} × ${r.h} |`);
-  fs.writeFileSync(path.join(__dirname, 'README.md'), `# Figures
+  fs.writeFileSync(path.join(__dirname, 'README.md'), `<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
+# Figures
 
 Every image here is generated. [figures.gen.js](figures.gen.js) draws them from the render tests'
 expected output — the exact bytes the binary draws for each fixture, in

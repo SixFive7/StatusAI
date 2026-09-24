@@ -1,3 +1,5 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Layout
 
 The rules the grid obeys, and the reasoning behind each. Most were arrived at by getting them wrong

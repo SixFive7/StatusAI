@@ -1,7 +1,10 @@
+<sub>[StatusAI](../README.md) › Documentation</sub>
+
 # Documentation
 
-New here? Start with [reading the status line](guide/reading-the-status-line.md), then
-[install](guide/install.md).
+Everything about StatusAI beyond the [README](../README.md): how to read it and install it, how it
+works, why it looks the way it does, and how to change it. New here? Start with
+[reading the status line](guide/reading-the-status-line.md), then [install](guide/install.md).
 
 ## Guide
 
@@ -40,4 +43,5 @@ Why it is the way it is, and what was tried and rejected.
 | [development.md](development.md) | the repository, building, the render tests, deploying, releasing and testing on a live machine — and the traps that waste an hour |
 
 The figures in [assets/](assets/) are drawn from the render tests' output by a generator; its
-[README](assets/README.md) lists them and gives the command that regenerates them.
+[README](assets/README.md) lists them and gives the command that regenerates them. What changed, and
+when, is in the [changelog](../CHANGELOG.md).

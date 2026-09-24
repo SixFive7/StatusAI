@@ -1,4 +1,10 @@
+<sub>[StatusAI](../../../README.md) › [Documentation](../../README.md)</sub>
+
 # House style
+
+How the status line is drawn in its documentation: the rules the
+[decisions page](../limits-decisions.html), the example in this folder and the figures on the README
+and the guide all follow.
 
 ## ⚠ Read this before opening `weekly-wall.html`
 

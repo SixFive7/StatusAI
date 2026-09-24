@@ -1,3 +1,5 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Install
 
 There is no installer yet. Each release is a zip on GitHub holding `cship-usage.exe` and the

@@ -1,3 +1,5 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Reading the status line
 
 StatusAI is Claude Code's status line: cship's model line with a meta segment appended, two rows of

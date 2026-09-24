@@ -1,4 +1,10 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Architecture
+
+The parts of the status line and how they fit together: the render chain, what draws each row, how
+often each source refreshes, the state kept between renders, and what would have to change to move
+it elsewhere.
 
 ## The render chain
 

@@ -1,3 +1,5 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Rejected designs
 
 Designs for the limit rows that were built or proposed and then rejected, each with the reasoning

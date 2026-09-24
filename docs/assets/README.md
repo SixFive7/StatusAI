@@ -1,3 +1,5 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Figures
 
 Every image here is generated. [figures.gen.js](figures.gen.js) draws them from the render tests'

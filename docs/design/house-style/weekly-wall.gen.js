@@ -1,5 +1,9 @@
 // Generates the artifact HTML. Every terminal character becomes a fixed 1ch cell so the
-// column arithmetic in the mockup matches what RenderRows actually emits.
+// column arithmetic in the mockup matches what RenderRows actually emits. From this folder:
+//
+//   node weekly-wall.gen.js weekly-wall.html
+//
+// A style reference only: the design it draws was reverted. Read README.md here first.
 const fs = require('fs');
 
 const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

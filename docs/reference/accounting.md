@@ -1,3 +1,5 @@
+<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+
 # Accounting
 
 How tokens and tool calls are counted, why the obvious approaches are wrong, and how the result is
