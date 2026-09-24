@@ -3,6 +3,11 @@
 What changed, newest first, with the commits it came from. Releases are headed by their version;
 the entries before the first release are by date.
 
+## Unreleased
+
+- The README opens with the status line exactly as a terminal shows it, nothing added, before the
+  annotated version that names every part. `e7da798`
+
 ## 0.1.0 — 2026-09-24
 
 The first release: a zip with `cship-usage.exe` and the configuration it is used with.
