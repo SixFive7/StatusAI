@@ -1,8 +1,8 @@
 # cship's configuration for the render tests: config/cship.toml without the starship line and
 # without the two modules that line does not use. The model line stays exactly as shipped, so the
 # host line the block is inserted under is the real one; the prompt line goes, because starship
-# draws the working directory, git, the clock, RAM and the GPU — none of it this repo's, and none
-# of it the same twice. Test-Renders.ps1 points cship here through HOME.
+# draws the working directory, git, the clock, RAM and the GPU. None of that belongs to this repo,
+# and none of it is the same twice. Test-Renders.ps1 points cship here through HOME.
 [cship]
 lines = [
   " $cship.model $cship.effort $cship.context_bar",
