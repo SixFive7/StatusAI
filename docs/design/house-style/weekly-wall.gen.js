@@ -1,5 +1,5 @@
-// Generates the artifact HTML. Every terminal character becomes a fixed 1ch cell so the
-// column arithmetic in the mockup matches what RenderRows actually emits. From this folder:
+// Generates weekly-wall.html. Every terminal character becomes a fixed 1ch cell, so the column
+// arithmetic in the mockup matches what RenderRows actually emits. From this folder:
 //
 //   node weekly-wall.gen.js weekly-wall.html
 //
@@ -17,7 +17,7 @@ function cells(spec) {
 }
 const rep = (n, ch, cls) => [ch.repeat(n), cls];
 
-// ── bars ───────────────────────────────────────────────────────────────────────
+// ---- bars
 // now bars (identical before/after)
 const NOW_5H  = [rep(3,'●','cy'), rep(7,'○','dm')];                 // 34%
 const NOW_7D  = [rep(7,'●','cy'), rep(1,'●','or'), rep(2,'○','dm')]; // 81%
@@ -28,7 +28,7 @@ const PRJ_5H_OLD = [rep(7,'●','cy'), rep(2,'●','or'), rep(1,'●','rd'), rep
 const PRJ_7D_OLD = [rep(7,'●','cy'), rep(2,'●','or'), rep(7,' ','dm')];                        // 90%
 const PRJ_FB_OLD = [rep(2,'●','cy'), rep(8,'○','dm'), rep(6,' ','dm')];                        // 21%
 
-// shipped projection bars (cap 17). Only the session row is walled — both weekly rows
+// shipped projection bars (cap 17). Only the session row is walled: both weekly rows
 // reset *with* the wall, so they draw exactly as before.
 const PRJ_5H_NEW = [rep(7,'●','cy'), rep(1,'●','or'), rep(1,'┃','wl'), rep(2,'●','gh'), rep(6,'✗','gh')];
 const PRJ_7D_NEW = [rep(7,'●','cy'), rep(2,'●','or'), rep(8,' ','dm')];
@@ -36,7 +36,7 @@ const PRJ_FB_NEW = [rep(2,'●','cy'), rep(8,'○','dm'), rep(7,' ','dm')];
 
 const SP = [' ', 'df'];
 
-// ── rows ───────────────────────────────────────────────────────────────────────
+// ---- rows
 // label, nowBar, now%, resetGlyph+value, etaGlyph+value, projBar, proj%
 function row({lbl, lblCls, nowBar, now, nowCls, reset, eta, etaGlyph, etaCls, proj, projBar, projCls}) {
   return [
@@ -71,7 +71,7 @@ const acct = `<span class="acct"><span class="em">👤</span> <i class="tx">some
 const IND = [[' ', 'df']];   // Compose() indents the composed line once, not each row
 const line2 = (a, b) => `<div class="ln">${cells([...IND, ...a, ...GAP, ...b])}</div>`;
 
-// ── annotation brackets (character columns, measured against the specs above) ───
+// ---- annotation brackets (character columns, measured against the specs above)
 function annot(marks) {
   const brk = marks.map(m =>
     `<span class="brk" style="--c:${m.col};--w:${m.len}"></span>`).join('');
@@ -80,7 +80,7 @@ function annot(marks) {
   return `<div class="annot">${brk}</div><div class="alabs">${lbl}</div>`;
 }
 
-const html = `<title>Weekly Wall — Style Template</title>
+const html = `<title>Weekly Wall: style template</title>
 <style>
 :root{
   --bg:#F1F2F8; --surface:#FFFFFF; --sunken:#E8EAF3;
@@ -115,7 +115,7 @@ body{
 .wrap{max-width:1180px; margin:0 auto; padding:56px 28px 88px;
   display:grid; gap:44px;}
 
-/* ── correction band ────────────────────────────────────────────────── */
+/* correction band */
 /* Every property the global h2/p rules also set is restated here, so the band
    never inherits the uppercase mono heading treatment used by the sections. */
 .warn{
@@ -139,7 +139,7 @@ body{
   padding:1px 5px; border-radius:3px; color:var(--ink)}
 .warn a{color:var(--accent); text-underline-offset:2px}
 
-/* ── header ─────────────────────────────────────────────────────────── */
+/* header */
 header{display:grid; gap:14px; max-width:64ch}
 .eyebrow{
   font-family:var(--mono); font-size:11.5px; letter-spacing:.16em;
@@ -152,7 +152,7 @@ h1{
 .lede{margin:0; color:var(--ink2); font-size:17px; text-wrap:pretty}
 .lede b{color:var(--ink); font-weight:600}
 
-/* ── terminal panes ─────────────────────────────────────────────────── */
+/* terminal panes */
 :root{--mono:ui-monospace,"Cascadia Mono","Cascadia Code",Consolas,"DejaVu Sans Mono",monospace}
 section{display:grid; gap:0}
 .phead{
@@ -171,7 +171,7 @@ section{display:grid; gap:0}
 .tag.bad{color:#F7768E; background:rgba(247,118,142,.13); border:1px solid rgba(247,118,142,.3)}
 .tag.good{color:#7DCFFF; background:rgba(125,207,255,.11); border:1px solid rgba(125,207,255,.3)}
 
-/* the pane is a device, not page chrome — it keeps the terminal's own world in both themes */
+/* the pane is a device, not page chrome: it keeps the terminal's own colours in both themes */
 .term{
   background:#16161E; border:1px solid #262738; border-radius:6px;
   padding:18px 16px 20px; overflow-x:auto; box-shadow:var(--shadow);
@@ -183,13 +183,13 @@ section{display:grid; gap:0}
 .cy{color:#7DCFFF} .or{color:#E0AF68} .rd{color:#F7768E; font-weight:700}
 .dm{color:#6E738D} .gr{color:#A6E3A1} .lg{color:#C6F6C1}
 .tx{color:#A9B1D6; font-style:normal} .df{color:#C0CAF5}
-.wl{color:#E0AF68; font-weight:700}          /* wall mark — inherits 7d severity */
+.wl{color:#E0AF68; font-weight:700}          /* wall mark, in the 7d row's severity colour */
 .gh{color:#3E4257}                            /* cancelled trajectory */
 .acct{color:#A9B1D6; white-space:pre}
 .acct i{font-style:normal}
 .em{font-family:"Segoe UI Emoji",var(--mono)}
 
-/* ── annotation ─────────────────────────────────────────────────────── */
+/* annotation */
 .annot{position:relative; height:13px; margin-top:2px}
 .brk{
   position:absolute; left:calc(var(--c) * 1ch); width:calc(var(--w) * 1ch);
@@ -197,7 +197,7 @@ section{display:grid; gap:0}
   border-bottom-left-radius:3px; border-bottom-right-radius:3px; opacity:.75;
 }
 /* font-size stays at the terminal's 13px so ch resolves to the same cell the
-   bars use — the visible label is sized on the inner span instead */
+   bars use; the visible label is sized on the inner span instead */
 .alabs{position:relative; height:17px}
 .alab{
   position:absolute; left:calc(var(--c) * 1ch); top:0;
@@ -208,7 +208,7 @@ section{display:grid; gap:0}
   color:#E0AF68; font-weight:700;
 }
 
-/* ── legend ─────────────────────────────────────────────────────────── */
+/* legend */
 .marks{display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:1px;
   background:var(--rule); border:1px solid var(--rule); border-radius:6px; overflow:hidden}
 .mark{background:var(--surface); padding:20px 22px; display:grid; gap:9px; align-content:start}
@@ -226,7 +226,7 @@ section{display:grid; gap:0}
 .mark code{font-family:var(--mono); font-size:13px; background:var(--sunken);
   padding:1px 5px; border-radius:3px; color:var(--ink)}
 
-/* ── states table ───────────────────────────────────────────────────── */
+/* states table */
 .states{width:100%; border-collapse:collapse; font-size:14.5px}
 .states th{
   text-align:left; font-family:var(--mono); font-size:10.5px; letter-spacing:.13em;
@@ -259,22 +259,22 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
 
 <div class="wrap">
   <div class="warn">
-    <div class="warn-tag">⚠ Style template — not a specification</div>
+    <div class="warn-tag">⚠ Style template, not a specification</div>
     <h2>Everything this page describes was reverted. Its premise is false.</h2>
     <p>This file is in the repository for <b>one reason</b>: it is the house style for visual
-    documentation of the status line. Copy its <b>presentation</b> — the character-cell terminal
+    documentation of the status line. Copy its <b>presentation</b>: the character-cell terminal
     rendering, the palette lifted verbatim from <code>Program.cs</code>, the before/after panes,
-    the column-anchored annotations, the habit of stating what a design costs in characters.
-    Do not copy, implement, or reason from its <b>content</b>.</p>
+    the column-anchored annotations and the habit of stating what a design costs in characters.
+    Do not copy, implement or reason from its <b>content</b>.</p>
     <ul>
-      <li><b>The claim was:</b> the 5-hour session limit resets when the 7-day weekly limit
+      <li>The claim was that the 5-hour session limit resets when the 7-day weekly limit
       resets, so the 5h projection should stop at the weekly boundary.</li>
-      <li><b>That is false.</b> The session window is independent — <code>session.resets_at</code>
-      follows its own schedule and the weekly reset does not touch it.</li>
-      <li><b>The change was built, deployed, and reverted.</b> <code>src/Program.cs</code> carries
+      <li><b>That is false.</b> The session window is independent: <code>session.resets_at</code>
+      follows its own schedule, and the weekly reset does not touch it.</li>
+      <li>The change was built, deployed and reverted. <code>src/Program.cs</code> carries
       none of it: no <code>BarCut</code>, no <code>WallColor</code>, no <code>walled</code>, no
       <code>projFull</code>. The <code>⇥</code> and <code>┃</code> marks shown below <b>do not
-      exist in the product</b> and never will under this rationale.</li>
+      exist in the product</b>, and will never be added on this reasoning.</li>
     </ul>
     <p>The correct limit model is in <a href="../../reference/limits.md">docs/reference/limits.md</a>,
     and the full record of why this was rejected in
@@ -282,10 +282,10 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
   </div>
 
   <header>
-    <div class="eyebrow">Documentation style template · reverted design</div>
+    <div class="eyebrow">Documentation style template, reverted design</div>
     <h1>The Weekly Wall</h1>
-    <p class="lede"><b>As originally written, this page argued:</b> the 7d window resets at 05:00,
-    2h30m before the 5h window's own reset at 07:30 — and takes the 5h counter with it, so the
+    <p class="lede"><b>As originally written, this page argued</b> that the 7d window resets at
+    05:00, 2h30m before the 5h window's own reset at 07:30, and takes the 5h counter with it, so the
     session projection has to stop there. That reasoning does not hold. Everything below is
     preserved as written, at the live numbers from 03:49, purely as a worked example of the
     documentation format.</p>
@@ -295,7 +295,7 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
     <div class="phead">
       <span class="ptitle">Now</span>
       <span class="tag bad">projects past the wall</span>
-      <span class="pnote">5h extrapolates the full 3h41m to its own reset — 161% and a red overshoot that cannot happen.</span>
+      <span class="pnote">5h extrapolates the full 3h41m to its own reset: 161%, and a red overshoot that cannot happen.</span>
     </div>
     <div class="term"><div class="term-inner">
       ${line2(OLD_5H, []).replace('</div>', acct + '</div>')}
@@ -324,24 +324,25 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
           <span class="chip"><i class="wl">⇥ 1h11m</i></span>
           <span class="mark-t">The wall column</span>
         </div>
-        <p>On a walled row the <b>“time to 100%”</b> field is meaningless — you never get there.
-        It is spent on the wall instead: <code>→</code> becomes <code>⇥</code> and the value
-        becomes the 7d countdown. Both clocks stay on the row — the row's own reset at
-        <code>↻ 3h41m</code>, the one that actually governs at <code>⇥ 1h11m</code>.
-        Costs <b>zero characters</b>: <code>→ 1h54m</code> and <code>⇥ 1h11m</code> are the
-        same seven cells.</p>
+        <p>On a walled row the <b>"time to 100%"</b> field is meaningless, because you never get
+        there. It is spent on the wall instead: <code>→</code> becomes <code>⇥</code> and the value
+        becomes the 7d countdown. Both clocks stay on the row: the row's own reset at
+        <code>↻ 3h41m</code>, and the one that actually governs at <code>⇥ 1h11m</code>.
+        It costs <b>zero characters</b>, since <code>→ 1h54m</code> and <code>⇥ 1h11m</code> are
+        the same seven cells.</p>
       </div>
       <div class="mark">
         <div class="mark-h">
           <span class="chip"><i class="cy">●●</i><i class="wl">┃</i><i class="gh">●✗✗</i></span>
           <span class="mark-t">The cut in the bar</span>
         </div>
-        <p>The projection bar keeps the <b>full 161% trajectory</b> but <code>┃</code> cuts it
-        at the wall. Everything left of the cut is where you actually land — 75%. Everything
-        right of it keeps its shape, including the six <code>✗</code> of overshoot, but goes
-        ghosted: that is the part the week cancels. Bar 16→17, percent column 3→2, so the row
-        width is unchanged. It is drawn only where something is actually cut — never on a row
-        that was going to end at the wall anyway.</p>
+        <p>The projection bar keeps the <b>full 161% trajectory</b>, but <code>┃</code> cuts it
+        at the wall. Everything left of the cut is where you actually land: 75%. Everything right
+        of it keeps its shape, including the six <code>✗</code> of overshoot, but is ghosted,
+        because that is the part the week cancels. The bar grows from 16 cells to 17 and the
+        percent column shrinks from 3 to 2, so the row width is unchanged. The cut is drawn only
+        where something is actually cut, never on a row that was going to end at the wall
+        anyway.</p>
       </div>
     </div>
   </section>
@@ -353,9 +354,9 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
       <tbody>
         <tr>
           <td>5h</td>
-          <td><b>Session.</b> A rolling five-hour window whose reset drifts with use — 07:30
-          today, 2h30m the far side of the weekly boundary. The only row that can run into
-          the wall.</td>
+          <td><b>Session.</b> A rolling five-hour window whose reset drifts with use: 07:30
+          today, 2h30m the far side of the weekly boundary. It is the only row that can run
+          into the wall.</td>
           <td><span class="mini"><span class="wl">⇥ 1h11m</span></span> and a cut bar</td>
         </tr>
         <tr>
@@ -365,7 +366,7 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
         </tr>
         <tr>
           <td>Fable</td>
-          <td><b>Weekly, model-scoped.</b> Resets <em>with</em> the wall rather than into it —
+          <td><b>Weekly, model-scoped.</b> Resets <em>with</em> the wall rather than into it:
           04:59:59.821391 against 04:59:59.821140.</td>
           <td>Untouched</td>
         </tr>
@@ -373,35 +374,34 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
     </table>
     <p class="note">In code this is one field. <code>Wall</code> is <code>+∞</code> for both
     weekly rows, so <code>walled</code> is false and every branch the change adds stays
-    dormant for them — and dormant for the session row too, for most of the week, until the
+    dormant for them. It stays dormant for the session row too for most of the week, until the
     weekly reset finally overtakes it.</p>
   </section>
 
   <section>
     <h2>Colour rule</h2>
-    <p class="note">Both marks take the <b>7d row's severity colour</b>, not a fixed one —
-    amber today because <code>weekly_all</code> reports <code>severity: "warning"</code> at 81%,
-    green while it is normal, red once critical. So the wall does not just say <em>when</em> the
-    thing that governs you resets, it says <em>how much trouble it is in</em>. It reuses
-    <code>SevColor</code>, already in the file. If you would rather it stayed one fixed colour,
-    that is a one-line change.</p>
+    <p class="note">Both marks take the <b>7d row's severity colour</b> rather than a fixed one:
+    amber today, because <code>weekly_all</code> reports <code>severity: "warning"</code> at 81%,
+    green while it is normal and red once critical. So the wall tells you both <em>when</em> the
+    thing that governs you resets and <em>how much trouble it is in</em>. It reuses
+    <code>SevColor</code>, which is already in the file. If you would rather it stayed one fixed
+    colour, that is a one-line change.</p>
   </section>
 
   <section class="gapped">
-    <h2>Outcome — the premise did not hold</h2>
+    <h2>Outcome: the premise did not hold</h2>
     <p class="note">The caveat this page shipped with turned out to be the whole story. Nothing
     in the OAuth payload ever confirmed the coupling: <code>session.resets_at</code> stayed at
     07:30 regardless of the weekly boundary, and the array marked
     <code>session: is_active=false</code> against <code>weekly_all: is_active=true</code>. The
-    design rested on an observation that was subsequently withdrawn. It was reverted in full —
-    source restored and hash-verified against the pre-change file, binary rebuilt from it, and
-    both wall glyphs confirmed absent from the rendered output.</p>
-    <p class="note"><b>What survives is the presentation, and one habit worth keeping.</b> The
-    ghosted-tail bar was chosen because it kept the un-walled 161% trajectory on screen instead
-    of deleting it — the only option of the five that would have degraded gracefully if the
-    premise were wrong. It was wrong, and it would have. Designing the display so a bad
-    assumption stays visible rather than silently disappearing is the transferable lesson here;
-    the feature is not.</p>
+    design rested on an observation that was later withdrawn. It was reverted in full: the
+    source was restored and hash-verified against the pre-change file, the binary rebuilt from
+    it, and both wall glyphs confirmed absent from the rendered output.</p>
+    <p class="note">What survives is the presentation, and one habit that applies well beyond
+    this feature: design a display so that a bad assumption stays visible instead of silently
+    disappearing. The ghosted-tail bar was chosen because it kept the un-walled 161% trajectory
+    on screen instead of deleting it, and of the five options it was the only one that would have
+    degraded gracefully if the premise were wrong, as it turned out to be.</p>
   </section>
 </div>
 `;
