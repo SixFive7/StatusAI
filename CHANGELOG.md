@@ -33,8 +33,12 @@ the width is 141.
 
 The [README](README.md) opens with the status line as a terminal shows it, with nothing added, then
 an annotated version that names every part and opens the
-[reading guide](docs/guide/reading-the-status-line.md) when clicked. The release notes keep each
-paragraph on one line, because GitHub shows every line break in them.
+[reading guide](docs/guide/reading-the-status-line.md) when clicked.
+
+StatusAI is under the [MIT License](LICENSE), which the zip carries as `LICENSE.txt`. Beside
+it, [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) holds the licences of the .NET runtime,
+which is compiled into `cship-usage.exe`, and of cship and starship, since `cship.toml` and
+`starship.toml` are based on their configuration.
 
 It needs Windows 10 or 11 on x64, and Claude Code in a terminal, signed in with a Claude account for
 the limit rows; the VS Code extension's chat panel shows no status line. The terminal has to draw

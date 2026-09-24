@@ -154,6 +154,7 @@ which GitHub shows as source, so download it and open it in a browser.
 
 ---
 
-<sub>StatusAI is built on [cship](https://github.com/stephenleo/cship) (Apache-2.0) and, for the
-optional prompt line, [starship](https://starship.rs) (ISC). No licence has been chosen for StatusAI
-itself yet.</sub>
+<sub>StatusAI is under the [MIT License](LICENSE). It is built on
+[cship](https://github.com/stephenleo/cship) (Apache-2.0) and, for the optional prompt line,
+[starship](https://starship.rs) (ISC), and the two files in `config/` are based on theirs and keep
+those licences (see [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)).</sub>

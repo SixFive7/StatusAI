@@ -45,8 +45,6 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
 
 ## Download
 
-The repository is private for now, so the download works only for people who have access to it.
-
 1. Download `StatusAI-<version>-win-x64.zip` from the
    [latest release](https://github.com/SixFive7/StatusAI/releases/latest) and extract it: in
    Explorer, right-click it and choose *Extract All*. The release lists the zip's SHA-256 in
@@ -227,4 +225,8 @@ Remove-Item -Recurse "$env:USERPROFILE\.claude\projects\*\cship"
 ## Credits
 
 StatusAI renders on top of [cship](https://github.com/stephenleo/cship) (Apache-2.0) and,
-optionally, [starship](https://starship.rs) (ISC).
+optionally, [starship](https://starship.rs) (ISC). StatusAI itself is under the
+[MIT License](../../LICENSE). `cship.toml` and `starship.toml` are based on cship's and starship's
+own and keep those licences, and `cship-usage.exe` has the .NET runtime, which is MIT as well,
+compiled into it. [THIRD-PARTY-NOTICES.txt](../../THIRD-PARTY-NOTICES.txt) holds their licences,
+and the zip carries it beside `LICENSE.txt`.
