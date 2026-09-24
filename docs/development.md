@@ -108,8 +108,8 @@ a plain copy:
 ./scripts/Deploy.ps1           # the publish output over the cship-usage.exe on PATH
 ```
 
-It refuses unless `cship.exe` sits beside the target, runs the render tests against the build with
-that cship, stops if the target already has the build's hash, backs the target up as
+It refuses unless `cship.exe` sits beside the target, stops if the target already has the build's
+hash, runs the render tests against the build with that cship, backs the target up as
 `cship-usage.exe.bak.<unix-seconds>`, copies with retries, verifies the hash, and restores the
 backup if the copy did not land. That is traps 2 and 3 below, handled in one script. `-Source` and
 `-Target` name other files. Exit code 0 when deployed or already deployed, 1 when it refused, 2 when
@@ -125,7 +125,7 @@ itself yet: read its output the first time.
 ./scripts/Package.ps1 -Version 0.1.0
 ```
 
-It refuses unless `CHANGELOG.md` has a `## 0.1.0 — <date>` section, and unless the cship a friend
+It refuses unless `CHANGELOG.md` has a `## 0.1.0 - <date>` section, and unless the cship a friend
 is told to download is the one the render tests pin and the [install guide](guide/install.md)
 fetches: cship 1.8.0, by URL and SHA-256. It publishes the build with that version, runs the render
 tests against it with that same cship, byte for byte the download, and writes to `.work/release/`:
