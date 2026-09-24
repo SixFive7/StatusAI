@@ -9,9 +9,9 @@
 
 <a href="https://github.com/SixFive7/StatusAI/releases/latest"><img src="docs/assets/download.png" width="300" alt="Download StatusAI for Windows"></a>
 
-<sub>For Claude Code on Windows 10 and 11: [install guide](docs/guide/install.md), [what every glyph means](docs/guide/reading-the-status-line.md), [changelog](CHANGELOG.md)</sub>
-
 </div>
+
+## What you're looking at
 
 <div align="center">
 
@@ -23,17 +23,17 @@
 
 ## Why you'll like it
 
-- **It counts the whole tree.** The token figures Claude Code hands a status line only cover the
-  main conversation, and every sub-agent writes a transcript of its own. StatusAI reads all of
-  them, at any depth, and counts each API response exactly once. In three real sessions the
-  sub-agents spent 28%, 78% and 98% of the tokens.
-- **You see your limits coming.** Every limit shows how soon it reaches 100% at the pace of the last
-  hour, in red when that is before it resets and in forest green when the reset comes first, and
-  where it will stand when it does reset.
-- A figure it could not read never shows up as a zero. You get `—` instead, and a red row that says
-  which source failed and why.
-- It stays out of the way: one native `.exe` that needs no .NET installed, and all the Claude Code
-  sessions you have open share a single usage fetch.
+- It counts the whole tree. Claude Code only gives a status line the tokens of the main
+  conversation, while every sub-agent writes a transcript of its own. StatusAI reads all of them,
+  at any depth, and counts each API response once. In three real sessions the sub-agents used 28%,
+  78% and 98% of the tokens.
+- It shows your limits coming. Each limit says how soon it reaches 100% at the pace of the last
+  hour, in red if that is before it resets and in forest green if the reset comes first, and where
+  it will stand when it resets.
+- It never shows a missing figure as a zero. You get `—` instead, plus a red row that says which
+  source failed and why.
+- It stays out of the way. It is one native `.exe` that needs no .NET installed, and all your open
+  Claude Code sessions share a single usage fetch.
 
 ## A tour
 
@@ -91,17 +91,19 @@ the shared copy rather than wait.
 
 ## Get it
 
-**[Download the latest release](https://github.com/SixFive7/StatusAI/releases/latest)**: a zip with
-`cship-usage.exe` and its configuration. You need
+**[Download the latest release](https://github.com/SixFive7/StatusAI/releases/latest)**, a zip with
+`cship-usage.exe` and its configuration.
 
-- Windows 10 or 11, on x64;
-- Claude Code in a terminal, signed in with your Claude account (the VS Code extension's chat panel
-  shows no status line, but Claude Code in VS Code's own terminal does);
-- a terminal that draws emoji two columns wide, such as Windows Terminal, with a
-  [Nerd Font](https://www.nerdfonts.com) such as JetBrainsMono Nerd Font for the model line's two
-  icons;
-- [cship](https://github.com/stephenleo/cship) 1.8.0, which draws the model line StatusAI's rows go
-  under. The install block fetches it for you.
+You need:
+
+- Windows 10 or 11 on x64
+- Claude Code running in a terminal, signed in with your Claude account. The chat panel of the
+  VS Code extension shows no status line, but Claude Code in VS Code's own terminal does.
+- A terminal that draws emoji two columns wide, such as Windows Terminal, with a
+  [Nerd Font](https://www.nerdfonts.com) such as JetBrainsMono Nerd Font for the two icons on the
+  model line
+- [cship](https://github.com/stephenleo/cship) 1.8.0, which draws the model line that StatusAI's
+  rows sit under. The install block fetches it for you.
 
 Then:
 
