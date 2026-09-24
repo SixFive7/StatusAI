@@ -10,7 +10,7 @@ first.
 The terminal's width comes from `TermWidth()`, which takes the first of these that is a whole number
 over 40:
 
-1. `CSHIP_WIDTH`, a fixed width set by hand in the `env` of Claude Code's `settings.json`;
+1. `STATUSAI_WIDTH`, a fixed width set by hand in the `env` of Claude Code's `settings.json`;
 2. `COLUMNS`, which Claude Code sets to its terminal's width, beside `LINES` for the height, every
    time it runs the status line. It has done so since 2.1.153, the 2.1.281 bundle takes both from
    `process.stdout`, and its [status line documentation](https://code.claude.com/docs/en/statusline)
@@ -344,15 +344,15 @@ A meter the usage API sent that this status line does not draw is named in a row
 money. It sits under the red failure rows and above the credit alarm, which stays last.
 
 ```
-⚠ meters — the usage API sent a meter this status line ignores: Cowork (weekly_scoped, surface) · review cship-usage
-⚠ meters — the usage API sent 6 meters this status line ignores: Claude Design (weekly_scoped, surface) +5 more · review cship-usage
+⚠ meters — the usage API sent a meter this status line ignores: Cowork (weekly_scoped, surface) · review StatusAI
+⚠ meters — the usage API sent 6 meters this status line ignores: Claude Design (weekly_scoped, surface) +5 more · review StatusAI
 ```
 
 It has the `⚠` rows' budget, `avail - 2` for `⚠` and the text, and fills it with whole names: as
 many as fit, in the server's order, then `+N more` for the rest. If not even one name fits, it only
-counts them, `⚠ meters — the usage API sent 6 meters this status line ignores · review
-cship-usage` at 84 or 85 columns, and only below that would it be cut like any other reason. At the
-default 141 columns one name of up to 50 characters fits; `Cowork (weekly_scoped, surface)` is 31.
+counts them, `⚠ meters — the usage API sent 6 meters this status line ignores · review StatusAI` at
+81 or 82 columns, and only below that would it be cut like any other reason. At the default 141
+columns one name of up to 53 characters fits; `Cowork (weekly_scoped, surface)` is 31.
 
 ### "No messages yet" is a zero, not a gap
 

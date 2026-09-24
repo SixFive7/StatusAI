@@ -9,7 +9,7 @@
 
 param(
     [Parameter(Mandatory)] [string] $Sid,
-    [string] $CacheDir = (Join-Path $env:USERPROFILE '.claude\statusline-tokens')
+    [string] $CacheDir = (Join-Path $env:LOCALAPPDATA 'StatusAI\tokens')
 )
 
 $p = Join-Path $CacheDir "$Sid.bin"

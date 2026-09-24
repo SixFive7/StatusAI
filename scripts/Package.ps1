@@ -8,13 +8,13 @@
        (a hyphen or an em dash), and unless the cship this script tells a friend to download is
        the one the render tests pin (tests/cases.json) and the one the install guide fetches
        (docs/guide/install.md): its version, URL and SHA-256.
-    2. dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <OutDir>/build
+    2. dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o <OutDir>/build
        -p:Version=<version>, into a fresh directory, with no build server left running after it.
        The exe records the version, and the commit the SDK reads from git.
     3. Run tests/Test-Renders.ps1 against that exe, in the same PowerShell as this script, with
        its scratch under <OutDir>. Refuse if any render differs, or if the cship it would render
        with is not the pinned download, byte for byte.
-    4. Stage cship-usage.exe, cship.toml and starship.toml (from config/), a plain-text ASCII
+    4. Stage statusai.exe, cship.toml and starship.toml (from config/), a plain-text ASCII
        README.txt, LICENSE as LICENSE.txt, and THIRD-PARTY-NOTICES.txt in
        <OutDir>/StatusAI-<version>-win-x64/, and zip them in that order at the root of
        StatusAI-<version>-win-x64.zip. The zip is written with System.IO.Compression, so entry
@@ -61,7 +61,7 @@ param(
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Stop'
 
-# The cship a friend downloads beside cship-usage.exe: the version the render tests pin, from its
+# The cship a friend downloads beside statusai.exe: the version the render tests pin, from its
 # own release. install.md fetches the same URL and checks the same SHA-256.
 $CshipVersion = '1.8.0'
 $CshipUrl     = 'https://github.com/stephenleo/cship/releases/download/v1.8.0/cship-x86_64-pc-windows-msvc.exe'
@@ -172,7 +172,7 @@ Code's terminal interface; the VS Code extension's chat panel shows no status
 line.
 
 In this zip
-  cship-usage.exe  the status line. x64 only, and unsigned.
+  statusai.exe     the status line. x64 only, and unsigned.
   cship.toml       the configuration of cship, which draws the model line and
                    the context bar. It goes in %USERPROFILE%\.config.
   starship.toml    optional: the configuration of starship, for a prompt line
@@ -181,17 +181,17 @@ In this zip
   LICENSE.txt      the MIT License, which StatusAI is under.
   THIRD-PARTY-NOTICES.txt
                    the licences of the .NET runtime compiled into
-                   cship-usage.exe, and of cship and starship, whose own
+                   statusai.exe, and of cship and starship, whose own
                    configuration the two .toml files are based on.
 
-cship-usage.exe runs on top of cship {CSHIP}, which is not in this zip. Download
+statusai.exe runs on top of cship {CSHIP}, which is not in this zip. Download
 it from cship's own release:
 
   {URL}
   SHA-256 {SHA}
 
-and save it as cship.exe in the same folder as cship-usage.exe. cship-usage
-runs the cship.exe next to it before any other, and it won't find the download
+and save it as cship.exe in the same folder as statusai.exe. StatusAI runs
+the cship.exe next to it before any other, and it won't find the download
 under its original name. cship needs the Microsoft Visual C++ Redistributable
 (x64), which most PCs already have:
 
@@ -201,14 +201,14 @@ Neither program is signed. Where Windows 11's Smart App Control is on, it
 blocks them both; the install guide says what to do.
 
 Installing, in brief
-  1. Put cship-usage.exe in %USERPROFILE%\.local\bin. That folder must be on
+  1. Put statusai.exe in %USERPROFILE%\.local\bin. That folder must be on
      PATH; Claude Code's native installer keeps claude.exe there.
   2. Download cship as above, check its SHA-256, and save it in that same
      folder as cship.exe.
   3. Copy cship.toml to %USERPROFILE%\.config\cship.toml, unless you already
      have one.
   4. Add this to %USERPROFILE%\.claude\settings.json, inside its outer braces:
-       "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
+       "statusLine": { "type": "command", "command": "statusai", "refreshInterval": 60 }
      There is no width to set: Claude Code 2.1.153 and later pass the terminal's.
   5. Restart Claude Code.
 
@@ -229,7 +229,7 @@ $NotesFooter = @'
 ---
 
 **Install:** download `{ZIP}` below and follow the
-[install guide]({SITE}/blob/{TAG}/docs/guide/install.md). It puts `cship-usage.exe` in place and
+[install guide]({SITE}/blob/{TAG}/docs/guide/install.md). It puts `statusai.exe` in place and
 fetches [cship](https://github.com/stephenleo/cship) {CSHIP} beside it from cship's own release,
 checked against a pinned SHA-256. `{ZIP}.sha256` holds the SHA-256 of the zip.
 
@@ -320,15 +320,15 @@ function Invoke-Main {
     # ------------------------------------------------------------------ build
     Say 'build' $build
     # --disable-build-servers: no MSBuild node or compiler server outlives the build
-    & dotnet publish (Join-Path $root 'src\cship-usage.csproj') -c Release -r win-x64 -o $build "-p:Version=$Version" --disable-build-servers --nologo
+    & dotnet publish (Join-Path $root 'src\StatusAI.csproj') -c Release -r win-x64 -o $build "-p:Version=$Version" --disable-build-servers --nologo
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)." }
-    $exe = Join-Path $build 'cship-usage.exe'
+    $exe = Join-Path $build 'statusai.exe'
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "dotnet publish wrote no $exe." }
     $vi = (Get-Item -LiteralPath $exe).VersionInfo
     if ($vi.FileVersion -ne "$Version.0" -or $vi.ProductVersion -notmatch ('^' + [regex]::Escape($Version) + '(\+|$)')) {
         throw "The build is not $Version`: FileVersion $($vi.FileVersion), ProductVersion $($vi.ProductVersion)."
     }
-    Say 'cship-usage' "FileVersion $($vi.FileVersion), ProductVersion $($vi.ProductVersion)"
+    Say 'statusai' "FileVersion $($vi.FileVersion), ProductVersion $($vi.ProductVersion)"
 
     # ------------------------------------------------------------------ render tests
     $ps = (Get-Process -Id $PID).Path
@@ -339,7 +339,7 @@ function Invoke-Main {
 
     # ------------------------------------------------------------------ stage
     New-Item -ItemType Directory -Path $stage | Out-Null
-    Copy-Item -LiteralPath $exe -Destination (Join-Path $stage 'cship-usage.exe')
+    Copy-Item -LiteralPath $exe -Destination (Join-Path $stage 'statusai.exe')
     Copy-Item -LiteralPath (Join-Path $root 'config\cship.toml') -Destination (Join-Path $stage 'cship.toml')
     Copy-Item -LiteralPath (Join-Path $root 'config\starship.toml') -Destination (Join-Path $stage 'starship.toml')
     $readme = Fill $ReadmeTemplate @{ VERSION = $Version; SITE = $Site; CSHIP = $CshipVersion; URL = $CshipUrl; SHA = $CshipSha256; GUIDE = $GuideUrl }
@@ -347,7 +347,7 @@ function Invoke-Main {
     WriteText (Join-Path $stage 'README.txt') ($readme + "`n")
     Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
     Copy-Item -LiteralPath (Join-Path $root 'THIRD-PARTY-NOTICES.txt') -Destination (Join-Path $stage 'THIRD-PARTY-NOTICES.txt')
-    $files = @('cship-usage.exe', 'cship.toml', 'starship.toml', 'README.txt', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt')
+    $files = @('statusai.exe', 'cship.toml', 'starship.toml', 'README.txt', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt')
     if (-not $stamp) { $stamp = [DateTimeOffset]::new((Get-Item -LiteralPath $exe).LastWriteTime) }
 
     # ------------------------------------------------------------------ zip, then read it back

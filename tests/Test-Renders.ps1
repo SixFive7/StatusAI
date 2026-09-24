@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Renders every fixture through a cship-usage.exe, offline, and compares the output byte for
+    Renders every fixture through a statusai.exe, offline, and compares the output byte for
     byte with tests/expected.
 
 .DESCRIPTION
@@ -8,19 +8,20 @@
     (fixtures/homes) at one or more terminal widths. Each render runs in a fresh copy of its home
     under the scratch directory, with
 
-      CSHIP_OFFLINE = that copy   the limit rows, the euro rate, the account and the token cache
-                                  all come from it; the registry cache, the usage lock and the
-                                  network are never touched
-      CSHIP_WIDTH   = the width   unless the case has an "env", which then sets exactly the
-                                  variables it names, CSHIP_WIDTH and COLUMNS only, with {w}
-                                  standing for the width; COLUMNS is cleared unless it is named
-      HOME          = that copy   cship reads .config/cship.toml there: tests/cship.toml, which is
-                                  the shipped config without the starship line
+      STATUSAI_OFFLINE = that copy   the limit rows, the euro rate, the account and the token
+                                     cache all come from it; the registry cache, the usage lock
+                                     and the network are never touched
+      STATUSAI_WIDTH   = the width   unless the case has an "env", which then sets exactly the
+                                     variables it names, STATUSAI_WIDTH and COLUMNS only, with
+                                     {w} standing for the width; COLUMNS is cleared unless it is
+                                     named
+      HOME             = that copy   cship reads .config/cship.toml there: tests/cship.toml, which
+                                     is the shipped config without the starship line
 
     and the working directory set to it, so the payloads' relative transcript paths resolve
     inside it. Nothing is written to tests/ unless -Update is given.
 
-    The binary under test is staged beside a cship.exe in <scratch>/bin, because cship-usage runs
+    The binary under test is staged beside a cship.exe in <scratch>/bin, because statusai runs
     the cship in its own directory. The expected renders were recorded with the cship version
     cases.json names; another version is reported, and may draw the model line differently.
 
@@ -28,7 +29,7 @@
     1 when any differs or has no expected render, 2 when the run could not start.
 
 .PARAMETER Exe
-    The cship-usage.exe to test. Default: the output of `dotnet publish -c Release -r win-x64`
+    The statusai.exe to test. Default: the output of `dotnet publish -c Release -r win-x64`
     in src/.
 
 .PARAMETER Cship
@@ -52,7 +53,7 @@
     Default: .work/test-renders in the repository.
 
 .EXAMPLE
-    ./tests/Test-Renders.ps1 -Exe (Get-Command cship-usage).Source
+    ./tests/Test-Renders.ps1 -Exe (Get-Command statusai).Source
 
 .EXAMPLE
     ./tests/Test-Renders.ps1 -Case showcase -Show
@@ -73,7 +74,7 @@ $ErrorActionPreference = 'Stop'
 
 # Windows PowerShell 5.1 leaves $PSScriptRoot empty in parameter defaults, so they are set here
 $Tests    = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-if (-not $Exe)     { $Exe = Join-Path $Tests '..\src\bin\Release\net10.0-windows\win-x64\publish\cship-usage.exe' }
+if (-not $Exe)     { $Exe = Join-Path $Tests '..\src\bin\Release\net10.0-windows\win-x64\publish\statusai.exe' }
 if (-not $Scratch) { $Scratch = Join-Path $Tests '..\.work\test-renders' }
 # -File passes "a,b" as one string, so a comma separates cases as well
 $Case     = @($Case | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -87,15 +88,15 @@ class RunError : System.Exception { RunError([string] $m) : base($m) { } }
 function Fail([string] $msg) { throw [RunError]::new($msg) }
 
 # ------------------------------------------------------------------ the width, as a case sets it
-# CSHIP_WIDTH is the width unless the case has an "env". Then exactly the variables it names are
+# STATUSAI_WIDTH is the width unless the case has an "env". Then exactly the variables it names are
 # set, with {w} replaced by the width, and a null leaves one unset. Only the two the binary takes
 # its width from may be named.
 function Get-WidthEnv([string] $name, $c, [int] $width) {
     $vars = @{}
-    if (-not ($c.PSObject.Properties.Name -contains 'env')) { $vars['CSHIP_WIDTH'] = [string] $width; return $vars }
+    if (-not ($c.PSObject.Properties.Name -contains 'env')) { $vars['STATUSAI_WIDTH'] = [string] $width; return $vars }
     foreach ($p in $c.env.PSObject.Properties) {
-        if ($p.Name -cne 'CSHIP_WIDTH' -and $p.Name -cne 'COLUMNS') {
-            Fail "case ${name}: env may name CSHIP_WIDTH and COLUMNS, not $($p.Name)"
+        if ($p.Name -cne 'STATUSAI_WIDTH' -and $p.Name -cne 'COLUMNS') {
+            Fail "case ${name}: env may name STATUSAI_WIDTH and COLUMNS, not $($p.Name)"
         }
         if ($null -ne $p.Value) { $vars[$p.Name] = ([string] $p.Value).Replace('{w}', [string] $width) }
     }
@@ -114,10 +115,10 @@ function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, 
     $psi.RedirectStandardError = $true
     # cleared first, so nothing from the shell running the tests reaches a render; Claude Code
     # sets COLUMNS and LINES for its hooks as well as for the status line
-    foreach ($k in 'CSHIP_OFFLINE', 'CSHIP_WIDTH', 'COLUMNS', 'LINES', 'HOME', 'CLAUDE_HOME', 'STARSHIP_CONFIG', 'STARSHIP_SHELL') {
+    foreach ($k in 'STATUSAI_OFFLINE', 'STATUSAI_WIDTH', 'COLUMNS', 'LINES', 'HOME', 'CLAUDE_HOME', 'STARSHIP_CONFIG', 'STARSHIP_SHELL') {
         [void] $psi.Environment.Remove($k)
     }
-    $psi.Environment['CSHIP_OFFLINE'] = $homeDir
+    $psi.Environment['STATUSAI_OFFLINE'] = $homeDir
     foreach ($k in $widthEnv.Keys) { $psi.Environment[$k] = $widthEnv[$k] }
     $psi.Environment['HOME'] = $homeDir
     $psi.Environment['CLAUDE_HOME'] = $homeDir
@@ -157,7 +158,7 @@ function Show-Diff([byte[]] $want, [byte[]] $got) {
 function Invoke-Main {
     # ---------------------------------------------------------------- the binaries under test
     if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
-        Fail "No cship-usage.exe at $Exe. Build it (docs/development.md) or pass -Exe <path>."
+        Fail "No statusai.exe at $Exe. Build it (docs/development.md) or pass -Exe <path>."
     }
     $exePath = (Resolve-Path -LiteralPath $Exe).Path
     $cshipPath = $Cship
@@ -179,13 +180,13 @@ function Invoke-Main {
     $bin = Join-Path $scratchDir 'bin'
     if (Test-Path -LiteralPath $bin) { Remove-Item -LiteralPath $bin -Recurse -Force }
     New-Item -ItemType Directory -Path $bin | Out-Null
-    Copy-Item -LiteralPath $exePath   -Destination (Join-Path $bin 'cship-usage.exe')
+    Copy-Item -LiteralPath $exePath   -Destination (Join-Path $bin 'statusai.exe')
     Copy-Item -LiteralPath $cshipPath -Destination (Join-Path $bin 'cship.exe')
-    $staged = Join-Path $bin 'cship-usage.exe'
+    $staged = Join-Path $bin 'statusai.exe'
 
     $manifest = Get-Content -LiteralPath (Join-Path $Tests 'cases.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $cshipVersion = ((& (Join-Path $bin 'cship.exe') --version) -join ' ').Trim()
-    Write-Host "cship-usage : $exePath"
+    Write-Host "statusai    : $exePath"
     Write-Host "  sha256    : $((Get-FileHash -Algorithm SHA256 -LiteralPath $exePath).Hash.ToLowerInvariant())"
     Write-Host "cship       : $cshipPath ($cshipVersion)"
     if ($cshipVersion -ne "cship $($manifest.cship)") {

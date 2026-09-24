@@ -8,7 +8,7 @@ Releases/
 # scratch: test renders, builds, downloads, anything throwaway
 .work/
 
-# local state: a token cache a stray render writes (statusline-tokens/<sid>.bin), IDE files
+# local state: a token cache a stray offline render writes (StatusAI/tokens/<sid>.bin), IDE files
 *.bin
 *.bin.tmp
 *.user

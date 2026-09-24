@@ -4,5 +4,5 @@
 [0m Fable [38;2;125;207;255m●●●●●[38;2;110;115;141m○○○○○[0m [38;2;125;207;255m47%[0m [38;2;166;227;161m↻[0m [38;2;198;246;193m4d10h[0m [38;2;110;115;141m→ never[0m [38;2;110;115;141m⇢[0m [38;2;125;207;255m●●●●●[38;2;110;115;141m○○○○○[0m [38;2;110;115;141m47%[0m
 [0m 👤 [38;2;169;177;214msomeone@example.com[0m [38;2;110;115;141m· Max 20[0m [38;2;110;115;141m·[0m [38;2;169;177;214mCC 99%[0m [38;2;110;115;141m·[0m [38;2;169;177;214mChat 0%[0m [38;2;110;115;141m·[0m [38;2;169;177;214mCowork 1%[0m
 [0m [1;38;2;247;118;142m⚠ tokens — no transcript_path in the payload[0m
-[0m [38;2;224;175;104m⚠ meters — the usage API sent a meter this status line ignores · review cship-usage[0m
+[0m [38;2;224;175;104m⚠ meters — the usage API sent a meter this status line ignores · review StatusAI[0m
 [0m [1;38;2;247;118;142m⚠ on credit — $12,40 spent beyond the plan this period[0m

@@ -4,8 +4,10 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>cship-usage</AssemblyName>
+    <AssemblyName>statusai</AssemblyName>
+    <AssemblyTitle>StatusAI</AssemblyTitle>
     <Product>StatusAI</Product>
+    <Company>Jori Huisman</Company>
     <Copyright>Copyright (c) 2026 Jori Huisman</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PublishAot>true</PublishAot>

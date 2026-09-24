@@ -1,7 +1,7 @@
 {
  "statusLine": {
   "type": "command",
-  "command": "cship-usage",
+  "command": "statusai",
   "refreshInterval": 60,
   "padding": 2
  }

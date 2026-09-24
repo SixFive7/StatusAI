@@ -1,5 +1,5 @@
 {
-  "about": "One render per case and width: the payload on stdin, a copy of the home as CSHIP_OFFLINE and HOME, and CSHIP_WIDTH set to the width, or, where a case has an env, exactly the CSHIP_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. Run Test-Renders.ps1; see docs/development.md.",
+  "about": "One render per case and width: the payload on stdin, a copy of the home as STATUSAI_OFFLINE and HOME, and STATUSAI_WIDTH set to the width, or, where a case has an env, exactly the STATUSAI_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. Run Test-Renders.ps1; see docs/development.md.",
   "cship": "1.8.0",
   "cases": {
     "showcase": {
@@ -157,8 +157,8 @@
       "home": "showcase",
       "payload": "mid-session",
       "widths": [120],
-      "env": { "CSHIP_WIDTH": "{w}", "COLUMNS": "200" },
-      "checks": "CSHIP_WIDTH comes before COLUMNS: drawn at 120 while COLUMNS says 200, the same bytes as showcase at 120."
+      "env": { "STATUSAI_WIDTH": "{w}", "COLUMNS": "200" },
+      "checks": "STATUSAI_WIDTH comes before COLUMNS: drawn at 120 while COLUMNS says 200, the same bytes as showcase at 120."
     },
     "columns-invalid": {
       "home": "showcase",
@@ -178,8 +178,8 @@
       "home": "showcase",
       "payload": "mid-session",
       "widths": [120],
-      "env": { "CSHIP_WIDTH": "wide", "COLUMNS": "{w}" },
-      "checks": "A CSHIP_WIDTH that is not a number is passed over for COLUMNS: the same bytes as showcase at 120."
+      "env": { "STATUSAI_WIDTH": "wide", "COLUMNS": "{w}" },
+      "checks": "A STATUSAI_WIDTH that is not a number is passed over for COLUMNS: the same bytes as showcase at 120."
     },
     "padding": {
       "home": "padding",

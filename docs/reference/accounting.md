@@ -100,7 +100,7 @@ A full re-parse is not viable. The corpus tail runs to 313 MB across 237 files, 
 in PowerShell. Profiling shows I/O is not the bottleneck: reading all 152 MB takes 66 ms, while the
 per-line iteration takes 4,4 s.
 
-State is cached in `~/.claude/statusline-tokens/<session-id>.bin`, format magic `CTK2`:
+State is cached in `%LOCALAPPDATA%\StatusAI\tokens\<session-id>.bin`, format magic `CTK2`:
 
 - per-file byte offset parsed so far
 - running totals, main and sub, five counters each

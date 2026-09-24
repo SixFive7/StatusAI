@@ -191,7 +191,7 @@ Each row renders as:
 label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
 ```
 
-- `hist` in `HKCU\Software\cshipUsage` keeps `t:s:w:f` samples, pruned to the last hour.
+- `hist` in `HKCU\Software\StatusAI` keeps `t:s:w:f` samples, pruned to the last hour.
 - The slope is Theil-Sen, the median of all pairwise slopes, chosen because it shrugs off a single
   stray step that window invalidation missed. It is **gated** until at least 4 samples span at
   least 10 minutes; until then the row shows `early` rather than a guess.
@@ -247,7 +247,7 @@ a bug.
 
 ## Known gaps
 
-- The history cannot be run offline. `CSHIP_OFFLINE` takes a usage response through the same
+- The history cannot be run offline. `STATUSAI_OFFLINE` takes a usage response through the same
   `ParseUsage()` as a live fetch and draws it, and the
   [render tests](../development.md#the-render-tests) pin that parse and the drawing, but the
   forecast inputs come from the fixture, so the window checks and the slope cannot be

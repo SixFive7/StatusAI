@@ -5,7 +5,7 @@ StatusAI is under the MIT License, in LICENSE (LICENSE.txt in the release
 zip). It contains, or is based on, the three works below, and each keeps its
 own licence:
 
-  .NET runtime 10.0.12   MIT          compiled into cship-usage.exe
+  .NET runtime 10.0.12   MIT          compiled into statusai.exe
   cship 1.8.0            Apache-2.0   the basis of config/cship.toml
   starship               ISC          the basis of config/starship.toml
 
@@ -21,7 +21,7 @@ it.
 .NET runtime 10.0.12 - MIT
 --------------------------
 
-cship-usage.exe is compiled with NativeAOT, which builds the parts of the .NET
+statusai.exe is compiled with NativeAOT, which builds the parts of the .NET
 runtime and libraries that the program uses into the exe itself. They come
 from the runtime pack Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 10.0.12,
 compiled by the ILCompiler packages of the same version, all built from
@@ -312,7 +312,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 This is the THIRD-PARTY-NOTICES.TXT of the runtime pack named above, which is
 also src/runtime/THIRD-PARTY-NOTICES.TXT at the same commit. It covers the
-whole .NET runtime, not only the parts compiled into cship-usage.exe, and is
+whole .NET runtime, not only the parts compiled into statusai.exe, and is
 copied whole rather than trimmed to a guess at which parts those are.
 
 .NET Runtime uses third-party libraries or other resources that may be

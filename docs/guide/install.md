@@ -2,7 +2,7 @@
 
 # Install
 
-Each release is a zip on GitHub holding `cship-usage.exe` and the configuration it is used with,
+Each release is a zip on GitHub holding `statusai.exe` and the configuration it is used with,
 and this page puts them in place with a short PowerShell block you can read before you paste it.
 The block also fetches [cship](https://github.com/stephenleo/cship), which draws the model line
 that StatusAI's rows sit under, from cship's own release. Building from source is the
@@ -30,7 +30,7 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
 - For cship, the Microsoft Visual C++ Redistributable. cship is built against it and cannot start
   without it. Windows does not include it, but most PCs have it from some other program, and the
   block checks.
-- Neither `cship-usage.exe` nor cship is signed. The block checks the cship it downloads against a
+- Neither `statusai.exe` nor cship is signed. The block checks the cship it downloads against a
   pinned SHA-256, and each release publishes the zip's own. Your browser may warn that the zip is
   not commonly downloaded: in Edge choose *Keep*, then *Keep anyway*; in Chrome, *Download
   suspicious file*. The block removes the mark Windows puts on downloaded files, and Claude Code
@@ -57,7 +57,7 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
    ```powershell
    & {
      $ErrorActionPreference = 'Stop'
-     if (-not (Test-Path .\cship-usage.exe)) { throw 'Run this in the folder the zip was extracted to.' }
+     if (-not (Test-Path .\statusai.exe)) { throw 'Run this in the folder the zip was extracted to.' }
      $bin  = "$env:USERPROFILE\.local\bin"
      $conf = "$env:USERPROFILE\.config"
      New-Item -ItemType Directory -Force -Path $bin, $conf | Out-Null
@@ -73,22 +73,22 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
        throw "The cship download has SHA-256 $got, not $want. Nothing was installed."
      }
 
-     Copy-Item .\cship-usage.exe $bin -Force
+     Copy-Item .\statusai.exe $bin -Force
      Move-Item "$bin\cship.download" "$bin\cship.exe" -Force
-     Unblock-File "$bin\cship-usage.exe", "$bin\cship.exe"
+     Unblock-File "$bin\statusai.exe", "$bin\cship.exe"
      if (Test-Path "$conf\cship.toml") { Write-Warning "$conf\cship.toml exists and was left as it is." }
      else { Copy-Item .\cship.toml $conf }
      $v = try { & "$bin\cship.exe" --version 2>$null } catch { }
      if ("$v" -notlike 'cship*') {
        Write-Warning 'cship.exe does not start here: see "When something is missing" in the guide.'
      }
-     $found = Get-Command cship-usage -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
-     if ($found -eq "$bin\cship-usage.exe") { "Done. PATH leads to $found." }
-     else { Write-Warning "Done, but PATH does not lead to $bin\cship-usage.exe: see step 3." }
+     $found = Get-Command statusai -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+     if ($found -eq "$bin\statusai.exe") { "Done. PATH leads to $found." }
+     else { Write-Warning "Done, but PATH does not lead to $bin\statusai.exe: see step 3." }
    }
    ```
 
-   It puts `cship-usage.exe` in `%USERPROFILE%\.local\bin`, downloads cship beside it as
+   It puts `statusai.exe` in `%USERPROFILE%\.local\bin`, downloads cship beside it as
    `cship.exe`, and stops before installing anything if the download's SHA-256 is not the one
    above. It removes the mark Windows puts on downloaded files from both programs, and copies
    `cship.toml`, which draws the model line and the context bar, to `%USERPROFILE%\.config`. cship
@@ -96,10 +96,10 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
    nothing, and the status line says so in a `⚠` row. Then it starts cship once, to ask its
    version, and warns if cship cannot start on this PC.
 
-   cship-usage runs the `cship.exe` in its own folder before any on your PATH, which is why the
+   statusai runs the `cship.exe` in its own folder before any on your PATH, which is why the
    download is saved under that name beside it. With no cship to run, the status line prints the
    raw session JSON in place of the model line. Do not run cship's own installer or
-   `cship uninstall`: both delete the `statusLine` setting that points at cship-usage.
+   `cship uninstall`: both delete the `statusLine` setting that points at statusai.
 
    If you already have a `cship.toml`, the block leaves it as it is and says so. The status line's
    rows go under whatever your configuration draws, so it works as it is; for the model line and
@@ -118,7 +118,7 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
    file, create it with the entry between `{` and `}`.
 
    ```json
-   "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
+   "statusLine": { "type": "command", "command": "statusai", "refreshInterval": 60 }
    ```
 
    There is no width to set: StatusAI takes the terminal's from Claude Code. If you want a fixed
@@ -127,13 +127,13 @@ that StatusAI's rows sit under, from cship's own release. Building from source i
    runs in.
 
    ```json
-   "env": { "CSHIP_WIDTH": "120" }
+   "env": { "STATUSAI_WIDTH": "120" }
    ```
 
 5. Restart Claude Code.
 
 To update, download the new release and run the block again with Claude Code closed. Windows locks
-`cship-usage.exe` for the moment the status line runs it, and a copy made in that moment fails.
+`statusai.exe` for the moment the status line runs it, and a copy made in that moment fails.
 Your `cship.toml` is kept.
 
 ## Build from source
@@ -146,10 +146,10 @@ later with its *Desktop development with C++* workload, which
 link. Then:
 
 ```powershell
-dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <dir>
+dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o <dir>
 ```
 
-`<dir>\cship-usage.exe` is the whole program: NativeAOT, self-contained, about 5 MB, with no .NET
+`<dir>\statusai.exe` is the whole program: NativeAOT, self-contained, about 5 MB, with no .NET
 runtime to install. Check it with the [render tests](../development.md#the-render-tests) before
 putting it anywhere.
 
@@ -158,10 +158,10 @@ putting it anywhere.
 1. Download [cship](https://github.com/stephenleo/cship) 1.8.0,
    `cship-x86_64-pc-windows-msvc.exe` from its
    [release](https://github.com/stephenleo/cship/releases/tag/v1.8.0), and save it as `cship.exe`
-   **in the same directory as `cship-usage.exe`**, on your `PATH` (`%USERPROFILE%\.local\bin`, for
-   instance). cship-usage runs the cship beside it; if there is none, the status line prints the
+   **in the same directory as `statusai.exe`**, on your `PATH` (`%USERPROFILE%\.local\bin`, for
+   instance). statusai runs the cship beside it; if there is none, the status line prints the
    raw session JSON instead. Do not run cship's own installer or `cship uninstall`: both delete the
-   `statusLine` setting that points at cship-usage.
+   `statusLine` setting that points at statusai.
 2. Copy [config/cship.toml](../../config/cship.toml) to `%USERPROFILE%\.config\cship.toml`. It
    draws the model line and the context bar.
 3. Tell Claude Code about it and restart it, as in steps 4 and 5 of [Download](#download).
@@ -193,25 +193,25 @@ Nerd Font the few icons in cship's model line show as boxes; nothing StatusAI dr
 
 | what you see | what to do |
 |---|---|
-| the block stops: the file *contains a virus or potentially unwanted software* | Microsoft Defender has taken a new, unsigned program for malware, as it sometimes does with programs built the way `cship-usage.exe` is. Check the zip's SHA-256 against the release's `.sha256` file, and tell whoever sent you here. |
+| the block stops: the file *contains a virus or potentially unwanted software* | Microsoft Defender has taken a new, unsigned program for malware, as it sometimes does with programs built the way `statusai.exe` is. Check the zip's SHA-256 against the release's `.sha256` file, and tell whoever sent you here. |
 | the block warns that `cship.exe` does not start | Windows could not run cship. Most often the Microsoft Visual C++ Redistributable is missing: install the x64 one from [Microsoft](https://aka.ms/vc14/vc_redist.x64.exe) and run the block again. Otherwise Smart App Control is *On* (see [Before you start](#before-you-start)). |
-| no status line at all | Check that a new terminal finds the program: `where.exe cship-usage` should print `C:\Users\<you>\.local\bin\cship-usage.exe` (step 3). Claude Code runs a status line only in its terminal interface, and only in a folder you have trusted; `claude --debug` logs the exit code and error of its first run in a session. Smart App Control, if it is *On*, blocks it (see [Before you start](#before-you-start)). |
-| the session's raw JSON where the model line should be | cship is not beside `cship-usage.exe`. Run the block again. |
+| no status line at all | Check that a new terminal finds the program: `where.exe statusai` should print `C:\Users\<you>\.local\bin\statusai.exe` (step 3). Claude Code runs a status line only in its terminal interface, and only in a folder you have trusted; `claude --debug` logs the exit code and error of its first run in a session. Smart App Control, if it is *On*, blocks it (see [Before you start](#before-you-start)). |
+| the session's raw JSON where the model line should be | cship is not beside `statusai.exe`. Run the block again. |
 | `⚠ cship — no output`, and no model line | cship ran and drew nothing. Either `%USERPROFILE%\.config\cship.toml` is missing (copy it from the zip), or cship cannot start, which it can't without the Microsoft Visual C++ Redistributable: install the x64 one from [Microsoft](https://aka.ms/vc14/vc_redist.x64.exe). |
 | boxes instead of the model line's two icons | The terminal's font is not a Nerd Font. |
-| rows cut short at the right edge | Claude Code before 2.1.153 does not pass the terminal's width, so StatusAI assumes 141 columns: update Claude Code, or set `CSHIP_WIDTH` (step 4). A `CSHIP_WIDTH` wider than the terminal does the same. Below 121 columns the token grid is cut short whatever the width says. |
+| rows cut short at the right edge | Claude Code before 2.1.153 does not pass the terminal's width, so StatusAI assumes 141 columns: update Claude Code, or set `STATUSAI_WIDTH` (step 4). A `STATUSAI_WIDTH` wider than the terminal does the same. Below 121 columns the token grid is cut short whatever the width says. |
 | every limit row reads `→ early` | Nothing is wrong: for the first ten minutes there is no trend yet. |
 | `👤 not signed in`, and no limit rows | Claude Code is signed in with an API key rather than a Claude account; the limit rows need the account. |
 
 ## Uninstall
 
-Remove `statusLine` from `settings.json`, and `CSHIP_WIDTH` if you set it. Then delete the two
-programs and what the status line keeps between renders:
+Remove `statusLine` from `settings.json`, and `STATUSAI_WIDTH` if you set it. Then delete the two
+programs and what the status line keeps between renders, the registry key and the token cache:
 
 ```powershell
-Remove-Item "$env:USERPROFILE\.local\bin\cship-usage.exe", "$env:USERPROFILE\.local\bin\cship.exe"
-Remove-Item -Recurse "HKCU:\Software\cshipUsage"
-Remove-Item -Recurse "$env:USERPROFILE\.claude\statusline-tokens"
+Remove-Item "$env:USERPROFILE\.local\bin\statusai.exe", "$env:USERPROFILE\.local\bin\cship.exe"
+Remove-Item -Recurse "HKCU:\Software\StatusAI"
+Remove-Item -Recurse "$env:LOCALAPPDATA\StatusAI"
 ```
 
 `%USERPROFILE%\.config\cship.toml`, and `starship.toml` if you copied it, can go too unless
@@ -227,6 +227,6 @@ Remove-Item -Recurse "$env:USERPROFILE\.claude\projects\*\cship"
 StatusAI renders on top of [cship](https://github.com/stephenleo/cship) (Apache-2.0) and,
 optionally, [starship](https://starship.rs) (ISC). StatusAI itself is under the
 [MIT License](../../LICENSE). `cship.toml` and `starship.toml` are based on cship's and starship's
-own and keep those licences, and `cship-usage.exe` has the .NET runtime, which is MIT as well,
+own and keep those licences, and `statusai.exe` has the .NET runtime, which is MIT as well,
 compiled into it. [THIRD-PARTY-NOTICES.txt](../../THIRD-PARTY-NOTICES.txt) holds their licences,
 and the zip carries it beside `LICENSE.txt`.

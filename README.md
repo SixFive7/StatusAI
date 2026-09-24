@@ -75,7 +75,7 @@ read one scope straight down.
 
 ### Warnings that say why
 
-<img src="docs/assets/warnings.png" width="754" alt="Three warning rows under a limit row. In red: 'tokens — no transcript_path in the payload'. In amber: the usage API sent a meter this status line ignores. In red: 'on credit — $12,40 spent beyond the plan this period'.">
+<img src="docs/assets/warnings.png" width="994" alt="Three warning rows under a limit row. In red: 'tokens — no transcript_path in the payload'. In amber: the usage API sent a meter this status line ignores, Cowork, so review StatusAI. In red: 'on credit — $12,40 spent beyond the plan this period'.">
 
 When a figure could not be read, you get a red `⚠` row naming its source and the reason, not a zero
 that looks real. When fetching your usage fails twice in a row, the row says why and how old the
@@ -93,7 +93,7 @@ the shared copy rather than wait.
 ## Get it
 
 **[Download the latest release](https://github.com/SixFive7/StatusAI/releases/latest)**, a zip with
-`cship-usage.exe` and its configuration.
+`statusai.exe` and its configuration.
 
 You need:
 
@@ -112,13 +112,13 @@ Then:
    is not commonly downloaded, keep it: it is new and unsigned. On Windows 11, right-click inside
    the extracted folder and choose *Open in Terminal*.
 2. Paste the block from the [install guide](docs/guide/install.md#download). It puts
-   `cship-usage.exe` and cship in `%USERPROFILE%\.local\bin`, which has to be on your PATH, and
+   `statusai.exe` and cship in `%USERPROFILE%\.local\bin`, which has to be on your PATH, and
    `cship.toml` in `%USERPROFILE%\.config`.
 3. Tell Claude Code about it: add this entry to `%USERPROFILE%\.claude\settings.json`, inside its
    outer braces.
 
    ```json
-   "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
+   "statusLine": { "type": "command", "command": "statusai", "refreshInterval": 60 }
    ```
 
 4. Restart Claude Code.
@@ -129,7 +129,7 @@ take it out again.
 
 This is 1.0.0, the first release, and it has a few known limits. Numbers are in Dutch notation
 (`1.234,56`), the token grid needs a terminal at least 121 columns wide, and there is only an x64
-build. Neither `cship-usage.exe` nor cship is signed, so Windows 11's Smart App Control blocks them
+build. Neither `statusai.exe` nor cship is signed, so Windows 11's Smart App Control blocks them
 where it is on. There is no installer or auto-update yet.
 
 ## Learn more

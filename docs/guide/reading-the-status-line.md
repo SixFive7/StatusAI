@@ -179,6 +179,6 @@ Two more rows can appear there, and neither is a failure:
 
 All three at once, in their order, under the last limit row:
 
-<img src="../assets/warnings.png" width="754" alt="Three warning rows under a limit row. In red: 'tokens — no transcript_path in the payload'. In amber: the usage API sent a meter this status line ignores. In red: 'on credit — $12,40 spent beyond the plan this period'.">
+<img src="../assets/warnings.png" width="994" alt="Three warning rows under a limit row. In red: 'tokens — no transcript_path in the payload'. In amber: the usage API sent a meter this status line ignores, Cowork, so review StatusAI. In red: 'on credit — $12,40 spent beyond the plan this period'.">
 
 Every reason and when it appears is in [layout.md](../reference/layout.md#the--row).

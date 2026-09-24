@@ -9,22 +9,22 @@ it elsewhere.
 ## The render chain
 
 ```
-Claude Code  --stdin JSON-->  cship-usage.exe  --stdin-->  cship.exe  -->  starship
-  statusLine hook               (this repo)                (Apache-2.0)     (ISC, optional)
-  refreshInterval: 60                 |
-                                      +--> transcript tree      tokens, tool calls
-                                      +--> api.anthropic.com    5h / 7d / scoped limits
-                                      +--> ecb.europa.eu        EUR reference rate
-                                      +--> .credentials.json    OAuth token, plan tier
+Claude Code  --stdin JSON-->  statusai.exe  --stdin-->  cship.exe  -->  starship
+  statusLine hook              (this repo)              (Apache-2.0)    (ISC, optional)
+  refreshInterval: 60               |
+                                    +--> transcript tree      tokens, tool calls
+                                    +--> api.anthropic.com    5h / 7d / scoped limits
+                                    +--> ecb.europa.eu        EUR reference rate
+                                    +--> .credentials.json    OAuth token, plan tier
 ```
 
-`cship-usage` reads the status-line payload on stdin, pipes it through `cship`, takes its stdout,
+`statusai` reads the status-line payload on stdin, pipes it through `cship`, takes its stdout,
 appends the meta segment to the last non-empty line, and inserts the token rows and limit rows
 beneath it. If `cship` returns nothing, as it does with a payload it cannot parse, there is no line
 to append to, and the block is emitted on its own with the meta segment on its first row rather than
 dropped; see [layout.md](layout.md#when-there-is-no-host-line).
 
-`cship` has to be in the same directory as `cship-usage`. Windows searches the calling executable's
+`cship` has to be in the same directory as `statusai`. Windows searches the calling executable's
 own directory before PATH, and if `cship` isn't found, the failure path is `catch { return input; }`,
 which echoes the entire raw session JSON onto the status line. Keeping the two together is a
 requirement, not a convenience.
@@ -49,7 +49,7 @@ Four clocks, stacked:
 
 | layer | interval | trigger |
 |---|---|---|
-| Claude Code running `cship-usage` | `refreshInterval: 60` | plus every new assistant message, after `/compact`, on permission-mode change; debounced 300 ms |
+| Claude Code running `statusai` | `refreshInterval: 60` | plus every new assistant message, after `/compact`, on permission-mode change; debounced 300 ms |
 | OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s** | `FreshVal`: `now - t < 50`, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries |
 | EUR rate | cached **24 h** | ECB daily feed |
 | token rows, account line | **every render** | incremental parse of appended bytes only |
@@ -75,15 +75,16 @@ failed in a row and keep the latest reason, for the `⚠` row every session draw
 
 | location | contents |
 |---|---|
-| `HKCU\Software\cshipUsage` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
-| `~/.claude/statusline-tokens/<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
-| named mutex `Global\cshipUsage.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
+| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
+| `%LOCALAPPDATA%\StatusAI\tokens\<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
+| named mutex `Global\StatusAI.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 
-Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json`,
-`statusline-cache.json`. The registry's `val`, the drawn rows builds before 2026-09-24 cached, is
-removed by the first good fetch after the switch.
+Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json` and
+`statusline-cache.json`, and `HKCU\Software\cshipUsage` and `~/.claude/statusline-tokens`, which
+held the registry cache and the token cache before the rename to StatusAI. In that old key, `val`
+held the drawn rows until 2026-09-24, and the first good fetch after that switch removed it.
 
-With `CSHIP_OFFLINE` set, a switch for development (see
+With `STATUSAI_OFFLINE` set, a switch for development (see
 [development.md](../development.md#offline-beside-live-sessions)), none of the three is touched: the
 rows and the euro rate come from a file in that directory, and the token cache and the account files
 move into it.
@@ -100,8 +101,8 @@ The token accounting is fully portable, but the code around it uses a few Window
 | `net10.0-windows` TFM | consequence of the above |
 
 Everything in the walker is cross-platform: `Path`, `FileStream`, `BinaryReader`, `JsonDocument`,
-`Environment.SpecialFolder.UserProfile`. The transcript tree is located from `transcript_path` in the
-stdin payload, so no path is hardcoded.
+`Environment.SpecialFolder.UserProfile` and `LocalApplicationData`. The transcript tree is located
+from `transcript_path` in the stdin payload, so no path is hardcoded.
 
 A Linux/macOS port means replacing the registry with a JSON file and the mutex naming with a lock
 file. The accounting needs no changes.
@@ -109,7 +110,7 @@ file. The accounting needs no changes.
 | move it to | what breaks | fix |
 |---|---|---|
 | Linux / macOS | registry, mutex naming, TFM | about an hour |
-| a different terminal width | nothing from Claude Code 2.1.153 on, which sets `COLUMNS` to the terminal's width; before that the width is 141 unless `CSHIP_WIDTH` says otherwise | none |
+| a different terminal width | nothing from Claude Code 2.1.153 on, which sets `COLUMNS` to the terminal's width; before that the width is 141 unless `STATUSAI_WIDTH` says otherwise | none |
 | a terminal rendering emoji single-width | the grid: `iw[]` declares 4 columns per 2-emoji block | one array |
 | a machine without a Nerd Font | cship/starship glyphs, **not** the token rows | see below |
 | an API-key-only account | the limit rows and the account line | nothing; it degrades |
@@ -126,7 +127,7 @@ Dropping starship removes ~90% of the font requirement.
 .NET 10 SDK, `PublishAot`, `InvariantGlobalization`, `net10.0-windows`, x64.
 
 ```
-dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <out>
+dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o <out>
 ```
 
 Output is ~4,83 MiB and really self-contained: no `hostfxr`, no `coreclr` and no VC++

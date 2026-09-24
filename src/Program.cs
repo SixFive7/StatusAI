@@ -22,6 +22,10 @@ const string NoData = "—";
 // pastel: chroma 76 against 41, and a CIEDE2000 difference of 21,7 and 27,3 from them.
 const string Forest = "\x1b[38;2;40;164;40m";
 
+// The registry key under HKCU that holds what every session shares: the limit rows' cache, the
+// count of failed fetches, the prediction history and the euro rate.
+const string RegKey = @"Software\StatusAI";
+
 string stdin;
 using (var s = Console.OpenStandardInput())
 using (var r = new StreamReader(s, Encoding.UTF8)) stdin = r.ReadToEnd();
@@ -220,14 +224,14 @@ static int Vis(string s) {
     return n;
 }
 
-// The terminal's width. CSHIP_WIDTH first, a fixed width set by hand (settings.json "env");
+// The terminal's width. STATUSAI_WIDTH first, a fixed width set by hand (settings.json "env");
 // then COLUMNS, which Claude Code sets to its terminal's width when it runs the status line
 // (since 2.1.153; the 2.1.281 bundle takes it from process.stdout); then 141, a measured
 // width. Asking the OS is useless: Claude Code spawns the status line detached, and the
 // console it gets reports a phantom 120x30. A value that is not a whole number over 40 is
 // passed over for the next.
 static int TermWidth() {
-    foreach (string name in new[] { "CSHIP_WIDTH", "COLUMNS" })
+    foreach (string name in new[] { "STATUSAI_WIDTH", "COLUMNS" })
         if (int.TryParse(Environment.GetEnvironmentVariable(name), out int w) && w > 40) return w;
     return 141;
 }
@@ -257,22 +261,27 @@ static int Padding() {
     return 0;
 }
 
-// CSHIP_OFFLINE names a directory to render from instead of the live machine, for the dev
+// STATUSAI_OFFLINE names a directory to render from instead of the live machine, for the dev
 // loop. Everything the status line normally shares with the running sessions comes from a
 // file in it instead: the limit rows from its usage.json and rows.json rather than the
 // registry cache and the API, the euro rate from rows.json, and it replaces %USERPROFILE%,
 // so the account line reads its .claude.json, statusLine.padding comes from its
-// .claude/settings.json and the token cache goes in its .claude folder.
-// HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken and
+// .claude/settings.json and the token cache goes in its AppData\Local (LocalAppData).
+// HKCU\Software\StatusAI is neither read nor written, the usage lock is never taken and
 // nothing is fetched. So a dev build run this way can't draw a live session's cached rows,
 // count a failed fetch against them, or push a sample into the shared prediction history,
 // all of which a plain test run on a live machine does.
 static string? Offline() {
-    string? d = Environment.GetEnvironmentVariable("CSHIP_OFFLINE");
+    string? d = Environment.GetEnvironmentVariable("STATUSAI_OFFLINE");
     return string.IsNullOrEmpty(d) ? null : d;
 }
 
 static string Home() => Offline() ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+// %LOCALAPPDATA%, where the token cache lives. Offline it is the AppData\Local of the directory
+// that stands in for the user profile, which is where Windows keeps it by default.
+static string LocalAppData() => Offline() is string d ? Path.Combine(d, "AppData", "Local")
+                                : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
 static string RunCship(string input) {
     try {
@@ -429,7 +438,7 @@ static string LockName() {
     using var id = WindowsIdentity.GetCurrent();
     string sid = id.User?.Value ?? "nosid";
     bool adm = new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
-    return @"Global\cshipUsage.fetch." + sid + (adm ? ".adm" : ".std");
+    return @"Global\StatusAI.fetch." + sid + (adm ? ".adm" : ".std");
 }
 
 // Returns the bare reason; WarnRows does the ⚠ and the colour, so the lock failure shares
@@ -479,7 +488,7 @@ static string MetersRow(string ig, int avail) {
     int room = avail - 2 - 2;   // the ⚠ rows' budget, less "⚠ "
     string head = "meters — the usage API sent " + (names.Length == 1 ? "a meter" : names.Length + " meters")
                 + " this status line ignores";
-    const string tail = " · review cship-usage";
+    const string tail = " · review StatusAI";
     for (int k = names.Length; k >= 1; k--) {
         string t = head + ": " + string.Join(", ", names.Take(k))
                  + (k < names.Length ? $" +{names.Length - k} more" : "") + tail;
@@ -506,7 +515,7 @@ static string Short(string s, int max = 64) {
 // in val left it, reads as no cache, so the next render fetches.
 static Cached? FreshVal(long now) {
     try {
-        using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.OpenSubKey(RegKey);
         if (rk?.GetValue("ts") is string ts && long.TryParse(ts, out long t) && now - t < 50) return FromKey(rk);
     } catch { }
     return null;
@@ -514,7 +523,7 @@ static Cached? FreshVal(long now) {
 
 static Cached? AnyVal() {
     try {
-        using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.OpenSubKey(RegKey);
         if (rk is not null) return FromKey(rk);
     } catch { }
     return null;
@@ -625,7 +634,7 @@ static string FetchWhy(string why) => why switch {
 static void SaveFailure(string why) {
     try {
         var (fails, w) = AfterFetch(RegInt("fail"), RegStr("why"), why);
-        using var rk = Registry.CurrentUser.CreateSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
         rk.SetValue("fail", fails.ToString(CultureInfo.InvariantCulture));
         rk.SetValue("why", w);
     } catch { }
@@ -727,7 +736,7 @@ static (string line, bool signedIn) BuildAccount() {
 static List<(long t, int s, int w, int f)> LoadHist() {
     var list = new List<(long, int, int, int)>();
     try {
-        using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.OpenSubKey(RegKey);
         if (rk?.GetValue("hist") is string h && h.Length > 0)
             foreach (var part in h.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)) {
                 var f = part.Split(':');
@@ -739,7 +748,7 @@ static List<(long t, int s, int w, int f)> LoadHist() {
 }
 
 static string RegStr(string name) {
-    try { using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage"); return rk?.GetValue(name) as string ?? ""; } catch { return ""; }
+    try { using var rk = Registry.CurrentUser.OpenSubKey(RegKey); return rk?.GetValue(name) as string ?? ""; } catch { return ""; }
 }
 
 static long RegLong(string name) => long.TryParse(RegStr(name), out long v) ? v : 0;
@@ -752,7 +761,7 @@ static int RegInt(string name) => int.TryParse(RegStr(name), out int v) ? v : 0;
 static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, long vfS, long vfW, long vfF,
                  List<(long t, int s, int w, int f)> hist, Cached c, long now) {
     try {
-        using var rk = Registry.CurrentUser.CreateSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
         rk.SetValue("acct", acct);
         rk.SetValue("sn", scopedName);
         rk.SetValue("rsS", rsS.ToString()); rk.SetValue("rsW", rsW.ToString()); rk.SetValue("rsF", rsF.ToString());
@@ -995,7 +1004,7 @@ static double EurPerUsd() {
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     double cached = 0;
     try {
-        using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.OpenSubKey(RegKey);
         if (rk?.GetValue("fx") is string fv
             && double.TryParse(fv, NumberStyles.Float, CultureInfo.InvariantCulture, out double c)) cached = c;
         if (cached > 0 && rk?.GetValue("fxTs") is string ts
@@ -1004,7 +1013,7 @@ static double EurPerUsd() {
     double fresh = FetchEurPerUsd();
     if (fresh <= 0) return cached;
     try {
-        using var rk = Registry.CurrentUser.CreateSubKey(@"Software\cshipUsage");
+        using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
         rk.SetValue("fx", fresh.ToString("R", CultureInfo.InvariantCulture));
         rk.SetValue("fxTs", now.ToString());
     } catch { }
@@ -1416,7 +1425,7 @@ static long TokHash(string s) {
 }
 
 static string TokPath(string sid) {
-    string dir = Path.Combine(Home(), ".claude", "statusline-tokens");
+    string dir = Path.Combine(LocalAppData(), "StatusAI", "tokens");
     Directory.CreateDirectory(dir);
     return Path.Combine(dir, sid + ".bin");
 }

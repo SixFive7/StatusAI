@@ -5,7 +5,7 @@ release are by date.
 
 ## 1.0.0 - 2026-09-24
 
-The first release: a zip with `cship-usage.exe` and the configuration it is used with.
+The first release: a zip with `statusai.exe` and the configuration it is used with.
 [install.md](docs/guide/install.md) puts it in place and fetches
 [cship](https://github.com/stephenleo/cship) 1.8.0 beside it. It draws:
 
@@ -28,8 +28,12 @@ The first release: a zip with `cship-usage.exe` and the configuration it is used
   seconds old.
 
 It fits the terminal's width, which Claude Code 2.1.153 and later pass to it, and every open session
-draws at the width of its own terminal. `CSHIP_WIDTH` sets a fixed width instead, and with neither
-the width is 141.
+draws at the width of its own terminal. `STATUSAI_WIDTH` sets a fixed width instead, and with
+neither the width is 141.
+
+The program is `statusai.exe`; the builds before this release were `cship-usage.exe`. What it
+keeps took the new name as well: the registry key `HKCU\Software\StatusAI`, the token cache in
+`%LOCALAPPDATA%\StatusAI\tokens`, and `STATUSAI_WIDTH`, which was `CSHIP_WIDTH`.
 
 The [README](README.md) opens with the status line as a terminal shows it, with nothing added, then
 an annotated version that names every part and opens the
@@ -37,7 +41,7 @@ an annotated version that names every part and opens the
 
 StatusAI is under the [MIT License](LICENSE), which the zip carries as `LICENSE.txt`. Beside
 it, [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) holds the licences of the .NET runtime,
-which is compiled into `cship-usage.exe`, and of cship and starship, since `cship.toml` and
+which is compiled into `statusai.exe`, and of cship and starship, since `cship.toml` and
 `starship.toml` are based on their configuration.
 
 It needs Windows 10 or 11 on x64, and Claude Code in a terminal, signed in with a Claude account for
@@ -46,7 +50,7 @@ emoji two columns wide, as Windows Terminal does, and be at least 121 columns wi
 grid. cship needs the Microsoft Visual C++ Redistributable, which most PCs already have and the
 install block checks for.
 
-Known limits: numbers are in Dutch notation (`1.234,56`); `cship-usage.exe` is x64 only; it and
+Known limits: numbers are in Dutch notation (`1.234,56`); `statusai.exe` is x64 only; it and
 cship are unsigned, so Windows 11's Smart App Control blocks them where it is on; there is no
 installer or auto-update yet.
 
