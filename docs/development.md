@@ -10,7 +10,8 @@ src/        Program.cs and the csproj — the whole implementation
 tests/      the render tests: fixtures, expected renders, Test-Renders.ps1
 scripts/    Deploy.ps1, and independent PowerShell implementations that verify the accounting
 config/     the cship and starship configuration the status line is used with
-docs/       guide/ for using it, reference/ for how it works, design/ for why, and this page
+docs/       guide/ for using it, reference/ for how it works, design/ for why, assets/ for the
+            figures, and this page
 .work/      scratch, gitignored: builds, test renders, anything throwaway
 ```
 
@@ -78,11 +79,12 @@ test.
 
 **A deliberate change of output** is recorded with `-Update`, which rewrites `tests/expected` and
 removes any render no case produces; read the diff before committing it. To add a case, add a home
-or a payload, give it an entry in `cases.json`, and run `-Update -Case <name>`.
+or a payload, give it an entry in `cases.json`, and run `-Update -Case <name>`. The figures in
+`docs/assets/` are drawn from these files, so a change of output is also a reason to regenerate
+them, in the same commit: `node docs/assets/figures.gen.js` (see [its README](assets/README.md)).
 
 **To look at a render**, `-Case showcase -Show` prints it with its colours, and `-OutDir <dir>`
-writes every render it makes as `<case>.w<width>.ansi` — the source for any figure of the status
-line.
+writes every render it makes as `<case>.w<width>.ansi`, at any width a case lists.
 
 ## Deploying
 

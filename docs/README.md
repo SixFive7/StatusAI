@@ -39,4 +39,5 @@ Why it is the way it is, and what was tried and rejected.
 |---|---|
 | [development.md](development.md) | the repository, building, the render tests, deploying and testing on a live machine — and the traps that waste an hour |
 
-Images the docs use go in [assets/](assets/).
+The figures in [assets/](assets/) are drawn from the render tests' output by a generator; its
+[README](assets/README.md) lists them and gives the command that regenerates them.

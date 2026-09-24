@@ -56,6 +56,36 @@ re-theme a screenshot. Page chrome around it gets the full three-state light/dar
 **Say what a design costs.** Character budget, glyph widths, which column grows. A status-line
 design note without a width figure is not finished.
 
+## Figures for Markdown pages
+
+GitHub shows an HTML file as source, so the pages people read on GitHub — the README and the guide —
+get their figures as images. [figures.gen.js](../../assets/figures.gen.js) draws them in this style
+and has Edge, headless, export each as a PNG; [docs/assets/README.md](../../assets/README.md) lists
+them, with the command that regenerates them all. The rules above hold, and six more:
+
+- **Drawn from the render tests, never typed.** Each figure names renders in `tests/expected` — the
+  bytes the binary is held to — and the lines and columns to show. A crop never splits a two-column
+  cell, and a callout finds its columns by matching the text it names, so a change of output
+  either carries the callout along or stops the generator.
+- **Cells in pixels.** 8 px wide at 13,33 px, JetBrains Mono's own advance, so a glyph's box and
+  its cell are one thing; an emoji gets two. The widths are Windows Terminal's: East-Asian Wide
+  emoji two columns, Neutral and Ambiguous glyphs and cship's Nerd Font icons one. A glyph whose
+  width the generator does not know stops it.
+- **The device on a transparent ground.** The terminal stays dark and the margin around it is
+  transparent, with a shadow that fades out inside it, so GitHub's light and dark pages show the
+  same figure with nothing to re-theme. The callout labels sit inside the device, on its ground,
+  for the same reason.
+- **Twice the density**, so the text stays sharp on a high-density screen and when GitHub scales a
+  wide figure down.
+- **93 columns or fewer, where it can be helped.** GitHub's README column is about 830 px, which
+  holds a device of 93 columns at its own size; a wider one is scaled down with everything in it.
+  The whole status line is 133 columns at the default width and is shown whole once, as the hero;
+  every other figure is cropped to the rows and columns it is about.
+- **Every `<img>` has alt text and a `width` equal to the figure's CSS width**, half its pixel
+  width, so GitHub draws it at its own size, or narrower where the column is. The generator checks
+  both on every Markdown page, and refuses a label that leaves its device or comes within 10 px of
+  another.
+
 ## Regenerating
 
 ```bash
