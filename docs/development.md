@@ -8,7 +8,7 @@ traps below cost real time; the first one is the expensive one.
 ```
 src/        Program.cs and the csproj — the whole implementation
 tests/      the render tests: fixtures, expected renders, Test-Renders.ps1
-scripts/    independent PowerShell implementations that verify the accounting
+scripts/    Deploy.ps1, and independent PowerShell implementations that verify the accounting
 config/     the cship and starship configuration the status line is used with
 docs/       guide/ for using it, reference/ for how it works, design/ for why, and this page
 .work/      scratch, gitignored: builds, test renders, anything throwaway
@@ -83,6 +83,23 @@ or a payload, give it an entry in `cases.json`, and run `-Update -Case <name>`.
 writes every render it makes as `<case>.w<width>.ansi` — the source for any figure of the status
 line.
 
+## Deploying
+
+```powershell
+./scripts/Deploy.ps1 -WhatIf   # what it would do, without doing it
+./scripts/Deploy.ps1           # the publish output over the cship-usage.exe on PATH
+```
+
+It refuses unless `cship.exe` sits beside the target, runs the render tests against the build with
+that cship, stops if the target already has the build's hash, backs the target up as
+`cship-usage.exe.bak.<unix-seconds>`, copies with retries, verifies the hash, and restores the
+backup if the copy did not land — traps 2 and 3 below, as one script. `-Source` and `-Target` name
+other files. Exit code 0 when deployed or already deployed, 1 when it refused, 2 when the copy
+failed and the backup is back in place, 3 when even that failed, the backup intact beside it.
+
+It was written on 2026-09-24 from the procedure that day's deploys used, and has not been run
+itself yet: read its output the first time.
+
 ## Trap 1 — the cache serves output from the *previous* binary
 
 **This will make a working change look broken, and a broken change look fine.**
@@ -113,17 +130,12 @@ cache, so it has no trap to invalidate.
 ## Trap 2 — the binary is locked while the status line runs it
 
 Windows holds the image while the process runs, and it runs every 60 seconds for ~100 ms. A
-straight copy fails intermittently. Retry:
-
-```powershell
-foreach ($i in 1..12) {
-  try { Copy-Item $src $dst -Force -ErrorAction Stop; break }
-  catch { Start-Sleep -Milliseconds 700 }
-}
-```
+straight copy fails intermittently, so [Deploy.ps1](#deploying) retries it, twelve times, 700 ms
+apart.
 
 Back up the outgoing binary first. The convention on the dev machine is a sibling
-`cship-usage.exe.bak.<unix-seconds>`, which makes a revert a copy rather than a rebuild.
+`cship-usage.exe.bak.<unix-seconds>`, which makes a revert a copy rather than a rebuild; the script
+writes that backup and verifies it before it copies anything.
 
 ## Trap 3 — `dotnet publish` output is not what is deployed
 
