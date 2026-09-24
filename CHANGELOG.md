@@ -7,6 +7,8 @@ the entries before the first release are by date.
 
 - The README opens with the status line exactly as a terminal shows it, with nothing added, before
   the annotated version that names every part. `e7da798`
+- The annotated figure opens the reading guide when clicked, and a centred link to the guide sits
+  right below it. `1e4ea1e`
 
 ## 0.1.0 - 2026-09-24
 
