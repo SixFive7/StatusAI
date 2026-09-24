@@ -259,7 +259,7 @@ h2{font-family:var(--mono); font-size:13px; letter-spacing:.14em; text-transform
 
 <div class="wrap">
   <div class="warn">
-    <div class="warn-tag">⚠ Style template, not a specification</div>
+    <div class="warn-tag">Style template, not a specification</div>
     <h2>Everything this page describes was reverted. Its premise is false.</h2>
     <p>This file is in the repository for <b>one reason</b>: it is the house style for visual
     documentation of the status line. Copy its <b>presentation</b>: the character-cell terminal
