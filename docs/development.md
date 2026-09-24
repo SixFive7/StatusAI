@@ -3,6 +3,17 @@
 Building, deploying and testing a change to the status line on a live machine. Three of the four
 traps below cost real time; the first one is the expensive one.
 
+## The repository
+
+```
+src/        Program.cs and the csproj — the whole implementation
+tests/      the render tests: fixtures, expected renders, Test-Renders.ps1
+scripts/    independent PowerShell implementations that verify the accounting
+config/     the cship and starship configuration the status line is used with
+docs/       guide/ for using it, reference/ for how it works, design/ for why, and this page
+.work/      scratch, gitignored: builds, test renders, anything throwaway
+```
+
 ## Build
 
 .NET 10 SDK (developed against 10.0.302), NativeAOT, `net10.0-windows`, x64.
