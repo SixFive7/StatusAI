@@ -20,13 +20,20 @@ The first release: a zip with `cship-usage.exe` and the configuration it is used
   Cowork 1%`.
 - **Time and money**: how long the session has run, the lines it changed, its cost per hour and its
   cost so far, in dollars and euros.
-- **Warnings that say why**: a red `⚠` row names every source that failed, an amber one names a
-  limit it does not draw yet, and a red alarm appears if usage is ever billed beyond the plan.
-- **One usage fetch for every open session**, at most once every 50 seconds.
+- **Warnings that say why**: a figure that could not be read shows `—` and a red `⚠` row names its
+  source, an amber row names a limit it does not draw yet, and a red alarm appears if usage is ever
+  billed beyond the plan.
+- **One usage fetch at a time for every open session**, and none while the shared copy is under 50
+  seconds old.
+
+It needs Windows 10 or 11 on x64, Claude Code in a terminal — the VS Code extension's chat panel
+shows no status line — and, for cship, the Microsoft Visual C++ Redistributable, which most PCs
+already have and the install block checks for.
 
 Known limits: numbers are in Dutch notation (`1.234,56`); the width is 141 columns unless
-`CSHIP_WIDTH` says otherwise, and the token grid needs at least 121; the binary is x64 only and
-unsigned; there is no installer or auto-update yet.
+`CSHIP_WIDTH` says otherwise, and the token grid needs at least 121; a usage fetch that fails is not
+reported, and the limit rows keep the last good one; the binary is x64 only and unsigned, so
+Windows 11's Smart App Control blocks it where it is on; there is no installer or auto-update yet.
 
 ## 2026-09-24
 
@@ -45,6 +52,14 @@ unsigned; there is no installer or auto-update yet.
 
 **The repository**
 
+- The [install guide](docs/guide/install.md) says where the status line shows, what cship needs,
+  what an unsigned program meets on Windows, and what to do when something is missing; its block
+  checks that cship starts. The README's steps link it. `5dc4ac7`
+- The README and the guides say only what the code and the transcripts bear out: the sub-agents'
+  28%, 78% and 98% are sourced in [accounting.md](docs/reference/accounting.md), a claim about the
+  build session that could not be checked is gone, and the one failure that raises no row, a usage
+  fetch, is named. `fba03ea`
+- Every docs page opens with a way back to the README and the docs index. `38df644`
 - The [README](README.md) is a landing page: what the status line does, a tour of its parts with a
   figure each, and how to get it. `562812e`
 - Figures drawn from the render tests' expected output in the house style by
