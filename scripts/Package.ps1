@@ -4,9 +4,9 @@
     Publishes nothing.
 
 .DESCRIPTION
-    1. Refuse unless -Version is x.y.z and CHANGELOG.md has a "## <version> <em dash> <date>"
-       heading, and unless the cship this script tells a friend to download is the one the
-       render tests pin (tests/cases.json) and the one the install guide fetches
+    1. Refuse unless -Version is x.y.z and CHANGELOG.md has a "## <version> - <date>" heading
+       (a hyphen or an em dash), and unless the cship this script tells a friend to download is
+       the one the render tests pin (tests/cases.json) and the one the install guide fetches
        (docs/guide/install.md): its version, URL and SHA-256.
     2. dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <OutDir>/build
        -p:Version=<version>, into a fresh directory, with no build server left running after it.
@@ -226,10 +226,10 @@ function Invoke-Main {
     foreach ($p in @($build) + $Outputs) { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force } }
 
     $lines = (ReadText (Join-Path $root 'CHANGELOG.md')).Split("`n")
-    $heading = [regex] ('^## ' + [regex]::Escape($Version) + ' ' + [char] 0x2014 + ' (?<rest>.*)$')
+    $heading = [regex] ('^## ' + [regex]::Escape($Version) + ' [-' + [char] 0x2014 + '] (?<rest>.*)$')
     $at = -1
     for ($i = 0; $i -lt $lines.Count; $i++) { if ($heading.IsMatch($lines[$i])) { $at = $i; break } }
-    if ($at -lt 0) { Refuse "CHANGELOG.md has no '## $Version <em dash> <date>' heading. Write the release's entry first." }
+    if ($at -lt 0) { Refuse "CHANGELOG.md has no '## $Version - <date>' heading (a hyphen or an em dash). Write the release's entry first." }
     $end = $lines.Count
     for ($i = $at + 1; $i -lt $lines.Count; $i++) { if ($lines[$i].StartsWith('## ')) { $end = $i; break } }
     $section = ''
