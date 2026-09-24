@@ -9,10 +9,11 @@
 // Three sources of mockup rows, and the generator refuses to run if they disagree:
 //  * bd399ae rows — the binary deployed when the questions were asked — are the exact bytes it
 //    drew through CSHIP_OFFLINE (data.renders), converted cell by cell;
-//  * a84bd3a rows — the binary deployed after the decisions — likewise (data.asbuilt);
-//  * rows for options that were never built come from port(), a line-for-line port of both
+//  * a84bd3a rows — deployed after Q4 and Q5 — likewise (data.asbuilt), and 878a8e4 rows —
+//    deployed after Q9 and Q11, the binary deployed now — likewise (data.asbuilt2);
+//  * rows for options that were never built come from port(), a line-for-line port of the three
 //    builds' RenderRows / Bar / Hm / BuildAccount / Compose / WithBreakdown. Before anything is
-//    written, port() re-renders every captured case of both builds from its inputs and must
+//    written, port() re-renders every captured case of all three builds from its inputs and must
 //    reproduce the binary's bytes exactly.
 const fs = require('fs');
 const path = require('path');
@@ -37,11 +38,12 @@ function Hm(hours) {
 }
 const BarFill = p => Math.max(0, Math.ceil(p / 10));
 const Zone = i => i >= 10 ? RED : i >= 8 ? AMB : CYA;
-function Bar(pct, padTo = 0, cap = 15) {
+// muted (878a8e4): every cell dim, with the same glyphs, for a segment that is shown but does not apply
+function Bar(pct, padTo = 0, cap = 15, muted = false) {
   const fill = BarFill(pct), len = Math.min(cap, Math.max(10, fill));
   let s = '', cur = '';
   for (let i = 1; i <= len; i++) {
-    const on = i <= fill, col = on ? Zone(i) : DIM;
+    const on = i <= fill, col = on && !muted ? Zone(i) : DIM;
     if (col !== cur) { s += col; cur = col; }
     s += on ? (i >= 11 ? '✗' : '●') : '○';
   }
@@ -60,6 +62,8 @@ const windowLen = label => WINDOW_H[label] || 168;
 //   r24, projLabel ('⇢' | '⇢avg')
 // opt.afterReset (5h only, Q4): 'never' | 'first' | 'dash'
 // opt.forest: a84bd3a's → colour when the row's own reset comes before 100% (3a801e1)
+// opt.muted: 878a8e4's ⇢ segment of a row at 100%, drawn wholly dim (Q11)
+// opt.maxed (Q11's options, never built): 'cap' ⇢ at 100% | 'hide' the ⇢ segment, left blank
 function renderRows(rows, leftCount, opt = {}) {
   const term = opt.term || TERM;
   const d = rows.map(r => {
@@ -74,6 +78,8 @@ function renderRows(rows, leftCount, opt = {}) {
       const minEl = r.mode === 'c' ? 12 : 0;
       proj = r.hasReset && ok && el >= minEl ? Math.min(roundEven(now + avg * r.hrs), 300) : now;
     }
+    let hide = false;
+    if (opt.maxed && now >= 100) { if (opt.maxed === 'cap') proj = Math.min(proj, 100); else { proj = now; hide = true; } }
     let to100, overshoot = false, forest = false, first = false;
     if (!trend) to100 = NODATA;
     else if (r.gated) to100 = 'early';
@@ -89,7 +95,7 @@ function renderRows(rows, leftCount, opt = {}) {
       }
     } else to100 = now >= 100 ? 'maxed' : 'never';
     return { label: r.label, now, proj, reset: r.hasReset ? Hm(r.hrs) : NODATA, to100, overshoot, forest, sev: r.sev,
-             pl: r.projLabel || '⇢', first };
+             pl: r.projLabel || '⇢', first, hide };
   });
   const z = () => [0, 0];
   const wLbl = z(), wNow = z(), wReset = z(), wTo = z(), wProj = z(), wPl = [1, 1];
@@ -115,7 +121,9 @@ function renderRows(rows, leftCount, opt = {}) {
     s += ` ${GRN}↻${RST} ${LGR}${x.reset.padEnd(wReset[c])}${RST}`;
     s += x.first ? ` ${GRN}↻${RST}${DIM} ${x.to100.padEnd(wTo[c])}${RST}`
                  : ` ${x.overshoot ? RED : x.forest ? FOREST : DIM}→ ${x.to100.padEnd(wTo[c])}${RST}`;
-    s += ` ${DIM}${x.pl.padEnd(wPl[c])}${RST} ${Bar(x.proj, wBar[c], capBar)} ${x.proj > 100 ? RED : DIM}${String(x.proj).padStart(wProj[c])}%${RST}`;
+    const blocked = !!opt.muted && x.now >= 100;
+    const seg = ` ${DIM}${x.pl.padEnd(wPl[c])}${RST} ${Bar(x.proj, wBar[c], capBar, blocked)} ${blocked || x.proj <= 100 ? DIM : RED}${String(x.proj).padStart(wProj[c])}%${RST}`;
+    s += x.hide ? ' '.repeat(vis(seg)) : seg;
     return s;
   });
   return { lines, capBar, d };
@@ -174,6 +182,10 @@ for (const [name, cse] of Object.entries(D.renders.cases)) check('bd399ae ' + na
 const A84 = c => ({ a84: true, forest: true, bd: c.bd });
 for (const [name, cse] of Object.entries(D.asbuilt.cases))
   check('a84bd3a ' + name, port(cse.rows, cse.fixture.email, cse.plan, A84(cse)).lines, cse.lines.filter(l => !l.includes('⚠')));
+// 878a8e4: three known meters (the fixture's others are flagged, not drawn), and Q11's grey
+const A878 = c => ({ a84: true, forest: true, muted: true, bd: c.bd });
+for (const [name, cse] of Object.entries(D.asbuilt2.cases))
+  check('878a8e4 ' + name, port(cse.rows, cse.fixture.email, cse.plan, A878(cse)).lines, cse.lines.filter(l => !l.includes('⚠')));
 
 // ───────────────────────────────────────────── ANSI → 1ch cells
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -232,7 +244,7 @@ function pane({ title, tag, tagCls, note, lines, gutW = 0, cols, id }) {
   if (cols === undefined) cols = fit(lines);
   const body = lines.map(L => lineHtml(L.cells, gutW ? (L.gut || '') : undefined, title) + (L.marks ? annot(L.marks, gutW) : '')).join('\n');
   return `<div class="pane"${id ? ` id="${id}"` : ''}>
-  ${title ? `<div class="phead"><span class="ptitle">${title}</span>${tag ? `<span class="tag ${tagCls || ''}">${esc(tag)}</span>` : ''}${note ? `<span class="pnote">${note}</span>` : ''}</div>` : ''}
+  ${title || tag || note ? `<div class="phead">${title ? `<span class="ptitle">${title}</span>` : ''}${tag ? `<span class="tag ${tagCls || ''}">${esc(tag)}</span>` : ''}${note ? `<span class="pnote">${note}</span>` : ''}</div>` : ''}
   <div class="term"><div class="term-inner" style="--cols:${cols + gutW};--gut:${gutW}">${body}</div></div></div>`;
 }
 const exeCells = key => { const c = D.renders.cases[key]; if (!c) throw new Error('no capture ' + key); return c.lines.map(toCells); };
@@ -589,7 +601,7 @@ const secBuild = `
 </section>`;
 
 // ───────────────────────────────────────────── as built (a84bd3a)
-const COMMIT_SUBJECT = 'Record the limit-row decisions and the rejected window-average forecast';
+const COMMIT_SUBJECT = 'Record Q9, Q10 and Q11 on the decisions page';
 const AB = D.asbuilt, abc = name => AB.cases[name];
 const abCells = name => abc(name).lines.map(toCells);
 const abShot = abCells('shot'), abOver = abCells('overshoot7d'), abLive = abCells('live'), abE38 = abCells('email38'),
@@ -608,38 +620,96 @@ const q4only = (() => {
   if (diff.length !== s.len || diff[0] !== s.col) throw new Error('forest reached outside the → field');
   return { cells: diff.length, from: a[s.col].cls, to: b[s.col].cls };
 })();
-const AB_NOTE = `Drawn by the deployed binary, ${AB.commit} (sha256 ${AB.exe_sha256.slice(0, 12)}…), through <code>CSHIP_OFFLINE</code>
+// Q11 is a colour and nothing else: the port with and without the grey differs only inside the maxed
+// row's ⇢ segment, and only in class
+const q11only = (() => {
+  const c = D.asbuilt2.cases['maxed5h'];
+  const a = port(c.rows, c.fixture.email, c.plan, { a84: true, forest: true, bd: c.bd }).lines.map(toCells)[0];
+  const b = port(c.rows, c.fixture.email, c.plan, A878(c)).lines.map(toCells)[0];
+  if (a.length !== b.length) throw new Error('the grey changed the width');
+  const diff = a.map((x, i) => (x.ch !== b[i].ch || x.cls !== b[i].cls || x.bold !== b[i].bold) ? i : -1).filter(i => i >= 0);
+  if (diff.some(i => a[i].ch !== b[i].ch)) throw new Error('the grey changed a character');
+  const t = colText(a), c0 = t.indexOf('⇢'), c1 = t.indexOf('%', c0);
+  if (diff.some(i => i < c0 || i > c1)) throw new Error('the grey reached outside the ⇢ segment');
+  // the segment is ⇢, a space, the bar, a space, the percentage
+  const p0 = t.lastIndexOf(' ', c1) + 1, pct = t.slice(p0, c1 + 1);
+  const bar = diff.filter(i => i > c0 && i < p0).length, pctN = diff.filter(i => i >= p0).length;
+  if (bar + pctN !== diff.length || pctN !== pct.length) throw new Error('the grey changed something besides the bar and the percentage');
+  if (a[c0].cls !== 'dm' || b[c0].cls !== 'dm') throw new Error('the ⇢ glyph is not dim in both');
+  return { cells: diff.length, bar, pct };
+})();
+// the binary deployed after Q9 and Q11 (878a8e4): drawn from the same fixtures, where they overlap
+const AB2 = D.asbuilt2, ab2c = name => AB2.cases[name];
+const ab2Cells = name => ab2c(name).lines.map(toCells);
+const nShot = ab2Cells('shot'), nOver = ab2Cells('overshoot7d'), nLive = ab2Cells('live'), nE38 = ab2Cells('email38'),
+      nE58 = ab2Cells('email58'), nFour = ab2Cells('fourth'), nCS = ab2Cells('credit-spent'), nCA = ab2Cells('credit-at100'),
+      nCOff = ab2Cells('credit-off-at100'), nMax = ab2Cells('maxed5h'), nMany = ab2Cells('many-ignored'), nUnk = ab2Cells('unknown'),
+      nFC = ab2Cells('fourth-credit');
+// which a84bd3a captures does the binary deployed now still draw byte for byte?
+const SAME = {}, SUPER = [];
+for (const name of Object.keys(AB.cases)) {
+  const a = AB.cases[name].lines, b = AB2.cases[name] && AB2.cases[name].lines;
+  if (!b) continue;
+  SAME[name] = a.length === b.length && a.every((l, i) => l === b[i]);
+  if (!SAME[name]) SUPER.push(name);
+}
+const noticeSpan = cells => span(cells, /⚠ meters.*$/);
+const moreSpan = cells => span(cells, /\+\d+ more/);
+const segOf = cells => { const t = colText(cells), i = t.indexOf('⇢'), j = t.indexOf('%', i); return { col: i, len: j - i + 1 }; };
+const AB_NOTE = `Drawn by the deployed binary, ${AB2.commit} (sha256 ${AB2.exe_sha256.slice(0, 12)}…), through <code>CSHIP_OFFLINE</code>
   from the implementation’s own fixtures, at ${TERM} columns.`;
 const secAsBuilt = `
 <section class="sec gapped" id="asbuilt">
-  <h2>As built · ${AB.commit}</h2>
-  <p class="note">${AB_NOTE} Q4 and Q5 as they were implemented; Q3’s rows further down are the binary that was deployed when
-  the questions were asked, bd399ae.</p>
+  <h2>As built · ${AB2.commit}, deployed now</h2>
+  <p class="note">${AB_NOTE} Q4, Q5, Q9, Q10 and Q11 as they stand. Of the ${Object.keys(SAME).length} fixtures drawn by both
+  ${AB.commit} and ${AB2.commit}, ${Object.values(SAME).filter(Boolean).length} render byte-identical; the other
+  ${SUPER.length} (${SUPER.join(', ')}) are kept at the end of this section, marked superseded. Q3’s rows further down are the
+  binary that was deployed when the questions were asked, bd399ae.</p>
   ${pane({ title: 'Q4 · the 19:57 screenshot, rebuilt', tag: '3a801e1', tagCls: 'pick', cols: COLS,
     note: 'The same inputs as the screenshot. The 5h → is forest because its reset (3h23m) comes before 100% would (7h29m).',
-    lines: [{ cells: abShot[0], marks: [mk(span(abShot[0], ARROW), 'forest: the reset comes first', 'fo'), mk(tailOf(abShot[0]), 'Q5: the breakdown', 'chg')] },
-            { cells: abShot[1], marks: [mk(f7(abShot[1]).a, 'red: 100% comes first', 'rd')] }] })}
+    lines: [{ cells: nShot[0], marks: [mk(span(nShot[0], ARROW), 'forest: the reset comes first', 'fo'), mk(tailOf(nShot[0]), 'Q5: the breakdown', 'chg')] },
+            { cells: nShot[1], marks: [mk(f7(nShot[1]).a, 'red: 100% comes first', 'rd')] }] })}
   ${pane({ title: 'Q4 · both colours on one screen', tag: 'fixture', tagCls: 'no', cols: COLS,
     note: 'A 5h row whose reset comes first above a 7d row that runs out first. The account line had no room left here, so the breakdown is left off.',
-    lines: [{ cells: abOver[0], marks: [mk(span(abOver[0], ARROW), 'forest', 'fo')] }, { cells: abOver[1], marks: [mk(f7(abOver[1]).a, 'red', 'rd')] }] })}
+    lines: [{ cells: nOver[0], marks: [mk(span(nOver[0], ARROW), 'forest', 'fo')] }, { cells: nOver[1], marks: [mk(f7(nOver[1]).a, 'red', 'rd')] }] })}
   <p class="note"><b>Q4 costs no width.</b> The port drawn with and without forest differs in exactly ${q4only.cells} cells —
   <code>→ 7h29m</code>, class <code>${q4only.from}</code> → <code>${q4only.to}</code> — and in nothing else. Red, <code>never</code>,
   <code>early</code> and <code>maxed</code> are unchanged, and the rule is the same on every row.</p>
   <div class="stack">
-  ${pane({ title: 'Q5 · the breakdown gives way', tag: 'all entries', tagCls: 'no', cols: COLS, lines: [{ cells: abLive[0], marks: [mk(tailOf(abLive[0]), 'CC 99% · Chat 0% · Cowork 1%', 'chg')] }, { cells: abLive[1] }] })}
-  ${pane({ tag: 'a longer account: the 0% entries go first', tagCls: 'no', cols: COLS, lines: [{ cells: abE38[0], marks: [mk(tailOf(abE38[0]), 'without its 0% entry', 'chg')] }, { cells: abE38[1] }] })}
-  ${pane({ tag: 'longer still: none', tagCls: 'no', cols: COLS, lines: [{ cells: abE58[0] }, { cells: abE58[1] }] })}
+  ${pane({ title: 'Q5 · the breakdown gives way', tag: 'all entries', tagCls: 'no', cols: COLS, lines: [{ cells: nLive[0], marks: [mk(tailOf(nLive[0]), 'CC 99% · Chat 0% · Cowork 1%', 'chg')] }, { cells: nLive[1] }] })}
+  ${pane({ tag: 'a longer account: the 0% entries go first', tagCls: 'no', cols: COLS, lines: [{ cells: nE38[0], marks: [mk(tailOf(nE38[0]), 'without its 0% entry', 'chg')] }, { cells: nE38[1] }] })}
+  ${pane({ tag: 'longer still: none', tagCls: 'no', cols: COLS, lines: [{ cells: nE58[0] }, { cells: nE58[1] }] })}
   </div>
   <p class="note">The breakdown takes no part in the layout decision: it gets whatever room the line has left — every entry,
-  then without the 0% ones, then none — and is never wrapped or cut inside an entry. Line 1 here is ${width(abLive[0])},
-  ${width(abE38[0])} and ${width(abE58[0])} columns, all inside ${COLS}.</p>
-  ${pane({ title: 'Q5 · a fourth meter', tag: 'fixture: Cowork is hypothetical', tagCls: 'no', cols: COLS,
-    note: 'Every meter the server sends gets a row, in its order; past the third, a line of its own in the right column.',
-    lines: [{ cells: abFour[0] }, { cells: abFour[1] }, { cells: abFour[2], marks: [mk(span(abFour[2], /→ —/), 'no history series: see Q9', 'am')] }] })}
-  ${pane({ title: 'Q5 · on credit', tag: 'fixtures', tagCls: 'no', cols: COLS,
-    note: 'A red ⚠ row of its own, always last: money spent beyond the plan this period, or a limit at 100% while credits are on.',
-    lines: [{ cells: abCS[0] }, { cells: abCS[1] }, { cells: abCS[2], marks: [mk(warnSpan(abCS[2]), 'spend.used above 0', 'rd')] }] })}
-  ${pane({ cols: COLS, lines: [{ cells: abCA[0] }, { cells: abCA[1] }, { cells: abCA[2], marks: [mk(warnSpan(abCA[2]), '5h at 100% with credits on', 'rd')] }] })}
+  then without the 0% ones, then none — and is never wrapped or cut inside an entry. Line 1 here is ${width(nLive[0])},
+  ${width(nE38[0])} and ${width(nE58[0])} columns, all inside ${COLS}.</p>
+  ${pane({ title: 'Q9 · a meter this status line does not know', tag: 'ccf37df', tagCls: 'pick', cols: COLS,
+    note: 'The three known meters are drawn as always; the fourth is not drawn, only named, in an amber notice at the bottom.',
+    lines: [{ cells: nFour[0] }, { cells: nFour[1] }, { cells: nFour[2], marks: [mk(noticeSpan(nFour[2]), 'amber: review cship-usage', 'am')] }] })}
+  ${pane({ tag: 'several: named while they fit, then +N more', tagCls: 'no', cols: COLS,
+    lines: [{ cells: nMany[0] }, { cells: nMany[1] }, { cells: nMany[2], marks: [mk(moreSpan(nMany[2]), `${ab2c('many-ignored').fixture.ignored.length} ignored`, 'am')] }] })}
+  ${pane({ tag: 'unknown kinds are named by their kind', tagCls: 'no', cols: COLS, lines: [{ cells: nUnk[0] }, { cells: nUnk[1] }, { cells: nUnk[2] }] })}
+  ${pane({ title: 'Q10 · on credit', tag: 'a84bd3a', tagCls: 'pick', cols: COLS,
+    note: 'A red ⚠ row of its own, always last; the amber notice, when there is one, sits above it.',
+    lines: [{ cells: nFC[0] }, { cells: nFC[1] }, { cells: nFC[2] }, { cells: nFC[3], marks: [mk(warnSpan(nFC[3]), 'red: spend.used above 0', 'rd')] }] })}
+  ${pane({ title: 'Q11 · a row at 100%', tag: '878a8e4', tagCls: 'pick', cols: COLS,
+    note: 'The 5h row is maxed. Its ⇢ segment keeps its glyphs, and so its width, but every cell is dim: greyed, like a disabled control.',
+    lines: [{ cells: nMax[0], marks: [mk(segOf(nMax[0]), 'greyed: blocked until ↻', 'same')] }, { cells: nMax[1] }] })}
+  ${pane({ tag: 'maxed with credits on', tagCls: 'no', cols: COLS,
+    lines: [{ cells: nCA[0], marks: [mk(segOf(nCA[0]), 'greyed', 'same')] }, { cells: nCA[1] }, { cells: nCA[2], marks: [mk(warnSpan(nCA[2]), '5h at 100% with credits on', 'rd')] }] })}
+  <p class="note"><b>Q11 costs no width.</b> The port drawn with and without the grey differs in exactly ${q11only.cells} cells —
+  the ${q11only.bar} of the bar and the ${q11only.pct.length} of <code>${q11only.pct}</code>, all inside the maxed row’s
+  <code>⇢</code> segment — and only in colour. The <code>⇢</code> glyph was dim already.</p>
+  <div class="superseded">
+    <div class="warn slim"><div class="warn-tag">Superseded · ${AB.commit}</div>
+      <p>How ${AB.commit}, deployed on 24 September at 01:32, drew the ${SUPER.length} fixtures that ${AB2.commit} now draws differently.
+      Kept, not deleted: Q9 and Q11 were asked about these rows.</p></div>
+    ${pane({ title: 'Q5 · a fourth meter, drawn', tag: 'superseded by ccf37df', tagCls: 'bad', cols: COLS,
+      note: 'Every meter got a row, past the third a line of its own in the right column, with → — where no history series followed it.',
+      lines: [{ cells: abFour[0] }, { cells: abFour[1] }, { cells: abFour[2], marks: [mk(span(abFour[2], /→ —/), 'no history series: Q9', 'am')] }] })}
+    ${pane({ title: 'Q5 · maxed with credits on, ⇢ in colour', tag: 'superseded by 878a8e4', tagCls: 'bad', cols: COLS,
+      lines: [{ cells: abCA[0], marks: [mk(segOf(abCA[0]), '⇢ 204% in colour: Q11', 'am')] }, { cells: abCA[1] }, { cells: abCA[2] }] })}
+  </div>
 </section>`;
 
 // ───────────────────────────────────────────── decisions
@@ -729,7 +799,7 @@ const bdAnsi = bd.map(r => `${TXT}${short[r.key] || r.display_name} ${r.percent}
 const q5c = port(q5bRows, q5.email, 'Max 20', { rightExtra: true, acctExtra: ` ${DIM}·${RST} ${bdAnsi}` }).lines.map(toCells);
 const credits = toCells(RST + ' ' + `credits ${Bar(25, 10, 10)} ${PctColor(25)}25%${RST} ${TXT}$12,40${RST} ${DIM}of${RST} ${TXT}$50,00${RST} ${DIM}· extra usage, monthly${RST}`);
 const bdSpan = span(q5c[0], /CC \d+.*$/);
-const Q5COLS = fit([...q5a, ...q5b, ...q5c, credits, ...abFour, ...abCS].map(c => ({ cells: c })));
+const Q5COLS = fit([...q5a, ...q5b, ...q5c, credits, ...abFour, ...abCS, ...nFour].map(c => ({ cells: c })));
 const limitsList = U.limits.map(l => `<code>${l.kind}</code> ${l.percent}%${l.scope && l.scope.model ? ' (' + l.scope.model.display_name + ')' : ''}${l.is_active ? ' · <b>is_active</b>' : ''}`).join(', ');
 const secQ5 = `
 <div class="q" id="q5"><h3 class="qh">Q5 · Show more of what the usage API returns? ${DECIDED('decided · a84bd3a')}</h3>
@@ -744,15 +814,19 @@ const secQ5 = `
     note: `Built as part of c. +1 line per extra meter, in the right column under Fable; line 2 ${widthNote(width(q5a[1]), width(q5b[1]))}.` })}
   ${optCard({ letter: 'c', title: 'b plus the product breakdown, after the account', status: 'chosen', cols: Q5COLS, gutW: 5, lines: q5c.map((c, i) => ({ cells: c, marks: i === 0 ? [mk(bdSpan, 'seven_day_breakdown', 'chg')] : undefined })),
     note: `The mockup the choice was made on. Built with two additions the user asked for: “%” on the numbers, and “a full warning line at the bottom if we are on credit” in place of d.`,
-    body: pane({ title: `As built · ${AB.commit}`, tag: 'the same moment', tagCls: 'pick', cols: Q5COLS, gutW: 5,
+    body: pane({ title: `As built · ${AB.commit}`, tag: 'every meter: superseded by ccf37df', tagCls: 'bad', cols: Q5COLS, gutW: 5,
       lines: [{ cells: abFour[0], marks: [mk(tailOf(abFour[0]), 'with %', 'chg')] }, { cells: abFour[1] }, { cells: abFour[2], marks: [mk(span(abFour[2], /→ —/), '→ —: see Q9', 'am')] }] })
-      + pane({ cols: Q5COLS, gutW: 5, lines: [{ cells: abCS[2], marks: [mk(warnSpan(abCS[2]), 'on credit: see Q10', 'rd')] }] })
-      + `<p class="opt-w">The fourth-meter fixture, then the credit row from the credit fixture. The breakdown gives way to a long account — all entries, then without 0%, then none — and a meter no history series follows draws <code>→ —</code>.</p>` })}
+      + pane({ title: `As built · ${AB2.commit}`, tag: 'deployed now', tagCls: 'pick', cols: Q5COLS, gutW: 5,
+      lines: [{ cells: nFour[0] }, { cells: nFour[1] }, { cells: nFour[2], marks: [mk(noticeSpan(nFour[2]), 'ignored and flagged: Q9', 'am')] }] })
+      + pane({ cols: Q5COLS, gutW: 5, lines: [{ cells: nCS[2], marks: [mk(warnSpan(nCS[2]), 'on credit: see Q10', 'rd')] }] })
+      + `<p class="opt-w">The fourth-meter fixture drawn by both builds, then the credit row. The breakdown and the credit alarm are unchanged since ${AB.commit}; the fourth meter is no longer drawn but flagged (Q9).</p>` })}
   ${optCard({ letter: 'd', title: 'b plus a credits line, only while spend or extra usage is on', status: 'no', lines: [...q5b.map(c => ({ cells: c, gut: 'off' })), ...q5b.map(c => ({ cells: c, gut: 'on' })), { cells: credits, gut: 'on' }], gutW: 5, cols: Q5COLS,
     note: `Replaced by the ⚠ row: being on credit is an alarm, not a meter.` })}
-  <p class="recline"><b>Decided: c, extended, implemented in a84bd3a (2026-09-24).</b> Every meter the server sends; the
-  breakdown as <code>CC 99% · Chat 0% · Cowork 1%</code>, dropping its 0% entries and then itself when room runs out; a red
-  <code>⚠</code> row of its own, always last, when on credit; and <code>→ —</code> on a meter no history series follows.</p>
+  <p class="recline"><b>Decided: c, extended, implemented in a84bd3a (2026-09-24).</b> The breakdown as
+  <code>CC 99% · Chat 0% · Cowork 1%</code>, dropping its 0% entries and then itself when room runs out, and a red
+  <code>⚠</code> row of its own, always last, when on credit. Its “every meter” part — with <code>→ —</code> on a meter no history
+  series followed — was <b>superseded</b> the same morning by Q9 (ccf37df): the three known meters are drawn and any other is
+  flagged.</p>
 </div>`;
 // Q7 · push
 const G = D.git;
@@ -778,62 +852,106 @@ function gitLines(state) {
   return out.map(c => ({ cells: c }));
 }
 const nLocal = G.commits.findIndex(c => c.h === G.origin) + 1;
+// the remote's jori@huisman.io run: from the oldest such commit up to origin/main
+const onRemote = G.commits.slice(nLocal - 1), hzOld = onRemote.filter(c => c.email.endsWith('huisman.io')).pop();
+const iOld = onRemote.indexOf(hzOld), before = onRemote.slice(iOld + 1);
+if (!hzOld || G.commits.slice(0, nLocal - 1 + iOld + 1).some(c => c.email !== G.commits[0].email)
+    || before.length !== 2 || before.some(c => c.email !== 'someone@example.com')) throw new Error('the Q7 wording no longer matches the history');
 const secPush = `
 <div class="q" id="push"><h3 class="qh">Q7 · Push ${DECIDED('decided · push')}</h3>
   <p class="primer"><code>main</code> is ${nLocal} commits ahead of <code>origin/main</code> (${G.origin}):
-  ${G.commits.slice(0, nLocal - 1).reverse().map(c => `<code>${c.h}</code>`).join(', ')} and the commit that adds this page
-  (<code>·······</code> below: its hash cannot be written inside itself). All carry <b>${G.commits[0].email}</b>; the first
-  two commits in the repository used <b>someone@example.com</b>, and ${G.origin}, already on the remote, is
-  jori@huisman.io too — so pushing adds no new address.</p>
+  ${G.commits.slice(0, nLocal - 1).reverse().map(c => `<code>${c.h}</code>`).join(', ')} and the commit that brings this page
+  up to date (<code>·······</code> below: its hash cannot be written inside itself). All carry <b>${G.commits[0].email}</b>; the
+  first two commits in the repository used <b>someone@example.com</b>, and everything from ${hzOld.h} to ${G.origin}, already on
+  the remote, is ${G.commits[0].email} too — so pushing adds no new address.</p>
   ${optCard({ letter: 'a', title: 'Push as they are', status: 'chosen', lines: gitLines('push'), note: '<code>origin/main</code> moves to the local head. Nothing is rewritten.' })}
-  ${optCard({ letter: 'b', title: 'Re-author them to someone@example.com, then push', status: 'no', lines: gitLines('reauthor'), note: 'New hashes for each (shown as ·······). The history stays mixed anyway: 59816fb on the remote keeps jori@huisman.io unless it is force-pushed too.' })}
+  ${optCard({ letter: 'b', title: 'Re-author them to someone@example.com, then push', status: 'no', lines: gitLines('reauthor'), note: `New hashes for each (shown as ·······). The history stays mixed anyway: ${hzOld.h} to ${G.origin} on the remote keep ${G.commits[0].email} unless they are force-pushed too.` })}
   ${optCard({ letter: 'c', title: 'Don’t push yet', status: 'no', lines: gitLines('keep'), note: 'The commits stay on this machine only.' })}
-  <p class="recline"><b>Decided: a, push.</b> The push follows the commit that adds this page; the page itself says
-  “decided”, not “pushed”.</p>
+  <p class="recline"><b>Decided: a, push.</b> Everything up to ${G.origin} is on the remote; the rest is pushed right after the
+  commit that brings this page up to date, so the page says “decided”, not “pushed”.</p>
 </div>`;
 
-// ───────────────────────────────────────────── open questions
-// Q9: a meter no history series follows. a is the capture; b, c and d are the port on the same
-// inputs with that one meter changed — the port reproduces the capture itself above.
+// ───────────────────────────────────────────── Q9 – Q11, decided 2026-09-24
+// Q9: the option rows are a84bd3a's capture (a) and the port on the same inputs with that one meter
+// changed (b – d); the chosen rows are 878a8e4's captures.
 const four = abc('fourth');
 const q9row = patch => port(four.rows.map((r, i) => i === 3 ? { ...r, ...patch } : r), four.fixture.email, four.plan, A84(four)).lines.map(toCells);
 const q9a = abFour, q9b = q9row({ trend: true, gated: true }), q9c = q9row({ trend: true, gated: false, rate: 0 }),
       q9d = q9row({ trend: true, gated: false, rate: 1.2 });
 const Q9M = (cells, text, tone) => [mk(span(cells, /→ \S+/, colText(cells).indexOf('Cowork')), text, tone)];
 const q9w = cells => cells.map(width).join(' / ');
-const Q9COLS = fit([...q9a, ...q9b, ...q9c, ...q9d].map(c => ({ cells: c })));
+const Q9COLS = fit([...q9a, ...q9b, ...q9c, ...q9d, ...nFour, ...nMany].map(c => ({ cells: c })));
 const secQ9 = `
-<div class="q" id="q9"><h3 class="qh">Q9 · What should → show for a meter the history doesn’t track? ${DECIDED('open · recommend a', 'good')}</h3>
-  <p class="primer">The history keeps three trend series: the session, <code>weekly_all</code> and one scoped meter. Q5 draws
-  every meter the server sends, so a fourth meter — or a second scoped one — is drawn with no trend at all: no rate, so no
-  forecast. ${AB.commit} draws its <code>→</code> as <code>—</code>, the sentinel for a source that reported nothing, and its
+<div class="q" id="q9"><h3 class="qh">Q9 · What should → show for a meter the history doesn’t track? ${DECIDED('decided · ccf37df')}</h3>
+  <p class="primer">The history keeps three trend series: the session, <code>weekly_all</code> and one scoped meter. ${AB.commit}
+  drew every meter the server sent, so a fourth meter — or a second scoped one — was drawn with no trend at all: no rate, so
+  no forecast. It drew that <code>→</code> as <code>—</code>, the sentinel for a source that reported nothing, and its
   <code>⇢</code> bar at the current value. No account has sent a fourth meter yet; the rows use the fixture’s hypothetical
   Cowork meter at 12%.</p>
-  ${optCard({ letter: 'a', title: '<code>—</code>', status: 'rec', cols: Q9COLS, gutW: 6, lines: q9a.map((c, i) => ({ cells: c, marks: i === 2 ? Q9M(c, 'no series, nothing to say', 'am') : undefined })),
-    note: `As built, ${AB.commit}. Widths ${q9w(q9a)}. No width cost: <code>—</code> pads to the column like any other value.` })}
-  ${optCard({ letter: 'b', title: '<code>early</code>', cols: Q9COLS, gutW: 6, lines: q9b.map((c, i) => ({ cells: c, marks: i === 2 ? Q9M(c, 'promises a trend', 'am') : undefined })),
-    note: `Widths ${q9w(q9b)}, unchanged. But <code>early</code> means “a trend is coming once there is enough data”, and for this meter none ever comes.` })}
-  ${optCard({ letter: 'c', title: '<code>never</code>', cols: Q9COLS, gutW: 6, lines: q9c.map((c, i) => ({ cells: c, marks: i === 2 ? Q9M(c, 'asserts: not burning', 'am') : undefined })),
-    note: `Widths ${q9w(q9c)}, unchanged. <code>never</code> asserts the meter is not burning, which is unknown.` })}
-  ${optCard({ letter: 'd', title: 'Track every meter', cols: Q9COLS, gutW: 6,
-    lines: [...q9b.map((c, i) => ({ cells: c, gut: i === 2 ? 'start' : '' })), ...q9d.map((c, i) => ({ cells: c, gut: i === 2 ? 'later' : '' }))],
-    note: `Its own series: <code>early</code> for the first ten minutes like any series, then a real trend — here a hypothetical 1,2 %/h, red because 100% comes before its reset. Widths then ${q9w(q9d)}: the right column takes the new values. The cost is in the forecast, not the row: <code>hist</code> holds <code>t:s:w:f</code>, one field per series, so it becomes one series per meter with its own window checks, and the registry value grows with every meter.` })}
-  <p class="recline"><b>Recommendation: a.</b> It is what is built, it costs no width, and it is the one answer that says only
-  what is known. d is the real fix, but a bigger forecast change for a meter no account has sent yet.</p>
+  ${optCard({ letter: '✓', title: 'Chosen: the user’s answer — draw the three known meters, and flag any other for review', status: 'chosen', cols: Q9COLS, gutW: 5,
+    lines: [...nFour.map((c, i) => ({ cells: c, gut: i === 0 ? 'one' : '', marks: i === 2 ? [mk(noticeSpan(c), 'not drawn: named, in amber', 'am')] : undefined })),
+            ...nMany.map((c, i) => ({ cells: c, gut: i === 0 ? 'many' : '', marks: i === 2 ? [mk(moreSpan(c), 'what fits, then +N more', 'am')] : undefined }))],
+    note: `As built, ccf37df. “I want to review our code if there is ever a new meter. Keep the code working for our three meters and ignore any other meters for now.” None of a–d: the session, <code>weekly_all</code> and one model-scoped <code>weekly_scoped</code> (the one the history follows, else the highest) are drawn, each with its own series; anything else is not drawn but named in an amber <code>⚠</code> row, above the credit alarm, until the code has been reviewed for it. <code>→ —</code> and the extra right-column lines went with it. Widths ${q9w(nFour)} and ${q9w(nMany)}.` })}
+  ${optCard({ letter: 'a', title: '<code>—</code>', status: 'no', cols: Q9COLS, gutW: 5, lines: q9a.map((c, i) => ({ cells: c, marks: i === 2 ? Q9M(c, 'no series, nothing to say', 'am') : undefined })),
+    note: `As built in ${AB.commit}, superseded by ccf37df. Widths ${q9w(q9a)}. Recommended here.` })}
+  ${optCard({ letter: 'b', title: '<code>early</code>', status: 'no', cols: Q9COLS, gutW: 5, lines: q9b.map((c, i) => ({ cells: c, marks: i === 2 ? Q9M(c, 'promises a trend', 'am') : undefined })),
+    note: `Widths ${q9w(q9b)}. <code>early</code> means “a trend is coming once there is enough data”, and for this meter none ever came.` })}
+  ${optCard({ letter: 'c', title: '<code>never</code>', status: 'no', cols: Q9COLS, gutW: 5, lines: q9c.map((c, i) => ({ cells: c, marks: i === 2 ? Q9M(c, 'asserts: not burning', 'am') : undefined })),
+    note: `Widths ${q9w(q9c)}. <code>never</code> asserts the meter is not burning, which was unknown.` })}
+  ${optCard({ letter: 'd', title: 'Track every meter', status: 'no', cols: Q9COLS, gutW: 5,
+    lines: [...q9b.map((c, i) => ({ cells: c, gut: i === 2 ? 'new' : '' })), ...q9d.map((c, i) => ({ cells: c, gut: i === 2 ? 'then' : '' }))],
+    note: `Its own series: <code>early</code> for the first ten minutes, then a real trend — here a hypothetical 1,2 %/h. Widths then ${q9w(q9d)}. The cost is in the forecast: <code>hist</code> holds one field per series, so it would become one series per meter with its own window checks.` })}
+  <p class="recline"><b>Decided: ignored and flagged, pending review — ccf37df, 2026-09-24.</b> A meter this status line has
+  never been checked against is no longer drawn on trust; the amber row says which, and that the code needs a look. This
+  supersedes the “every meter” part of Q5.</p>
 </div>`;
-// Q10: "a full warning line". a is the capture; b is the same cells in reverse video across the width.
-const csWarn = abCS[2];
+// Q10: a is the capture; b is the same cells in reverse video across the width; c is the capture of a
+// maxed row on credit with its → maxed recoloured red.
+const csWarn = nCS[2];
 const rvBar = [...csWarn, ...Array(COLS - width(csWarn)).fill(0).map(() => ({ ch: ' ', cls: 'df', bold: false, w: 1 }))].map(c => ({ ...c, cls: 'rv', bold: true }));
+const redMaxed = (() => { const s = span(nCA[0], /→ maxed/); return nCA[0].map((c, i) => i >= s.col && i < s.col + s.len ? { ...c, cls: 'rd', bold: true } : c); })();
 const secQ10 = `
-<div class="q" id="q10"><h3 class="qh">Q10 · What does “a full warning line” mean? ${DECIDED('open · recommend a', 'good')}</h3>
-  <p class="primer">The request was “a full warning line at the bottom if we are on credit”. ${AB.commit} reads it as a red
+<div class="q" id="q10"><h3 class="qh">Q10 · What does “a full warning line” mean? ${DECIDED('decided · a')}</h3>
+  <p class="primer">The request was “a full warning line at the bottom if we are on credit”. ${AB.commit} read it as a red
   <code>⚠</code> row of its own, last in the block, like every other <code>⚠</code> row. It could also mean a bar of red across
-  the whole width. Both use the credit fixture: $12,40 spent beyond the plan this period.</p>
-  ${optCard({ letter: 'a', title: 'Its own red ⚠ row, like the others', status: 'rec', cols: COLS, lines: abCS.map((c, i) => ({ cells: c, marks: i === 2 ? [mk(warnSpan(c), 'as built', 'rd')] : undefined })),
-    note: `As built, ${AB.commit}. +1 line of ${width(csWarn)} columns; nothing else moves.` })}
-  ${optCard({ letter: 'b', title: 'A red bar across the whole width', cols: COLS, lines: [{ cells: abCS[0] }, { cells: abCS[1] }, { cells: rvBar }],
-    note: `The same text in reverse video — the terminal’s own background on the red — padded to ${COLS} columns (<code>term − 4</code>) so the colour reaches the edge; the binary would write SGR 7 or a red background and pad with spaces. +1 line, as a; it becomes the loudest thing the status line draws.` })}
-  <p class="recline"><b>Recommendation: a</b>, unless the bar is what was meant — then b is a change to one row.</p>
+  the whole width, or the row plus a pointer at the cause.</p>
+  ${optCard({ letter: 'a', title: 'Its own red ⚠ row, like the others', status: 'chosen', cols: COLS, lines: nCS.map((c, i) => ({ cells: c, marks: i === 2 ? [mk(warnSpan(c), 'as built', 'rd')] : undefined })),
+    note: `As built in ${AB.commit}, unchanged in ${AB2.commit} (drawn here by ${AB2.commit}). +1 line of ${width(csWarn)} columns; nothing else moves.` })}
+  ${optCard({ letter: 'b', title: 'A red bar across the whole width', status: 'no', cols: COLS, lines: [{ cells: nCS[0] }, { cells: nCS[1] }, { cells: rvBar }],
+    note: `The same text in reverse video — the terminal’s own background on the red — padded to ${COLS} columns (<code>term − 4</code>) so the colour reaches the edge. It would have been the loudest thing the status line draws.` })}
+  ${optCard({ letter: 'c', title: 'a, plus the maxed meter’s <code>→ maxed</code> in red while on credit', status: 'no', cols: COLS,
+    lines: [{ cells: redMaxed, marks: [mk(span(redMaxed, /→ maxed/), 'red: the cause', 'rd')] }, { cells: nCA[1] }, { cells: nCA[2] }],
+    note: `The credit-at-100% fixture as ${AB2.commit} draws it, with <code>→ maxed</code> recoloured. It points at the cause, for a little more logic.` })}
+  <p class="recline"><b>Decided: a — no change.</b> The alarm stays its own red row, as built in ${AB.commit}.</p>
+</div>`;
+// Q11: the chosen rows are 878a8e4's capture; a – c are the port on the same inputs (the port
+// reproduces a84bd3a's capture of the same rows); d's on-credit state is a84bd3a's own capture.
+const cOff = ab2c('credit-off-at100');
+const q11port = opt => port(cOff.rows, cOff.fixture.email, cOff.plan, { a84: true, forest: true, bd: cOff.bd, ...opt }).lines.map(toCells);
+const q11a = q11port({}), q11b = q11port({ maxed: 'cap' }), q11c = q11port({ maxed: 'hide' });
+const Q11COLS = fit([...nCOff, ...q11a, ...q11b, ...q11c, ...abCA].map(c => ({ cells: c })));
+const q11w = cells => `${width(cells[0])} / ${width(cells[1])}`;
+const secQ11 = `
+<div class="q" id="q11"><h3 class="qh">Q11 · A maxed meter still shows a projection ${DECIDED('decided · 878a8e4')}</h3>
+  <p class="primer">When a meter reaches 100%, <code>→</code> shows <code>maxed</code>, but <code>⇢</code> could still project far
+  above it — <code>⇢ 204%</code> in the credit fixture. The projection is the last hour’s pace, measured while climbing to 100%;
+  once blocked the counter stops rising, the pace fades and <code>⇢</code> drifts back towards 100% as the hour fills with flat
+  samples. Until then it shows demand that cannot be acted on, and <code>↻</code>, the time until the window resets, is the
+  useful number. The behaviour predates these changes; it was noticed while testing Q5.</p>
+  ${optCard({ letter: '✓', title: 'Chosen: the user’s variant of a — keep ⇢, greyed out like a disabled control', status: 'chosen', cols: Q11COLS, gutW: 4,
+    lines: [{ cells: nCOff[0], marks: [mk(segOf(nCOff[0]), 'every cell dim', 'same')] }, { cells: nCOff[1] }],
+    note: `As built, 878a8e4. “a - but maybe make it greyed out style signalling it is disabled?” The glyph, every bar cell including the ✗ marks, and the percentage are drawn dim; the row keeps its shape and the pace stays readable. Widths ${q11w(nCOff)}, as a’s: only colours change.` })}
+  ${optCard({ letter: 'a', title: 'Keep it', status: 'no', cols: Q11COLS, gutW: 4, lines: [{ cells: q11a[0], marks: [mk(segOf(q11a[0]), 'demand past the limit', 'am')] }, { cells: q11a[1] }],
+    note: `As ${AB.commit} and ccf37df drew it. Widths ${q11w(q11a)}. It shows how hard the meter was pushed, and reads oddly beside <code>maxed</code>. The chosen variant starts here.` })}
+  ${optCard({ letter: 'b', title: 'Cap ⇢ at 100% when maxed', status: 'no', cols: Q11COLS, gutW: 4, lines: [{ cells: q11b[0], marks: [mk(segOf(q11b[0]), 'capped', 'am')] }, { cells: q11b[1] }],
+    note: `Widths ${q11w(q11b)}. True, but it repeats <code>maxed</code>.` })}
+  ${optCard({ letter: 'c', title: 'Hide ⇢ when maxed, leaving ↻ to carry the message', status: 'no', cols: Q11COLS, gutW: 4, lines: [{ cells: q11c[0] }, { cells: q11c[1] }],
+    note: `Widths ${q11w(q11c)}: the segment is left blank, so nothing after it moves. The cleanest, but the burst is no longer visible. Recommended here.` })}
+  ${optCard({ letter: 'd', title: 'As c, except while on credit, when ⇢ shows how far into paid usage you are heading', status: 'no', cols: Q11COLS, gutW: 4,
+    lines: [{ cells: q11c[0], gut: 'off' }, { cells: q11c[1], gut: 'off' }, { cells: abCA[0], gut: 'on' }, { cells: abCA[1], gut: 'on' }, { cells: abCA[2], gut: 'on' }],
+    note: `Credits off: as c. Credits on: in colour, as ${AB.commit} drew the credit fixture. Useful in the one case where use keeps growing; a little more logic.` })}
+  <p class="recline"><b>Decided: the user’s variant of a — 878a8e4, 2026-09-24.</b> A row at 100% keeps its <code>⇢</code> segment,
+  greyed; <code>→</code> still reads <code>maxed</code>, or <code>early</code> while there is no trend yet.</p>
 </div>`;
 
 // method
@@ -842,21 +960,23 @@ const secMethod = `
   <h2>How this page was made, and what it cannot see</h2>
   <table class="states"><tbody>
     <tr><td>Real</td><td>The 19:57 figures (the screenshot and the registry’s 61 samples from 19:02:54 to 20:02:39); every row
-      labelled bd399ae (bytes from the binary deployed when the questions were asked, sha256 ${D.renders.meta.exe_sha256.slice(0, 12)}…);
-      every row labelled ${AB.commit} (bytes from the binary deployed now, sha256 ${AB.exe_sha256.slice(0, 12)}…, drawing the
-      implementation’s fixtures); both through <code>CSHIP_OFFLINE</code>; and the 22:14 usage response.</td></tr>
+      labelled bd399ae (bytes from the binary deployed when Q3 – Q5 were asked, sha256 ${D.renders.meta.exe_sha256.slice(0, 12)}…),
+      ${AB.commit} (deployed after Q4 and Q5, sha256 ${AB.exe_sha256.slice(0, 12)}…) or ${AB2.commit} (deployed after Q9 and Q11,
+      the binary deployed now, sha256 ${AB2.exe_sha256.slice(0, 12)}…), the last two drawing the implementation’s fixtures; all
+      through <code>CSHIP_OFFLINE</code>; and the 22:14 usage response.</td></tr>
     <tr><td>Reconstructed</td><td>The 7d meter from Sat 05:00 to 19:02: this machine’s Claude Code usage at list price, scaled to the
       real samples (it reproduced ${P0(F.recon_last_hour_match)} of the last hour’s whole percents before they were spliced in). The 5h
       windows come from response times. Severity for past moments (label colour only) is taken as normal below 75%.</td></tr>
     <tr><td>Not visible</td><td>claude.ai on the web, desktop or phone (a “New chat - Claude” window was open), cloud sessions and
       routines, and other machines. In the last hour the meter rose 4 points (3.01–4.99 after rounding) where this machine’s usage predicts
       2.8, so usage of that order may be missing from busy hours. One week only: c’s bias depends on the week’s shape.</td></tr>
-    <tr><td>Mockups</td><td>Rows for options that were never built come from a port of both builds’ <code>RenderRows</code>,
+    <tr><td>Mockups</td><td>Rows for options that were never built come from a port of the three builds’ <code>RenderRows</code>,
       <code>Bar</code>, <code>Hm</code>, <code>BuildAccount</code>, <code>Compose</code> and <code>WithBreakdown</code>. The generator
       refuses to run unless the port reproduces all ${checks.length} captured renders — ${Object.keys(D.renders.cases).length} from bd399ae,
-      ${Object.keys(AB.cases).length} from ${AB.commit} (their ⚠ rows are shown as captured) — byte for byte. Every character is a 1ch
-      cell; 👤 is two.</td></tr>
-    <tr><td>Colours</td><td>Every mark is a Program.cs literal (${F.palette_check.palette.join(', ')}; forest #28A428 since 3a801e1),
+      ${Object.keys(AB.cases).length} from ${AB.commit} and ${Object.keys(AB2.cases).length} from ${AB2.commit} (their ⚠ rows are shown as
+      captured) — byte for byte. Every character is a 1ch cell; 👤 is two.</td></tr>
+    <tr><td>Colours</td><td>Every mark is a Program.cs literal (${F.palette_check.palette.join(', ')}; forest #28A428 since 3a801e1;
+      the amber notice #E0AF68 since ccf37df; a maxed row’s <code>⇢</code> segment in dim #6E738D since 878a8e4),
       on the terminal ground #16161E the template uses. The dataviz validator passes the chart colours on colour-blind separation
       (worst ΔE ${F.palette_check.cvd_worst}), normal vision (${F.palette_check.normal_worst}) and contrast (≥ ${F.palette_check.contrast_min}:1),
       and fails its lightness band — every Program.cs hue is lighter than the band on a dark ground — and the chroma floor for the
@@ -926,6 +1046,7 @@ code{font-family:var(--mono); font-size:.86em; background:var(--sunken); padding
 .warn a{color:var(--accent)}
 .warn.slim{padding:14px 18px; gap:6px}
 .rejected{display:grid; gap:48px; padding:22px 12px; border:1px dashed var(--warn-line); border-radius:8px}
+.superseded{display:grid; gap:14px; padding:16px 12px; border:1px dashed var(--warn-line); border-radius:8px}
 
 header{display:grid; gap:14px; max-width:72ch}
 .eyebrow{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); font-weight:600}
@@ -1088,11 +1209,12 @@ const script = `
 const DECISIONS = [
   ['q3', 'Q3', 'Switch the weekly rows to c?', '<b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code>⇢</code>.', 'decided 2026-09-23 · recorded in limits.md'],
   ['q4', 'Q4', 'What → shows when 100% would come after the row’s own reset', '<b>The user’s variant.</b> Keep the time; draw <code>→</code> and it forest green <code>#28A428</code>.', '3a801e1 · 2026-09-24'],
-  ['q5', 'Q5', 'Show more of what the usage API returns?', '<b>c, extended.</b> Every meter; <code>CC 99% · Chat 0% · Cowork 1%</code> after the account; a red <code>⚠</code> row when on credit.', 'a84bd3a · 2026-09-24'],
-  ['', 'Q6', 'This page', '<b>a.</b> It stays in <code>docs/</code> as the record of these decisions.', 'the commit that adds this page'],
-  ['push', 'Q7', 'Push', '<b>a — decided: push</b> the local commits as they are.', 'follows the commit that adds this page'],
-  ['q9', 'Q9', 'What should → show for a meter the history doesn’t track?', '<b>Open.</b> Recommended: a, <code>—</code> as built.', 'pending'],
-  ['q10', 'Q10', 'What does “a full warning line” mean?', '<b>Open.</b> Recommended: a, its own red <code>⚠</code> row as built.', 'pending'],
+  ['q5', 'Q5', 'Show more of what the usage API returns?', '<b>c, extended.</b> <code>CC 99% · Chat 0% · Cowork 1%</code> after the account; a red <code>⚠</code> row when on credit. Its “every meter” part was superseded by Q9.', 'a84bd3a · 2026-09-24'],
+  ['', 'Q6', 'This page', '<b>a.</b> It stays in <code>docs/</code> as the record of these decisions.', 'b63d40d'],
+  ['push', 'Q7', 'Push', '<b>a — decided: push</b> the local commits as they are.', 'b63d40d pushed; the rest follows this commit'],
+  ['q9', 'Q9', 'What should → show for a meter the history doesn’t track?', '<b>The user’s answer, none of a–d.</b> Draw only the three known meters; name any other in an amber <code>⚠</code> row, pending review.', 'ccf37df · 2026-09-24'],
+  ['q10', 'Q10', 'What does “a full warning line” mean?', '<b>a.</b> Its own red <code>⚠</code> row, as built.', 'a84bd3a · no change'],
+  ['q11', 'Q11', 'A maxed meter still shows a projection', '<b>The user’s variant of a.</b> Keep <code>⇢</code>, drawn wholly dim like a disabled control.', '878a8e4 · 2026-09-24'],
 ];
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1100,13 +1222,14 @@ const html = `<!doctype html>
 <style>${css}</style></head>
 <body><div class="wrap">
   <div class="band">
-    <div class="band-tag">Decided 23–24 Sep 2026 · two new questions open</div>
-    <h2>The forecast stays as it is. The harmless → turns forest green. Every meter the API sends is drawn.</h2>
+    <div class="band-tag">Decided 23–24 Sep 2026 · nothing pending</div>
+    <h2>The forecast stays as it is. The harmless → turns forest green. The three known meters are drawn, and anything else is flagged for review.</h2>
     <table class="dtab"><tbody>
     ${DECISIONS.map(([id, q, text, what, when]) => `<tr class="${when === 'pending' ? 'open' : ''}"><td>${id ? `<a href="#${id}">${q}</a>` : q}</td><td>${esc(text)}</td><td>${what}</td><td>${when}</td></tr>`).join('\n    ')}
     </tbody></table>
-    <p>Rows labelled <b>bd399ae</b> are what the binary drew when the questions were asked; rows labelled
-    <b>${AB.commit}</b> are the binary deployed now. Every other row is an option drawn by the same cell rules. The limit model is
+    <p>Rows labelled <b>bd399ae</b> are what the binary drew when Q3 – Q5 were asked, <b>${AB.commit}</b> the binary after Q4
+    and Q5 (superseded in part), and <b>${AB2.commit}</b> the binary deployed now. Every other row is an option drawn by the
+    same cell rules. The limit model is
     in <a href="limits.md">limits.md</a>; the house style is <a href="templates/README.md">templates/README.md</a>. Q8 was
     about a different subject and is not recorded here.</p>
   </div>
@@ -1115,9 +1238,9 @@ const html = `<!doctype html>
     <div class="eyebrow">Limit rows · decision record · 23–24 Sep 2026</div>
     <h1>Limit-row decisions</h1>
     <p class="lede">At 19:57 on 23 September the 7d row said <b>100% in 4h35m</b> and <b>226% at the reset</b>, both from the
-    pace of one busy hour. That question — and three others about the same rows — was decided over the next hours. This
-    page is the record: what was built, the design that was rejected together with the replay it was judged on, every option
-    as it was drawn, and the two questions the building raised.</p>
+    pace of one busy hour. That question — and the others it led to about the same rows — was decided over the next hours.
+    This page is the record: what was built, the design that was rejected together with the replay it was judged on, and every
+    option as it was drawn. Nothing on it is pending.</p>
   </header>
   ${secAsBuilt}
   <section class="rejected" id="rejected-c">
@@ -1142,10 +1265,9 @@ const html = `<!doctype html>
   ${secQ4}
   ${secQ5}
   ${secPush}
-  </section>
-  <section class="sec gapped" id="open"><h2>Open questions</h2>
   ${secQ9}
   ${secQ10}
+  ${secQ11}
   </section>
   ${secMethod}
 </div>
