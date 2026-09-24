@@ -1,7 +1,7 @@
 # Changelog
 
-What changed, newest first, with the commits it came from. Releases are headed by their version;
-the entries before the first release are by date.
+What changed, newest first. Releases are headed by their version; the entries before the first
+release are by date.
 
 ## Unreleased
 
@@ -28,13 +28,13 @@ the entries before the first release are by date.
   PowerShell's error, and `-WhatIf` works under Windows PowerShell 5.1, where `Get-FileHash` took it
   for its own and hashed nothing.
 - The README opens with the status line exactly as a terminal shows it, with nothing added, before
-  the annotated version that names every part. `e7da798`
+  the annotated version that names every part.
 - The annotated figure opens the reading guide when clicked, and a centred link to the guide sits
-  right below it. `1e4ea1e`
+  right below it.
 - The top of the README is tidier: no row of small links under the download button, a heading for
-  the annotated figure, and a plain list of requirements. `716e7ef`
+  the annotated figure, and a plain list of requirements.
 - The release notes put each paragraph on one line, because GitHub shows every line break in
-  them. `0afaab1`
+  them.
 
 ## 0.1.0 - 2026-09-24
 
@@ -73,74 +73,68 @@ Windows 11's Smart App Control blocks it where it is on; there is no installer o
 **The status line**
 
 - A row at 100% keeps its `⇢` segment but draws it grey, like a disabled control: the row is
-  blocked until its reset, so where it is heading does not apply yet. `878a8e4`
+  blocked until its reset, so where it is heading does not apply yet.
 - Only the three known limits are drawn: the session, the week, and one model-scoped weekly limit.
   Any other the usage API sends is named in an amber notice instead, pending a review of the code.
-  `ccf37df`
 - The account line shows how this week's usage splits across products, `CC 99% · Chat 0% ·
-  Cowork 1%`, in whole entries or not at all. `a84bd3a`
-- A red alarm, always the last row, when usage is being billed beyond the plan. `a84bd3a`
+  Cowork 1%`, in whole entries or not at all.
+- A red alarm, always the last row, when usage is being billed beyond the plan.
 - `→` turns forest green when the row's own reset comes before 100% would: at this pace the
-  window never runs out. `3a801e1`
+  window never runs out.
 
 **The repository**
 
 - The [install guide](docs/guide/install.md) says where the status line shows, what cship needs,
   what an unsigned program meets on Windows, and what to do when something is missing; its block
-  checks that cship starts. The README's steps link it. `5dc4ac7`
+  checks that cship starts. The README's steps link it.
 - The README and the guides say only what the code and the transcripts bear out: the sub-agents'
   28%, 78% and 98% are sourced in [accounting.md](docs/reference/accounting.md), and the one failure
-  that raises no row, a usage fetch, is named. `fba03ea`
-- Every docs page opens with a way back to the README and the docs index. `38df644`
+  that raises no row, a usage fetch, is named.
+- Every docs page opens with a way back to the README and the docs index.
 - The [README](README.md) is a landing page: what the status line does, a tour of its parts with a
-  figure each, and how to get it. `562812e`
+  figure each, and how to get it.
 - Figures drawn from the render tests' expected output in the house style by
   [figures.gen.js](docs/assets/figures.gen.js), as PNGs that read the same in GitHub's light and
   dark themes; the [reading guide](docs/guide/reading-the-status-line.md) shows them part by part.
-  `2c83e3b` `55266b3`
 - A render case with every kind of `⚠` row at once, which pins their order: 146 renders of 45
-  cases. `706daf2`
+  cases.
 - [Package.ps1](scripts/Package.ps1) builds the release zip, render-tested, with its SHA-256 and
   its release notes, and the [install guide](docs/guide/install.md) downloads it and fetches cship
-  beside it. `8cfb749`
+  beside it.
 - The docs are grouped by reader: [guide/](docs/guide/) for using it, [reference/](docs/reference/)
   for how it works, [design/](docs/design/) for why, with the packaging plan and the rejected
-  designs there. The README's technical content moved into them. `17623f1` `7f9b88f` `23496ac`
-  `a89974a`
+  designs there. The README's technical content moved into them.
 - Render tests: 143 renders of 44 cases compared byte for byte with the recorded output, offline,
-  beside live sessions. See [development.md](docs/development.md#the-render-tests). `068ef3b`
+  beside live sessions. See [development.md](docs/development.md#the-render-tests).
 - [Deploy.ps1](scripts/Deploy.ps1) tests, backs up, copies with retries, verifies and rolls back.
-  `71ae18a`
-- Every text file is LF; `.work/` is the scratch area. `9af4082`
-- The docs' mockups show example.com addresses, and their stale claims are corrected. `fe5a8f3`
-  `71f866c`
+- Every text file is LF; `.work/` is the scratch area.
+- The docs' mockups show example.com addresses, and their stale claims are corrected.
 - The [decisions page](docs/design/limits-decisions.html) records the limit-row questions of 23 and
   24 September: the rejected window-average forecast, and the decisions behind forest `→`, the
-  breakdown, the alarm, the amber notice and the grey `⇢`. `b63d40d` `5b9dd49`
+  breakdown, the alarm, the amber notice and the grey `⇢`.
 
 ## 2026-09-23
 
 - The scoped row's projection sits right after its own bar instead of padded to the left
-  column's width. `bd399ae`
+  column's width.
 - A new session no longer opens with a red `⚠` row: before its first reply Claude Code reports
   the context as null, which is a zero, not a gap, and the transcript is only written at the first
-  prompt. `bd399ae`
+  prompt.
 - `CSHIP_OFFLINE` renders from fixture files without touching the registry cache, the usage lock
-  or the network. `bd399ae`
+  or the network.
 - Every source that fails is named in a red `⚠` row, and its figure reads `—` instead of a false
-  `0`. When cship prints nothing, the rest of the status line is drawn on its own. `62f06a7`, in
-  use since 2026-08-19
+  `0`. When cship prints nothing, the rest of the status line is drawn on its own. In use since
+  2026-08-19.
 - Each row projects to its own reset, uncapped; a bar lights a cell as soon as its tenth begins, so
-  101% is visibly an eleventh cell; a limit without a reset time reads `↻ —`. `62f06a7`
+  101% is visibly an eleventh cell; a limit without a reset time reads `↻ —`.
 
 ## 2026-08-15
 
 - Docs for the limit rows, the dev loop, and the weekly-wall design that was built and reverted.
-  `59816fb`
 
 ## 2026-08-14
 
-- The first commit: tokens and tool calls for the whole agent tree (the main conversation and every
+- The first version: tokens and tool calls for the whole agent tree (the main conversation and every
   sub-agent at any depth), checked against independent PowerShell implementations on an 86-agent
-  session. `b4d7d99`
-- The verification scripts take `-Sid` and find the transcript themselves. `f1528d7`
+  session.
+- The verification scripts take `-Sid` and find the transcript themselves.
