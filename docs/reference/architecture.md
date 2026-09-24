@@ -131,7 +131,7 @@ Dropping starship removes ~90% of the font requirement.
 dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o <out>
 ```
 
-Output is ~4,83 MiB and really self-contained: no `hostfxr`, no `coreclr` and no VC++
+Output is about 4,8 MiB and really self-contained: no `hostfxr`, no `coreclr` and no VC++
 redistributable, because NativeAOT statically links the C++ runtime and uses only the in-box UCRT.
 There is **no ARM64 build**, though cship and starship both publish one.
 

@@ -26,7 +26,7 @@ x64. NativeAOT links with the C++ toolchain, so it also needs Visual Studio 2022
 
 ```bash
 cd src && dotnet publish -c Release -r win-x64
-# -> src/bin/Release/net10.0-windows/win-x64/publish/statusai.exe   ~4,83 MiB
+# -> src/bin/Release/net10.0-windows/win-x64/publish/statusai.exe   ~4,8 MiB
 ```
 
 ## The render tests
