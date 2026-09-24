@@ -45,10 +45,21 @@ unsigned; there is no installer or auto-update yet.
 
 **The repository**
 
+- The [README](README.md) is a landing page: what the status line does, a tour of its parts with a
+  figure each, and how to get it. `562812e`
+- Figures drawn from the render tests' expected output in the house style by
+  [figures.gen.js](docs/assets/figures.gen.js), as PNGs that read the same in GitHub's light and
+  dark themes; the [reading guide](docs/guide/reading-the-status-line.md) shows them part by part.
+  `2c83e3b` `55266b3`
+- A render case with every kind of `⚠` row at once, which pins their order: 146 renders of 45
+  cases. `706daf2`
+- [Package.ps1](scripts/Package.ps1) builds the release zip, render-tested, with its SHA-256 and
+  its release notes, and the [install guide](docs/guide/install.md) downloads it and fetches cship
+  beside it. `8cfb749`
 - The docs are grouped by reader: [guide/](docs/guide/) for using it, [reference/](docs/reference/)
   for how it works, [design/](docs/design/) for why, with the packaging plan and the rejected
-  designs there. The README's technical content moved into them, and it is becoming a landing
-  page. `17623f1` `7f9b88f` `23496ac` `a89974a`
+  designs there. The README's technical content moved into them. `17623f1` `7f9b88f` `23496ac`
+  `a89974a`
 - Render tests: 143 renders of 44 cases compared byte for byte with the recorded output, offline,
   beside live sessions — see [development.md](docs/development.md#the-render-tests). `068ef3b`
 - [Deploy.ps1](scripts/Deploy.ps1) tests, backs up, copies with retries, verifies and rolls back.
