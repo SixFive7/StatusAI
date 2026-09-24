@@ -10,7 +10,7 @@ it elsewhere.
 
 ```
 Claude Code  --stdin JSON-->  statusai.exe  --stdin-->  cship.exe  -->  starship
-  statusLine hook              (this repo)              (Apache-2.0)    (ISC, optional)
+  statusLine hook           (this repo, MIT)            (Apache-2.0)    (ISC, optional)
   refreshInterval: 60               |
                                     +--> transcript tree      tokens, tool calls
                                     +--> api.anthropic.com    5h / 7d / scoped limits
