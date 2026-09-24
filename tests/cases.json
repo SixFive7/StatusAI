@@ -140,6 +140,12 @@
       "widths": [100, 120, 137, 141, 160],
       "checks": "A flagged meter and money on credit together: the amber notice above the red alarm, which stays last."
     },
+    "every-warning": {
+      "home": "fourth-meter-and-credit",
+      "payload": "fresh-no-transcript-path",
+      "widths": [100, 120, 141],
+      "checks": "All three kinds of ⚠ row at once, in their order: the failed source (no transcript_path) in red, then the amber meters notice, then the on-credit alarm, last."
+    },
     "rows-shot": {
       "home": "rows-shot",
       "payload": "fresh",

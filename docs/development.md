@@ -35,7 +35,7 @@ against the deployed binary before replacing it:
 ./tests/Test-Renders.ps1 -Exe (Get-Command cship-usage).Source  # the deployed binary
 ```
 
-143 renders of 44 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
+146 renders of 45 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped — or says
 that only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the
 home it ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
@@ -70,10 +70,11 @@ and two sub-agents, one a nested workflow agent, whose files carry both
 [duplication traps](reference/accounting.md#the-two-duplication-traps); the scripts under
 [verifying the accounting](#verifying-the-accounting) agree with its totals. The rest: the limit
 rows through a usage response and through `rows.json` alone, the meters notice, the breakdown
-against the width, the on-credit alarm, and the payloads — fresh sessions that must stay quiet and
-broken ones that must still warn, one of them so broken that cship prints nothing. **What they
-cannot cover**: the live fetch, the registry cache and the history. The forecast is an input to a
-fixture, so the window checks and the slope are not under test.
+against the width, the on-credit alarm, the order of the `⚠` rows, and the payloads — fresh
+sessions that must stay quiet and broken ones that must still warn, one of them so broken that
+cship prints nothing. **What they cannot cover**: the live fetch, the registry cache and the
+history. The forecast is an input to a fixture, so the window checks and the slope are not under
+test.
 
 **A deliberate change of output** is recorded with `-Update`, which rewrites `tests/expected` and
 removes any render no case produces; read the diff before committing it. To add a case, add a home
