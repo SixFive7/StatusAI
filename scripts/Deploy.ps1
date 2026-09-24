@@ -14,8 +14,9 @@
       4. Back the target up as a sibling cship-usage.exe.bak.<unix-seconds>, and verify the copy.
       5. Copy the new build over the target, retrying: Claude Code runs the status line every
          60 seconds per session, and Windows holds the image for the ~100 ms it runs.
-      6. Verify the target's SHA-256 against the build. If the copy failed or landed wrong, restore
-         the backup the same way and verify that, so a working binary is always in place.
+      6. Verify the target's SHA-256 against the build. If no copy landed, the target still is the
+         previous binary and there is nothing to undo. If one landed wrong, restore the backup the
+         same way and verify that, so a working binary is always in place.
 
     The registry cache is not touched. It holds figures rather than drawn rows, so the new binary
     draws them itself at once; until the next fetch, within 50 s, the figures are the ones the old
@@ -54,7 +55,19 @@ if (-not $Target) {
     $Target = $found.Source
 }
 
-function Hash([string] $p) { (Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash.ToLowerInvariant() }
+# '' for a file that cannot be read, such as one another process holds open without sharing it.
+# Hashed in .NET rather than by Get-FileHash, which under Windows PowerShell 5.1 takes -WhatIf
+# for its own and returns nothing.
+function Hash([string] $p) {
+    try {
+        $fs = [IO.File]::Open($p, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
+        try {
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { [BitConverter]::ToString($sha.ComputeHash($fs)).Replace('-', '').ToLowerInvariant() }
+            finally { $sha.Dispose() }
+        } finally { $fs.Dispose() }
+    } catch { '' }
+}
 function Copy-WithRetry([string] $from, [string] $to) {
     foreach ($i in 1..12) {
         try { Copy-Item -LiteralPath $from -Destination $to -Force; return $i }
@@ -80,6 +93,8 @@ if (-not (Test-Path -LiteralPath $cship -PathType Leaf)) {
 
 $newHash = Hash $Source
 $oldHash = Hash $Target
+if ($newHash -eq '') { Write-Host "Cannot read $Source, which another process may hold open. Nothing deployed." -ForegroundColor Red; exit 1 }
+if ($oldHash -eq '') { Write-Host "Cannot read $Target, which another process may hold open. Nothing deployed." -ForegroundColor Red; exit 1 }
 Write-Host "build          : $Source"
 Write-Host "  sha256       : $newHash"
 Write-Host "installed      : $Target"
@@ -97,7 +112,8 @@ if (-not $PSCmdlet.ShouldProcess($Target, "replace with $Source")) { exit 0 }
 # ------------------------------------------------------------------ back up, copy, verify
 $t = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $bak = "$Target.bak.$t"
-Copy-Item -LiteralPath $Target -Destination $bak
+try { Copy-Item -LiteralPath $Target -Destination $bak }
+catch { Write-Host "Could not back up $Target to ${bak}: $($_.Exception.Message) Nothing deployed." -ForegroundColor Red; exit 1 }
 if ((Hash $bak) -ne $oldHash) { Write-Host "The backup $bak does not match the installed binary; nothing deployed." -ForegroundColor Red; exit 1 }
 Write-Host "backup         : $bak (verified)"
 
@@ -109,9 +125,18 @@ if ($n -gt 0 -and $got -eq $newHash) {
     exit 0
 }
 
-Write-Host "DEPLOY FAILED (copy attempts used: $n; the target's sha256 is now $got); restoring $bak" -ForegroundColor Red
+# No copy landed, so the previous binary never left: a restore would only wait on the same lock,
+# and report a failure when there is nothing wrong.
+if ($got -eq $oldHash) {
+    Write-Host "DEPLOY FAILED (copy attempts used: $n); the target is unchanged and still the previous binary (sha256 $got)" -ForegroundColor Red
+    exit 2
+}
+
+$state = if ($got -eq '') { 'cannot be read' } else { "has sha256 $got" }
+Write-Host "DEPLOY FAILED (copy attempts used: $n; the target now $state); restoring $bak" -ForegroundColor Red
 $r = Copy-WithRetry $bak $Target
 $now = Hash $Target
-if ($r -gt 0 -and $now -eq $oldHash) { Write-Host "restored the previous binary (sha256 $now)"; exit 2 }
-Write-Host "RESTORE FAILED: $Target has sha256 $now; the previous binary is intact at $bak" -ForegroundColor Red
+if ($now -eq $oldHash) { Write-Host ("restored the previous binary (attempt {0}, sha256 {1})" -f $r, $now); exit 2 }
+$state = if ($now -eq '') { 'cannot be read' } else { "has sha256 $now" }
+Write-Host "RESTORE FAILED: $Target $state; the previous binary is intact at $bak" -ForegroundColor Red
 exit 3

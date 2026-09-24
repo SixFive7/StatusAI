@@ -118,14 +118,23 @@ a plain copy:
 
 It refuses unless `cship.exe` sits beside the target, stops if the target already has the build's
 hash, runs the render tests against the build with that cship, backs the target up as
-`cship-usage.exe.bak.<unix-seconds>`, copies with retries, verifies the hash, and restores the
-backup if the copy did not land. That is traps 2 and 3 below, handled in one script. `-Source` and
-`-Target` name other files. Exit code 0 when deployed or already deployed, 1 when it refused, 2 when
-the copy failed and the backup is back in place, 3 when even that failed, with the backup intact
-beside it.
+`cship-usage.exe.bak.<unix-seconds>` and verifies the backup, copies with retries, and verifies the
+hash. If no copy landed, the target is still the previous binary and it stops there; if one landed
+wrong, it restores the backup the same way. That is traps 2 and 3 below, handled in one script.
+`-Source` and `-Target` name other files, so it can be tried on a scratch folder holding a
+`cship.exe` and an older `cship-usage.exe`. Exit code 0 when deployed or already deployed, 1 when it
+refused, 2 when the copy failed and the previous binary is in place, never having left or restored,
+3 when even the restore failed, with the backup intact beside it.
 
-It was written on 2026-09-24 from the procedure that day's deploys used, and has not been run
-itself yet: read its output the first time.
+It was tried that way on 2026-09-24, under PowerShell 7 and Windows PowerShell 5.1, before its
+first deploy: a deploy, a rerun that does nothing, `-WhatIf`, a build the render tests refuse, no
+cship beside the target, no build and no target, a target held by a running copy of itself through
+every retry, a copy that lands wrong and is restored, one whose restore fails too, and a target it
+cannot read. Three faults turned up and are fixed. A target locked through every retry, which the
+copy never touched, was restored all the same, the restore failed on the same lock, and it said so
+with exit 3. A file it could not read stopped it with PowerShell's error rather than a refusal. And
+under Windows PowerShell 5.1, `-WhatIf` reached into `Get-FileHash`, which then hashed nothing, so
+the script stopped on an error; it hashes in .NET now.
 
 ## Releasing
 

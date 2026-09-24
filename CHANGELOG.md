@@ -21,6 +21,12 @@ the entries before the first release are by date.
 - Render cases for a usage fetch that fails once, twice, in another session and before any has
   worked, then recovers, and for the failed fetch among the other `⚠` rows: 164 renders of 58
   cases.
+- [Deploy.ps1](scripts/Deploy.ps1) was tried on a scratch folder, through every exit code, before
+  its first deploy. A target locked through every retry is left as it is, still the previous
+  binary, with exit 2; it used to be restored all the same, and the restore failing on the same
+  lock said exit 3. A file it cannot read, or a backup it cannot write, is now a refusal rather than
+  PowerShell's error, and `-WhatIf` works under Windows PowerShell 5.1, where `Get-FileHash` took it
+  for its own and hashed nothing.
 - The README opens with the status line exactly as a terminal shows it, with nothing added, before
   the annotated version that names every part. `e7da798`
 - The annotated figure opens the reading guide when clicked, and a centred link to the guide sits
