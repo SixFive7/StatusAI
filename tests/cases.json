@@ -229,6 +229,24 @@
       "widths": [100, 120, 141],
       "checks": "The failed fetch among the other rows, in every-warning's order: the red failures first, the usage one before the tokens one, on one row where they fit and one each where they do not; then the amber meters notice, then the on-credit alarm, last."
     },
+    "fetch-retry-too-soon": {
+      "home": "fetch-retry-too-soon",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The warning is showing and the last attempt was 49 s ago: no fetch, though this one would have worked. The saved rows and the warning straight away, the same bytes as fetch-failed-twice at 141."
+    },
+    "fetch-retry-due": {
+      "home": "fetch-retry-due",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The warning is showing and the last attempt was 50 s ago: one attempt, which fails with HTTP 503, so the row names that instead of the timeout."
+    },
+    "fetch-retry-recovered": {
+      "home": "fetch-retry-recovered",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The warning is showing and the last attempt was 50 s ago: one attempt, which works and clears the warning, the same bytes as live at 141."
+    },
     "rows-shot": {
       "home": "rows-shot",
       "payload": "fresh",

@@ -25,7 +25,8 @@ The first release: a zip with `statusai.exe` and the configuration it is used wi
   status, no token, offline) and how old the limit rows still shown are. An amber row names a limit
   it does not draw yet, and a red alarm appears if usage is ever billed beyond the plan.
 - One usage fetch at a time for every open session, and none while the shared copy is under 50
-  seconds old.
+  seconds old. Once fetching has failed twice in a row, the sessions retry at most once every 50
+  seconds between them, and draw the saved rows and the warning in the meantime.
 
 It fits the terminal's width, which Claude Code 2.1.153 and later pass to it, and every open session
 draws at the width of its own terminal. `STATUSAI_WIDTH` sets a fixed width instead, and with

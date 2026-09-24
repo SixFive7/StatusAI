@@ -42,10 +42,20 @@ meter `the response has no meters`, and any other failure is named by its except
 signed in there is no token to fetch with and no rows to miss, and the account line already says
 `not signed in`, so the row stays away.
 
+From the second failure in a row the retries are spaced out: a render tries again only once the
+last attempt is 50 seconds old, so the open sessions between them make at most one attempt every 50
+seconds rather than one at every render, each of which could wait three seconds on a timeout. A
+render in between makes no attempt and takes no lock, and draws the saved rows and the `⚠` row
+straight away. Before that nothing is held back: after a single failure the next render to find the
+cache stale tries again. The rule is `MayRetry()`, which the offline renders go through as well.
+
 The count is kept beside the rows in the registry, `fail` for the failures in a row and `why` for
-the latest reason, so every session shows the same row, whether or not it was the one that fetched.
-A good fetch sets `fail` back to 0. Only a fetch that finishes is counted: one cut short by such a
-cancel counts as neither, so in a busy session a timeout can go uncounted until a quiet moment.
+the latest reason, so every session shows the same row, whether or not it was the one that fetched,
+and `tryTs` for when the fetch was last tried, which the 50 seconds are measured from. A good fetch
+sets `fail` back to 0. Only a fetch that finishes is counted: one cut short by such a cancel counts
+as neither, so in a busy session a timeout can go uncounted until a quiet moment. `tryTs`, though,
+is written as an attempt starts, so even one cut short holds the next attempt off once the row
+shows.
 
 ### None of it comes from stdin
 

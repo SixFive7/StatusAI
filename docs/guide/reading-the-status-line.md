@@ -168,7 +168,8 @@ brand-new session, before its first reply, is not a failure and says nothing.
 A usage fetch that fails once (when you're offline, say) is quiet. The limit rows keep showing the
 last good fetch, with its countdowns where they stood then, or are left out if there has been none,
 and the next render tries again. If that fails too, a red row names the reason and says how old the
-rows are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds.
+rows are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds. While
+the row shows, your open sessions try again at most once every 50 seconds between them.
 
 Two more rows can appear there, and neither is a failure:
 

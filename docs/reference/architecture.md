@@ -50,7 +50,7 @@ Four clocks, stacked:
 | layer | interval | trigger |
 |---|---|---|
 | Claude Code running `statusai` | `refreshInterval: 60` | plus every new assistant message, after `/compact`, on permission-mode change; debounced 300 ms |
-| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s** | `FreshVal`: `now - t < 50`, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries |
+| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s** | `FreshVal`: `now - t < 50`, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries; from the second failure in a row, only once the last attempt is 50 s old (`MayRetry`) |
 | EUR rate | cached **24 h** | ECB daily feed |
 | token rows, account line | **every render** | incremental parse of appended bytes only |
 
@@ -68,14 +68,15 @@ always the running build's own; what a cached entry still carries from the build
 the figures, the pace above all. On a machine with a live session that is the trap described in
 [development.md](../development.md). Until 2026-09-24 the cache held the drawn rows, in `val`, and
 a new build served its predecessor's drawing too. `fail` and `why` count the fetches that have
-failed in a row and keep the latest reason, for the `⚠` row every session draws from them; see
-[limits.md](limits.md#when-a-fetch-fails).
+failed in a row and keep the latest reason, for the `⚠` row every session draws from them, and
+`tryTs` is when the fetch was last tried, which spaces the retries 50 s apart once that row shows;
+see [limits.md](limits.md#when-a-fetch-fails).
 
 ## State
 
 | location | contents |
 |---|---|
-| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
+| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
 | `%LOCALAPPDATA%\StatusAI\tokens\<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
 | named mutex `Global\StatusAI.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 
@@ -95,7 +96,7 @@ The token accounting is fully portable, but the code around it uses a few Window
 
 | Windows-only API | belongs to |
 |---|---|
-| `Registry.CurrentUser` (8 sites) | limit-bar cache, and the FX rate cache |
+| `Registry.CurrentUser` (9 sites) | limit-bar cache, and the FX rate cache |
 | `WindowsIdentity` / `WindowsPrincipal` | mutex naming |
 | `Global\` mutex | single-flight on the usage fetch |
 | `net10.0-windows` TFM | consequence of the above |

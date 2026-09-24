@@ -307,12 +307,15 @@ static string RunCship(string input) {
 // twice in a row or more (FetchWarn), read from the shared state, so every session shows the
 // same row whether or not it was the one that fetched. A fresh cache means the last fetch
 // worked, so it comes with none. A failed fetch leaves the cache stale, so the next render
-// to take the lock is the retry. There is no second attempt inside one render, which would
-// double the 3 s a render can already spend waiting.
+// to take the lock is the retry. Once the ⚠ row shows, MayRetry spaces the retries 50 s
+// apart, and a render in between draws the saved rows and the warning at once, without taking
+// the lock. There is no second attempt inside one render, which would double the 3 s a render
+// can already spend waiting.
 static (Cached c, string err, string fetchErr) GetUsage() {
     if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     if (FreshVal(now) is Cached fresh) return (fresh, "", "");
+    if (!MayRetry(RegInt("fail"), RegLong("tryTs"), now)) return Saved(now);
     Mutex? mx = null; bool owned = false;
     try {
         mx = new Mutex(false, LockName());
@@ -322,21 +325,35 @@ static (Cached c, string err, string fetchErr) GetUsage() {
         return (AnyVal() ?? Cached.None, LockError(ex), "");
     }
     try {
+        // both checked again under the lock: another session may have fetched or tried since
         if (owned) {
             now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             if (FreshVal(now) is Cached fresh2) return (fresh2, "", "");
-            if (FetchAndSave(now) is Cached got) return (got, "", "");
+            if (MayRetry(RegInt("fail"), RegLong("tryTs"), now) && FetchAndSave(now) is Cached got)
+                return (got, "", "");
         }
-        // another session holds the lock, or this fetch failed: the last good rows, and the
-        // failures counted so far
-        var last = AnyVal();
-        return (last ?? Cached.None, "", FetchWarn(RegInt("fail"), RegStr("why"),
-                                                   last is null ? 0 : RegLong("ts"), now));
+        // another session holds the lock or has just tried, or this fetch failed
+        return Saved(now);
     } finally {
         if (owned) { try { mx!.ReleaseMutex(); } catch { } }
         mx?.Dispose();
     }
 }
+
+// A render without a fetch of its own: the last good rows, and the ⚠ reason once two fetches in
+// a row have failed
+static (Cached c, string err, string fetchErr) Saved(long now) {
+    var last = AnyVal();
+    return (last ?? Cached.None, "", FetchWarn(RegInt("fail"), RegStr("why"),
+                                               last is null ? 0 : RegLong("ts"), now));
+}
+
+// Whether a render may try the fetch: always until it has failed twice in a row, and from then
+// on, with the ⚠ row showing, only once the last attempt (tryTs) is 50 s old, so that the open
+// sessions between them retry once every 50 s instead of at every render. An attempt dated
+// after now, as when the clock has been set back, holds nothing off.
+static bool MayRetry(int fails, long triedAt, long now) =>
+    fails < 2 || now - triedAt >= 50 || triedAt > now;
 
 // What GetUsage returns, read from files instead of the machine. Two fixture shapes.
 //
@@ -361,15 +378,18 @@ static (Cached c, string err, string fetchErr) GetUsage() {
 // the registry's fail and why hold them. "attempt" is this render's fetch: "ok", the
 // default, draws the response at "now"; "none" makes no attempt, as when another session
 // holds the lock; anything else fails with that reason. "okAt" is when the last good fetch
-// was made, the registry's ts. A render without a good fetch of its own draws the rows as
-// that fetch measured them, or none if the fixture has none to draw.
+// was made, the registry's ts, and "triedAt" when the fetch was last tried, its tryTs, which
+// is 0 when not given. Where MayRetry holds the retry off, the render makes no attempt,
+// whatever "attempt" says. A render without a good fetch of its own draws the rows as that
+// fetch measured them, or none if the fixture has none to draw.
 //
 //   "fetch": { "fails": 1, "why": "timeout", "attempt": "timeout", "okAt": "2026-09-23T20:12:20Z" }
 //
 // Either way the forecast is an input, not computed from a history. This path is here to
-// test the parsing, the drawing and the count of failed fetches: the count moves by the
-// live code's AfterFetch and the reason is its FetchWarn. The rows also pass through the
-// string the registry keeps them in, so RowsOut and RowsIn are under test too.
+// test the parsing, the drawing and the count of failed fetches: whether a render tries is
+// the live code's MayRetry, the count moves by its AfterFetch and the reason is its
+// FetchWarn. The rows also pass through the string the registry keeps them in, so RowsOut
+// and RowsIn are under test too.
 static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
     try {
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
@@ -380,6 +400,8 @@ static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
         string why = sim ? Str(fe, "why") : "", attempt = sim ? Str(fe, "attempt") : "";
         if (attempt.Length == 0) attempt = "ok";
         var okAt = (sim ? Time(fe, "okAt") : null) ?? now;
+        long triedAt = (sim ? Time(fe, "triedAt") : null)?.ToUnixTimeSeconds() ?? 0;
+        if (!MayRetry(fails, triedAt, now.ToUnixTimeSeconds())) attempt = "none";
         bool ok = attempt == "ok";
 
         Cached? c = null;
@@ -560,6 +582,7 @@ static List<RowIn>? RowsIn(string s) {
 }
 
 static Cached? FetchAndSave(long now) {
+    SaveTry(now);
     var (u, why) = Fetch();
     if (u is null) { SaveFailure(why); return null; }
     string acct = AccountInfo().uuid;
@@ -637,6 +660,15 @@ static void SaveFailure(string why) {
         using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
         rk.SetValue("fail", fails.ToString(CultureInfo.InvariantCulture));
         rk.SetValue("why", w);
+    } catch { }
+}
+
+// When the fetch was last tried, which MayRetry measures from. Written before the attempt, so
+// one that Claude Code cuts short still counts.
+static void SaveTry(long now) {
+    try {
+        using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
+        rk.SetValue("tryTs", now.ToString());
     } catch { }
 }
 

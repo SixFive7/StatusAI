@@ -49,7 +49,7 @@ dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe
 ```
 
-164 renders of 58 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
+167 renders of 61 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
@@ -90,8 +90,9 @@ sub-agents, one of them a nested workflow agent, whose files carry both
 the limit rows through a usage response and through `rows.json` alone, the meters notice, the
 breakdown against the width, the on-credit alarm, the order of the `⚠` rows, where the width comes
 from (`COLUMNS`, `STATUSAI_WIDTH` before it, a value that is not a width, `statusLine.padding`), a
-usage fetch that fails once, twice, in another session and before any has worked, then recovers,
-and the payloads: fresh sessions that must stay quiet, and broken ones that must still warn, one of
+usage fetch that fails once, twice, in another session and before any has worked, then recovers, a
+retry held off while the last attempt is under 50 seconds old and made once it is 50, and the
+payloads: fresh sessions that must stay quiet, and broken ones that must still warn, one of
 them so broken that cship prints nothing. What the tests cannot cover is the live fetch itself, the
 registry cache and the history. A failed fetch is the fixture's word, so the count and its row are
 under test and the network is not. The forecast is an input to a fixture, so the window checks and
@@ -199,7 +200,8 @@ Set-ItemProperty -Path "HKCU:\Software\StatusAI" -Name "ts" -Value "0"
 ```
 
 Then run it straight away. A live Claude Code window is racing you for the same mutex, and if it
-wins, you get its figures instead.
+wins, you get its figures instead. While the usage `⚠` row shows, a render also leaves the fetch
+alone until the last attempt is 50 seconds old, so set `tryTs` to `0` the same way.
 
 That is a write to state every running session shares, and the test run that follows fetches and
 pushes a sample into the shared prediction history. When what is under test is the drawing rather
@@ -277,9 +279,12 @@ the fetch this render makes (see [limits.md](reference/limits.md#when-a-fetch-fa
 and `why` hold them. `attempt` is this render's fetch: `ok`, the default, draws the response at
 `now`; `none` makes no attempt, as when another session holds the lock; anything else fails with
 that reason, as `timeout`, `offline`, `no token`, `http 429` or any text. `okAt` is when the last
-good fetch was made, the registry's `ts`. A render without a good fetch of its own draws the rows as
-that fetch measured them, or none if the fixture has none. The count moves and the row reads as in
-a live render, through the same `AfterFetch()` and `FetchWarn()`.
+good fetch was made, the registry's `ts`, and `triedAt` when the fetch was last tried, its `tryTs`,
+none if left out. With `fails` at 2 or more and `triedAt` under 50 seconds before `now`, the render
+makes no attempt, whatever `attempt` says, as a live one would not. A render without a good fetch of
+its own draws the rows as that fetch measured them, or none if the fixture has none. Whether it
+tries, how the count moves and how the row reads are as in a live render, through the same
+`MayRetry()`, `AfterFetch()` and `FetchWarn()`.
 
 Keep the hours exact when comparing builds. A `usage.json` and a `rows.json` that should draw the
 same rows must agree on the hours to each reset down to the last bit: .NET's `TotalHours` is

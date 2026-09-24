@@ -88,7 +88,8 @@ does not draw yet, and a red alarm, always last, if your usage is ever billed be
 
 Open as many sessions as you like: they share one copy of your usage. A session only fetches a new
 one when the shared copy is 50 seconds old, and only one session fetches at a time; the others draw
-the shared copy rather than wait.
+the shared copy rather than wait. When fetching has failed twice in a row, they try again at most
+once every 50 seconds between them, and draw the shared copy and the warning in the meantime.
 
 ## Get it
 
