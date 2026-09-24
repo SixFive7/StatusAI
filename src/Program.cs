@@ -6,21 +6,20 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
 
-// `—` U+2014, the one sentinel for "this source reported nothing at all", as opposed to a
-// source that reported zero. East-Asian Ambiguous, like every other glyph drawn in a
-// metric row, so it is one column wide there and Vis()'s assumption holds. It is also
-// never wider than the value it replaces, so no column it appears in can grow.
-// A compile-time constant, so the static local functions below can use it.
+// The em dash (U+2014) is the sentinel for "this source reported nothing", as opposed to a
+// source that reported zero. Like every glyph in a metric row it is East Asian Ambiguous,
+// so it takes one column there, as Vis() assumes. It is never wider than the value it
+// replaces, so it can't widen a column. A const so the static local functions can use it.
 const string NoData = "—";
 
-// #28A428, forest green: the → time when the row's own reset comes before 100% would, so
-// this window cannot run out at the current pace — harmless, where red is not. X11
-// forestgreen #228B22 is 4,10:1 on the docs' #16161E and 3,54:1 where the 10%-opacity
-// wallpaper is lightest, so it keeps that hue (120°) and saturation (61%) and is lifted from
-// 34% to 40% lightness, the first step at 4,5:1 on every ground this terminal can show:
-// 5,99 on Campbell #0C0C0C, 4,75 on the lightest wallpaper #242424, 5,51 on #16161E. Chroma
-// 76 against the 41 of ↻'s #A6E3A1, and ΔE2000 21,7 from it and 27,3 from the reset time's
-// #C6F6C1, so it reads as a greener, stronger green than either rather than a third shade.
+// #28A428, forest green: the → time when the row's own reset comes before 100% would. At
+// this pace the window can't run out, so it gets a calm colour instead of red.
+// It is X11 forestgreen #228B22 (hue 120, saturation 61%) with the lightness raised from 34%
+// to 40%. #228B22 itself is only 4,10:1 on the docs' #16161E and 3,54:1 where the 10%
+// wallpaper is lightest; 40% is the first step that reaches 4,5:1 on every ground: 5,99 on
+// Campbell #0C0C0C, 4,75 on the lightest wallpaper #242424, 5,51 on #16161E. It also has to
+// read as a stronger green than ↻'s #A6E3A1 and the reset time's #C6F6C1, not as a third
+// pastel: chroma 76 against 41, and a CIEDE2000 difference of 21,7 and 27,3 from them.
 const string Forest = "\x1b[38;2;40;164;40m";
 
 string stdin;
@@ -29,9 +28,9 @@ using (var r = new StreamReader(s, Encoding.UTF8)) stdin = r.ReadToEnd();
 
 string cshipOut = RunCship(stdin);
 
-// A missing source and a genuine zero are the same number, so presence is tracked
-// alongside every value that would otherwise render as 0. Nothing is inferred from the
-// value itself: cost 0 on a fresh session is real and must keep rendering as $0,00.
+// A missing source and a real zero are the same number, so every value that could render
+// as 0 has a flag saying whether it was there. Nothing is inferred from the value itself:
+// cost 0 on a fresh session is real and must still render as $0,00.
 double costUsd = 0; long durMs = 0; int add = 0, del = 0;
 bool haveCost = false, haveDur = false, haveCtx = false, noMessagesYet = false;
 string transcriptPath = "";
@@ -44,16 +43,16 @@ try {
         if (c.TryGetProperty("total_lines_added", out var v3) && v3.ValueKind == JsonValueKind.Number) add = v3.GetInt32();
         if (c.TryGetProperty("total_lines_removed", out var v4) && v4.ValueKind == JsonValueKind.Number) del = v4.GetInt32();
     }
-    // Read only to tell "the field is missing" from "the field says 0" — the context bar
-    // itself is drawn by cship from this same payload, not here.
+    // Read only to tell "the field is missing" from "the field says 0". cship draws the
+    // context bar itself, from the same payload.
     //
-    // null is neither. Until the first API response of a context — every new session, and
-    // again after /clear — Claude Code sends used_percentage and current_usage as null: its
+    // null is neither. Until the first API response of a context (every new session, and
+    // again after /clear) Claude Code sends used_percentage and current_usage as null, its
     // documented "no messages yet". Both come from one lookup of the last response's usage
-    // (read in the 2.1.234 and 2.1.280 bundles), so they are null together or not at all,
-    // and that pair is a source honestly reporting nothing yet, like the cost of 0 above.
-    // Any other shape — no context_window, no used_percentage, a null beside a current_usage
-    // that holds a measurement, a value that is not a number — is still a missing source.
+    // (in the Claude Code 2.1.234 and 2.1.280 bundles), so they are null together or not at
+    // all, and that pair means "nothing yet", like the cost of 0 above. Any other shape is
+    // still a missing source: no context_window, no used_percentage, a null next to a
+    // current_usage that holds a measurement, or a value that is not a number.
     if (d.RootElement.TryGetProperty("context_window", out var cw) && cw.ValueKind == JsonValueKind.Object
         && cw.TryGetProperty("used_percentage", out var up)) {
         if (up.ValueKind == JsonValueKind.Number) haveCtx = true;
@@ -70,24 +69,23 @@ try {
 var (usage, usageErr) = GetUsage();
 string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
 var (acctLine, signedIn) = BuildAccount();
-// On a session seconds old the transcript may not exist yet, which is a race and not a
-// fault, so BuildTokens is told to stay quiet about a missing file that long. 30 s is
-// not a new threshold: BuildMeta rounds the duration to whole minutes, so this is the
-// same boundary as the ⏱ 0m being displayed while the exception applies. A duration the
-// payload never carried is not youth — it is a failed source in its own right, and buys
-// a missing transcript nothing.
+// A session a few seconds old may not have its transcript yet. That is a race, not a
+// fault, so BuildTokens stays quiet about a missing file for the first 30 s. The 30 s
+// matches the meta segment: BuildMeta rounds the duration to whole minutes, so ⏱ shows 0m
+// for as long as this applies. A payload with no duration doesn't count as young; that is
+// a failed source of its own and doesn't excuse a missing transcript.
 //
-// Youth alone is too short, though. Claude Code writes the transcript at the first prompt,
-// not at session start — every transcript's creation time is its first user record, on
-// 2.1.233/234 and 2.1.275–280 alike — so a session left open for more than 30 s before
-// anyone types has no file through no fault, and went red. While the payload says no
-// messages yet, a missing file is therefore expected at any age, duration or none; once a
-// context has been measured the file should exist, and past 30 s its absence is loud again.
+// 30 s alone is not enough, though. Claude Code writes the transcript at the first prompt,
+// not at session start (a transcript's creation time is its first user record, on 2.1.233,
+// 2.1.234 and 2.1.275 to 2.1.280), so a session left open for over 30 s before anyone
+// types has no file, and used to show red for it. While the payload says no messages yet,
+// a missing file is expected at any age, with or without a duration. Once a context has
+// been measured the file should exist, and after 30 s a missing one is reported again.
 bool youngSession = haveDur && durMs <= 30000;
 var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession || noMessagesYet);
 
-// One ⚠ row for every source that failed, so a blank figure always has a stated reason.
-// A source that reported a genuine zero contributes nothing here.
+// A ⚠ reason for every source that failed, so a blank figure always comes with a reason.
+// A source that reported a real zero adds nothing here.
 var warns = new List<string>();
 if (stdinErr.Length > 0) warns.Add(stdinErr);
 if (usageErr.Length > 0) warns.Add(usageErr);
@@ -95,20 +93,18 @@ if (stdinErr.Length == 0) {
     if (!haveCost && !haveDur) warns.Add("cost, duration — no cost block in the payload");
     else if (!haveCost) warns.Add("cost — no cost.total_cost_usd in the payload");
     else if (!haveDur) warns.Add("duration — no cost.total_duration_ms in the payload");
-    // cship draws the context bar from this field; with the field gone it draws an empty
-    // bar at 0%, the same glyphs as a genuinely empty context and told apart only by colour
-    // (a number takes the bar's style, anything else the default foreground). Saying so here
-    // is the only thing this repo can do about it — the bar is not ours to change. "No
-    // messages yet" is that genuinely empty context: no response has been measured, so its
-    // 0% is the honest reading, and it says nothing.
+    // cship draws the context bar from this field. Without it, cship draws an empty bar at
+    // 0%: the same glyphs as a context that really is empty, told apart only by colour (a
+    // number takes the bar's style, anything else the default foreground). The bar isn't
+    // ours to change, so a warning is all we can do. "No messages yet" is a context that
+    // really is empty: nothing has been measured, so 0% is correct and there is no warning.
     if (!haveCtx && !noMessagesYet) warns.Add("context — no context_window.used_percentage; the 0% bar is not real");
 }
 if (tokenErr.Length > 0) warns.Add(tokenErr);
 
-// The host line is located before the ⚠ rows are laid out, so its absence can add a
-// reason of its own to them. idx < 0 means every line cship returned was blank, which is
-// exactly what cship does with a payload it cannot parse — and a payload that cannot be
-// parsed is the case where a diagnostic is worth the most.
+// Find the host line before the ⚠ rows are laid out, so a missing one can add its own
+// reason. idx < 0 means every line cship returned was blank, which is what cship does with
+// a payload it can't parse, and that is when a diagnostic is worth the most.
 var lines = new List<string>(cshipOut.Replace("\r\n", "\n").Split('\n'));
 int idx = -1;
 for (int i = lines.Count - 1; i >= 0; i--) if (lines[i].Trim().Length > 0) { idx = i; break; }
@@ -122,10 +118,9 @@ if (MetersRow(usage.Ig) is { Length: > 0 } metersRow) warnLines.Add(metersRow);
 // its own row, last, under every other reason.
 if (usage.Cr.Length > 0) warnLines.Add(AlarmRow(usage.Cr));
 
-// Every row of the block opens with a single-width glyph — the token rows with their
-// │ rule, the metric rows with 5h/7d — so one indent serves them all and column 1 is
-// column 1 on every line. The breakdown belongs to an account: with nobody signed in there
-// is no account line to hang it on.
+// Every row of the block starts with a single-width glyph (the │ rule on the token rows,
+// 5h/7d on the metric rows), so one indent serves them all and column 1 lines up on every
+// line. The breakdown belongs to an account, so with nobody signed in it is left out.
 var block = new List<string>(tokenLines);
 block.AddRange(Compose(usage.Val, acctLine, signedIn ? usage.Bd : "", warnLines));
 if (idx >= 0) {
@@ -133,19 +128,17 @@ if (idx >= 0) {
     if (metaLine.Length > 0) lines[idx] += "   " + metaLine;
     lines.InsertRange(idx + 1, block.Select(l => "\x1b[0m " + l));
 } else {
-    // No host line to insert into. Emitting the block on its own is worth it because
-    // almost none of it comes from stdin: the limit rows are the registry cache and the
-    // API, the account line is the credentials file, and only the token rows and the meta
-    // figures are lost — each of them already degrading to a sentinel with a stated
-    // reason. Skipping the insert instead, as this did, printed nothing whatsoever, which
-    // is the one output indistinguishable from the binary being uninstalled or dead.
+    // No host line to insert into. The block is still worth printing on its own, because
+    // almost none of it comes from stdin: the limit rows come from the registry cache and
+    // the API, the account line from the account files. Only the token rows and the meta
+    // figures are lost, and each of those already falls back to a sentinel with a reason.
+    // This used to skip the insert and print nothing at all, which looks the same as the
+    // binary being uninstalled or dead.
     //
-    // The meta segment normally rides on the host line, so here it takes the first row of
-    // the block and opens with the — sentinel: the host line is a source that reported
-    // nothing at all, which is exactly what that glyph means everywhere else. It is
-    // single-width, so this row's left edge lands on column 1 like every other row's, and
-    // indent + marker + space costs 3 of the 137 columns against the meta segment's
-    // measured worst case of 130.
+    // The meta segment normally sits on the host line, so here it gets the first row of the
+    // block, opened by NoData: the host line is a source that reported nothing. NoData is
+    // single-width, so the row still starts on column 1, and indent + marker + space costs
+    // 3 of the 137 columns next to the meta segment's measured worst case of 130.
     lines.Clear();
     if (metaLine.Length > 0)
         lines.Add("\x1b[0m \x1b[38;2;110;115;141m" + NoData + "\x1b[0m " + metaLine);
@@ -190,10 +183,10 @@ static List<string> Compose(string usageRows, string acct, string bd, List<strin
     return block;
 }
 
-// The product breakdown after the account, in whole entries or not at all: every entry
-// while they all fit, then without the 0% ones, then none — never wrapped, never cut inside
-// an entry. `room` is what the line has left for the account; the account is charged as
-// Compose charges it, Vis + 1, so the line passes the test the layout was decided by.
+// The product breakdown after the account, in whole entries or not at all: every entry if
+// they all fit, else without the 0% ones, else none. Never wrapped, never cut inside an
+// entry. `room` is what the line has left for the account, which is charged the way
+// Compose charges it (Vis + 1), so the line passes the same test the layout was chosen by.
 static string WithBreakdown(string acct, string bd, int room) {
     if (bd.Length == 0) return acct;
     const string dim = "\x1b[38;2;110;115;141m", txt = "\x1b[38;2;169;177;214m", rst = "\x1b[0m";
@@ -222,22 +215,22 @@ static int Vis(string s) {
     return n;
 }
 
-// Claude Code spawns the status line detached, so the attached console reports a
-// phantom 120x30 default rather than the real terminal — OS detection is unusable.
-// Measured value; override with CSHIP_WIDTH (settings.json "env") after a resize.
+// Claude Code spawns the status line detached, so the console it gets reports a phantom
+// 120x30 default instead of the real terminal, and asking the OS is useless. 141 is a
+// measured width; after a resize, override it with CSHIP_WIDTH (settings.json "env").
 static int TermWidth() =>
     int.TryParse(Environment.GetEnvironmentVariable("CSHIP_WIDTH"), out int w) && w > 40 ? w : 141;
 
 // CSHIP_OFFLINE names a directory to render from instead of the live machine, for the dev
-// loop. Everything the status line normally shares with every running session is swapped
-// for a file in it: the limit rows come from its usage.json and rows.json rather than the
-// registry cache and the API, the euro rate from rows.json, and it stands in for the user
-// profile, so the account line reads its .claude.json and the token cache lands in its
-// .claude folder.
-// HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken, and
-// nothing is fetched — so a dev build run this way can neither serve a live session's
-// cached render nor push a sample into the prediction history every session shares, which
-// is what a plain test run on a live machine does.
+// loop. Everything the status line normally shares with the running sessions comes from a
+// file in it instead: the limit rows from its usage.json and rows.json rather than the
+// registry cache and the API, the euro rate from rows.json, and it replaces %USERPROFILE%,
+// so the account line reads its .claude.json and the token cache goes in its .claude
+// folder.
+// HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken and
+// nothing is fetched. So a dev build run this way can't serve a live session's cached
+// render or push a sample into the shared prediction history, both of which a plain test
+// run on a live machine does.
 static string? Offline() {
     string? d = Environment.GetEnvironmentVariable("CSHIP_OFFLINE");
     return string.IsNullOrEmpty(d) ? null : d;
@@ -262,8 +255,8 @@ static string RunCship(string input) {
 // processes. Losers render the last cached value instead of waiting on the network.
 // The lock name is scoped per user + elevation level, so an ACL on a mutex created by a
 // different security context can never deny us access. If the lock still fails, fetching
-// is suspended and a loud error line is rendered — never an unguarded parallel fetch,
-// which would corrupt the prediction history.
+// is suspended and a loud error line is rendered. Never an unguarded parallel fetch: that
+// would corrupt the prediction history.
 static (Cached c, string err) GetUsage() {
     if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -287,27 +280,26 @@ static (Cached c, string err) GetUsage() {
     }
 }
 
-// What GetUsage returns, from files instead of the machine. Two fixture shapes.
+// What GetUsage returns, read from files instead of the machine. Two fixture shapes.
 //
 // usage.json beside rows.json: a usage response, run through the same ParseUsage as a live
-// fetch at rows.json's "now", so the hours to each reset are fixed, with the forecast inputs
-// a live fetch takes from the history given in rows.json by label. Which meters are drawn
+// fetch at rows.json's "now", so the hours to each reset are fixed. The forecast inputs a
+// live fetch takes from the history are given in rows.json by label. Which meters are drawn
 // and which are flagged is the same Known() decision a live fetch makes, with "sn" as the
 // scoped meter already being followed; a drawn meter the forecast leaves out is gated.
 //
 //   { "fx": 0.876, "now": "2026-09-23T20:14:20Z", "sn": "Fable",
-//     "forecast": { "5h": { "rate": 28.8, "gated": false }, … } }
+//     "forecast": { "5h": { "rate": 28.8, "gated": false }, ... } }
 //
-// rows.json alone: the rows RenderRows is given, as it lists them — what comes out of the
-// fetch, the window checks and the slope — with no breakdown, no credit state and no
-// ignored meters:
+// rows.json alone: the list RenderRows is given, which is the output of the fetch, the
+// window checks and the slope. No breakdown, no credit state and no ignored meters:
 //
 //   { "fx": 0.876,
 //     "rows": [ { "label": "5h", "pct": 22, "hrs": 3.38, "hasReset": true,
-//                 "rate": 10.4, "gated": false, "sev": "normal" }, … ] }
+//                 "rate": 10.4, "gated": false, "sev": "normal" }, ... ] }
 //
-// Either way the forecast is an input, not recomputed from a history — what this path
-// exists to test is the parse and the drawing.
+// Either way the forecast is an input, not computed from a history. This path is here to
+// test the parsing and the drawing.
 static (Cached c, string err) OfflineRows(string dir) {
     try {
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
@@ -373,11 +365,10 @@ static string LockError(Exception ex) {
     return "usage tracking suspended — " + why;
 }
 
-// A failed source must never be indistinguishable from a source that honestly reported
-// nothing, so every reason is stated. They share one row separated by · while they fit —
-// a single reason then renders exactly as the lock error always has — and take a row each
-// once they do not, because a wrapped status line costs the same height as a split one
-// and reads far worse.
+// A failed source must never look like a source that reported nothing, so every reason is
+// stated. The reasons share one row, separated by ·, while they fit (a single reason then
+// renders as the lock error always has), and get a row each once they don't: a wrapped
+// status line costs the same height as a split one and reads far worse.
 static List<string> WarnRows(List<string> reasons) {
     const string red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
     var outp = new List<string>();
@@ -389,9 +380,9 @@ static List<string> WarnRows(List<string> reasons) {
     return outp;
 }
 
-// The on-credit alarm: red like every ⚠ row, to the same budget, but always a row of its
-// own and never joined by · — it is not a source that failed, it is usage being billed
-// that the plan should have covered.
+// The on-credit alarm: red like every ⚠ row and to the same budget, but always on a row of
+// its own, never joined by ·. It is not a failed source; it is usage being billed that the
+// plan should have covered.
 static string AlarmRow(string reason) {
     const string red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
     int budget = TermWidth() - 6;   // 4 host padding, 1 indent, 1 safety
@@ -418,12 +409,11 @@ static string MetersRow(string ig) {
     return amber + "⚠ " + Short(head + tail, room) + rst;
 }
 
-// A reason has to fit on a status line. Exception text can carry a whole path — a runaway
-// directory junction produced a 33 KB one under test, which tore the line apart — and a
-// transcript_path is routinely past 100 characters. Head and tail are kept because the
-// identifying part of a path is its end and the identifying part of a message is its
-// start. `…` U+2026 is East-Asian Ambiguous, so it is one column like every other glyph
-// here.
+// A reason has to fit on a status line. Exception text can carry a whole path (a runaway
+// directory junction once produced a 33 KB one in testing, which tore the line apart), and
+// a transcript_path is often over 100 characters. Head and tail are kept because a path is
+// identified by its end and a message by its start. The ellipsis (U+2026) is East Asian
+// Ambiguous, so it takes one column like every other glyph here.
 static string Short(string s, int max = 64) {
     if (max < 16) max = 16;   // TermWidth() floors at 41, so this only guards a future caller
     s = s.Replace('\n', ' ').Replace('\r', ' ');
@@ -482,8 +472,8 @@ static Cached? FetchAndRender(long now) {
         hist.Add((now, s, w, f));
     hist = hist.Where(h => now - h.t <= 3600 && h.t <= now).ToList();
 
-    // the rows this status line draws, in the order it always has — 5h, 7d, the scoped row
-    // — each with its own history series
+    // the rows this status line draws, in the order it always has (5h, 7d, the scoped
+    // row), each with its own history series
     var rows = new List<RowIn>();
     foreach (var (i, which) in new[] { (iS, 0), (iW, 1), (iF, 2) }) {
         if (i < 0) continue;
@@ -497,13 +487,13 @@ static Cached? FetchAndRender(long now) {
     return c;
 }
 
-// The three meters this status line draws — the session, weekly_all and one model-scoped
-// weekly_scoped — and a description of every other meter the response carried. The scoped
-// row stays with the meter the history has been following (sn) for as long as the server
-// still sends it, and otherwise takes the highest, as it always has. Anything else — a kind
-// never seen, a surface-scoped meter, a second model-scoped one — is not drawn until its code
-// has been reviewed; MetersRow names it instead. A missing session or weekly_all only means
-// one row fewer.
+// The three meters this status line draws (the session, weekly_all and one model-scoped
+// weekly_scoped) and a description of every other meter in the response. The scoped row
+// stays with the meter the history has been following (sn) for as long as the server still
+// sends it, and otherwise takes the highest, as it always has. Anything else (an unknown
+// kind, a surface-scoped meter, a second model-scoped one) is not drawn until the code has
+// been reviewed for it; MetersRow names it instead. A missing session or weekly_all just
+// means one row fewer.
 static (int s, int w, int f, List<string> ignored) Known(List<Meter> m, string trackedName) {
     static bool ModelScoped(Meter x) => x.Kind == "weekly_scoped" && x.Scope == "model";
     int s = m.FindIndex(x => x.Kind == "session"), w = m.FindIndex(x => x.Kind == "weekly_all");
@@ -518,7 +508,7 @@ static (int s, int w, int f, List<string> ignored) Known(List<Meter> m, string t
 }
 
 // "Cowork (weekly_scoped, surface)": the name the meter would be drawn under, its kind and
-// what its scope names — enough to find it in the response when the code is reviewed.
+// what its scope names: enough to find it in the response when the code is reviewed.
 static string Describe(Meter m) {
     string kind = Clean(m.Kind);
     if (kind.Length == 0) kind = "no kind";
@@ -627,8 +617,8 @@ static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, l
     } catch { }
 }
 
-// Theil-Sen: median of pairwise slopes, robust against a stray step the window
-// invalidation missed. Gated until 4+ samples spanning 10+ minutes exist.
+// Theil-Sen: the median of the pairwise slopes, so a stray step the window invalidation
+// missed barely moves it. Gated until there are 4+ samples spanning 10+ minutes.
 static double Slope(List<(long t, int s, int w, int f)> hist, int which, long validFrom, out bool gated) {
     gated = true;
     var pts = new List<(double x, double y)>();
@@ -652,7 +642,8 @@ static double Slope(List<(long t, int s, int w, int f)> hist, int which, long va
     return slopes[slopes.Count / 2];
 }
 
-// per-bullet color by zone: 0-70 cyan, 70-90 yellow, 90-100 red, >100 blinking red
+// per-cell colour by zone: 0-70 cyan, 70-90 amber, 90 and up bold red (past 100 the cells
+// are drawn as ✗, see Bar)
 static string ZoneColor(int oneBasedBullet) {
     if (oneBasedBullet >= 11) return "\x1b[1;38;2;247;118;142m";
     if (oneBasedBullet == 10) return "\x1b[1;38;2;247;118;142m";
@@ -660,23 +651,22 @@ static string ZoneColor(int oneBasedBullet) {
     return "\x1b[38;2;125;207;255m";
 }
 
-// Ceiling, not rounding. Rounding made a bar stand still across the only boundary that
-// matters: everything from 95% to 104% drew ten identical ●, so crossing 100 changed
-// nothing and the ✗ overflow glyph needed 105% before it appeared. Ceiling lights a cell
-// as soon as its tenth is entered, so 101% is visibly eleven cells and the first is an ✗.
-// It over-reports every bar by design — 31% draws 4 of 10 where it drew 3 — which is the
-// accepted trade: over-project rather than hide a crossing.
+// Ceiling, not rounding. With rounding a bar stood still across the one boundary that
+// matters: 95% to 104% all drew ten ●, so crossing 100 changed nothing and the ✗ overflow
+// cell needed 105% to appear. Ceiling lights a cell as soon as its tenth is entered, so
+// 101% is eleven cells, the last one an ✗. Every bar over-reports (31% draws 4 of 10, not
+// 3), which is the accepted trade: better to over-project than to hide a crossing.
 //
-// Shared by Bar() and by the width solver in RenderRows, which must agree exactly: the
-// solver pads a bar to a width it computes from this number, so two formulas would let
-// the pad and the bar disagree and shift the second column.
+// Bar() and the width solver in RenderRows both use this and must agree: the solver pads
+// a bar to a width computed from this number, so two formulas could disagree and shift
+// the second column.
 static int BarFill(int pct) {
     int f = (int)Math.Ceiling(pct / 10.0);
     return f < 0 ? 0 : f;
 }
 
-// `muted` draws every cell dim — filled, ✗ and empty alike — for a bar that is shown but does
-// not apply; the glyphs, and so the width, are exactly those of the coloured bar.
+// `muted` draws every cell dim (filled, ✗ and empty alike) for a bar that is shown but does
+// not apply. The glyphs, and so the width, are the same as the coloured bar's.
 static string Bar(int pct, int padTo = 0, int cap = 15, bool muted = false) {
     int fill = BarFill(pct);
     int len = Math.Min(cap, Math.Max(10, fill));
@@ -707,36 +697,34 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
         int now = Math.Clamp(r.Pct, 0, 100);
         double rate = Math.Min(r.Rate, 40);
         bool burning = !r.Gated && rate > 0.5;
-        // Project to the row's own reset, uncapped. An 8h ceiling made ⇢ mean "at reset"
-        // on the 5h row and "in 8 hours" on the 7d row — one glyph, two meanings, one line
-        // apart — so a red "hits 100% in 2d19h" could sit beside a calm ⇢ 20%.
+        // Project to the row's own reset, uncapped. An 8h cap made ⇢ mean "at reset" on the
+        // 5h row and "in 8 hours" on the 7d row, one line apart, so a red "hits 100% in
+        // 2d19h" could sit next to a calm ⇢ 20%.
         double horizon = r.Hrs;
         // Without a reset time there is no horizon, so there is no forecast to make: the
-        // bar shows the current value and asserts nothing about where it is heading.
+        // bar shows the current value and says nothing about where it is heading.
         int proj = burning && r.HasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
         // The → colour: 0 dim, 1 red, 2 forest.
         string to100; int tone = 0;
-        if (r.Gated) to100 = "early";   // not enough same-window data for an honest trend yet
+        if (r.Gated) to100 = "early";   // not enough same-window data for a reliable trend yet
         else if (burning && now < 100) {
             double h = (100 - now) / rate;
             // Tested against the row's own reset. Red: 100% arrives before the window resets.
-            // Forest: the reset comes first, so at this pace the window never runs out — the
-            // time is kept and the colour says it is harmless. Neither is asserted when we do
-            // not know when the window resets; the time then stays dim.
+            // Forest: the reset comes first, so at this pace the window never runs out; the
+            // time is still shown and the colour says it is harmless. When we don't know
+            // when the window resets, neither is claimed and the time stays dim.
             if (r.HasReset) tone = h < r.Hrs ? 1 : 2;
             to100 = Hm(h);
         } else to100 = now >= 100 ? "maxed" : "never";
         return (label: r.Label, now, proj, reset: r.HasReset ? Hm(r.Hrs) : NoData, to100, tone, sev: r.Sev);
     }).ToList();
-    // Every width is per column — [0] the left, [1] the right — and never shared between
-    // the two. The left column's rows stack, 5h above 7d, so they have to agree to line up.
-    // The right column holds the scoped row alone, beside 7d, and a row beside another has
-    // nothing to line up with. The labels were always kept apart this way, so 5h / 7d never
-    // inherit the width of a longer label like Fable; the other five widths were shared,
-    // which aligned nothing and padded the lone right-hand row out to the widest value on
-    // the left. A 7d projecting 226% draws 22 cells, so Fable's 24% sat fourteen blank
-    // columns past the end of its own ten-cell bar, at the far end of the line, aligned with
-    // nothing.
+    // Every width is per column ([0] left, [1] right) and never shared. The left column's
+    // rows stack, 5h above 7d, so they have to agree to line up; the right column holds the
+    // scoped row alone, next to 7d, with nothing to line up with. The labels were always
+    // kept apart like this, so 5h/7d never take the width of a longer label like Fable. The
+    // other five widths used to be shared, which aligned nothing and padded the lone
+    // right-hand row to the widest value on the left: a 7d projecting 226% draws 22 cells,
+    // which put Fable's 24% fourteen blank columns past the end of its own ten-cell bar.
     int[] wLbl = new int[2], wNow = new int[2], wReset = new int[2], wTo100 = new int[2], wProj = new int[2];
     for (int i = 0; i < d.Count; i++) {
         int c = i < leftCount ? 0 : 1;
@@ -747,12 +735,11 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
         wProj[c] = Math.Max(wProj[c], d[i].proj.ToString().Length);
     }
 
-    // The now-bar's own width, computed per column and padded to below exactly as the
-    // projection bar is. `now` is clamped to 0..100 above, so ceil(now/10) can never
-    // exceed ten and capNowBar makes that a guarantee rather than an accident — an
-    // eleventh cell here would shift everything to its right on that row alone, and
-    // Compose() lays two rows side by side assuming the left column's rows are one
-    // visible width.
+    // The now-bar's own width, per column, padded below the same way as the projection bar.
+    // `now` is clamped to 0..100 above, so ceil(now/10) can't exceed ten, and capNowBar
+    // makes that a guarantee rather than an accident: an eleventh cell would shift the rest
+    // of that one row, and Compose() puts two rows side by side assuming the left column's
+    // rows have one visible width.
     const int capNowBar = 10;
     int[] wNowBar = { 10, 10 };
     for (int i = 0; i < d.Count; i++) {
@@ -762,19 +749,18 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
     static int Wider(int[] w) => Math.Max(w[0], w[1]);
 
     // Spend whatever width is left on overshoot markers. A two-column line costs
-    // indent + leftRow + gap + rightRow; everything but the projection bars is known
-    // here, so solve for the bar length that exactly fills the terminal. Recomputed each
-    // render, so a wider reset/eta column shrinks the bars instead of wrapping.
+    // indent + leftRow + gap + rightRow; everything but the projection bars is known here,
+    // so solve for the bar length that fills the terminal. Recomputed every render, so a
+    // wider reset/eta column shrinks the bars instead of wrapping.
     //
-    // rowConst was 25 and carried the now-bar's ten cells inside it; the now-bar is now
-    // an explicit term, so the constant drops by exactly ten and the total is unchanged.
-    // Measured true value is 14 — nine spaces, ↻ → ⇢, two '%' — so 15 keeps the same
-    // one-per-row conservatism the 25 had. It underfills by two columns and never
-    // overflows.
+    // rowConst counts a row's glyphs and spaces outside the label, numbers and bars. The
+    // true count is 14 (nine spaces, ↻ → ⇢ and two '%'); 15 leaves a column of slack per
+    // row, so the line underfills by two columns and never overflows. It was 25 while it
+    // still included the now-bar's ten cells, which are now a term of their own.
     //
-    // The solver still charges each of the five widths at the wider of the two columns —
-    // exactly the max across all rows it charged when they were shared — so capBar is what
-    // it always was, and so is the guarantee: a column's own widths can only be narrower.
+    // The solver charges each of the five widths at the wider of the two columns, which is
+    // the same max over all rows it charged when the widths were shared. So capBar is what
+    // it always was, and a column's own widths can only be narrower.
     const int rowConst = 15;   // per-row glyphs/spaces outside label, numbers and bars
     int term = TermWidth();
     if (term <= 0) term = 138;
@@ -783,7 +769,7 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
                   + 2 * (Wider(wNow) + Wider(wReset) + Wider(wTo100) + Wider(wProj) + Wider(wNowBar));
     int capBar = Math.Clamp((term - 2 - fixedPart) / 2, 10, 30);   // -2 = safety margin
     // max over both bars' fills, so the projection column is never padded narrower than
-    // something already drawn on the line — per column, like every other width
+    // something already drawn on the line; per column, like every other width
     int[] wBar = { 10, 10 };
     for (int i = 0; i < d.Count; i++) {
         int c = i < leftCount ? 0 : 1;
@@ -801,10 +787,10 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
         sb.Append($" {Bar(x.now, wNowBar[c], capNowBar)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow[c])}%{rst}");
         sb.Append($" \x1b[38;2;166;227;161m↻{rst} \x1b[38;2;198;246;193m{x.reset.PadRight(wReset[c])}{rst}");
         sb.Append($" {(x.tone == 1 ? red : x.tone == 2 ? Forest : dim)}→ {x.to100.PadRight(wTo100[c])}{rst}");
-        // A row at 100% is blocked until its window resets, so where it is heading does not
-        // apply for now. The ⇢ segment is kept, so the row keeps its shape and the pace stays
-        // readable, but drawn wholly dim — the glyph, every bar cell including the ✗ marks,
-        // and the percentage — the way a disabled control is greyed rather than removed.
+        // A row at 100% is blocked until its window resets, so where it is heading doesn't
+        // apply for now. The ⇢ segment stays, so the row keeps its shape and the pace is
+        // still readable, but all of it is dim (the glyph, every bar cell including the ✗
+        // marks, and the percentage), the way a disabled control is greyed out, not removed.
         bool blocked = x.now >= 100;
         sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar[c], capBar, blocked)} {(blocked || x.proj <= 100 ? dim : red)}{x.proj.ToString().PadLeft(wProj[c])}%{rst}");
         outLines.Add(sb.ToString());
@@ -813,11 +799,11 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
 }
 
 // haveCost / haveDur say whether the payload carried the field at all. A figure whose
-// source is missing renders as — rather than as 0: the whole point of the meta segment is
-// that a small number means a cheap session, and a silent 0 for "the field wasn't there"
-// says exactly the opposite of the truth. A present 0 still renders $0,00, unchanged.
+// source is missing renders as NoData, not 0: a small number in the meta segment means a
+// cheap session, and a silent 0 for "the field wasn't there" says the opposite. A 0 that
+// was actually sent still renders as $0,00.
 static string BuildMeta(double cost, long durMs, int add, int del, double eurRate, bool haveCost, bool haveDur) {
-    // suppressed only when both sources genuinely reported nothing; an absent source has
+    // hidden only when both sources really reported nothing; an absent source has
     // something to say and says it
     if (durMs <= 0 && cost <= 0 && haveCost && haveDur) return "";
     double hours = durMs / 3600000.0;
@@ -839,19 +825,20 @@ static string BuildMeta(double cost, long durMs, int add, int del, double eurRat
     return sb.ToString();
 }
 
-// nl-NL notation: 1.234,56. InvariantGlobalization is on, so no culture is available at
-// runtime to do this — every named culture silently resolves to invariant. Formatting
-// invariant first and swapping the two separators gets there without the ICU dependency.
+// nl-NL notation: 1.234,56. InvariantGlobalization is on, so there is no culture to do this
+// at runtime: every named culture silently resolves to invariant. Formatting invariant and
+// swapping the two separators gets there without the ICU dependency.
 static string Nl(string s) {
     var sb = new StringBuilder(s.Length);
     foreach (char c in s) sb.Append(c == ',' ? '.' : c == '.' ? ',' : c);
     return sb.ToString();
 }
 
-// The API only ever reports USD. The ECB publishes a free daily reference feed with no
-// key; it is EUR-based, so its USD rate is dollars per euro and has to be inverted.
-// Cached for a day, so the network call happens at most once per day — and a missing or
-// stale rate drops the euro half of the figure rather than blocking the render.
+// The API only reports USD. The ECB publishes a free daily reference feed with no key;
+// it is EUR-based, so its USD rate is dollars per euro and has to be inverted. The rate is
+// cached for a day. If the refresh fails the old rate is kept and the next render tries
+// again, and with no rate at all the euro half of the figure is dropped rather than
+// blocking the render.
 static double EurPerUsd() {
     if (Offline() is string dir) return OfflineFx(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -939,15 +926,15 @@ static bool Fetch(out Usage? u) {
 static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
     var u = new Usage();
     if (root.TryGetProperty("limits", out var limits) && limits.ValueKind == JsonValueKind.Array) {
-        // every meter, in the server's order — Known() then decides which are drawn, and the
+        // every meter, in the server's order. Known() then decides which are drawn and the
         // rest are flagged, so nothing the server sends goes unmentioned
         foreach (var lim in limits.EnumerateArray()) {
             string kind = lim.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
             int pct = lim.TryGetProperty("percent", out var pc) ? (int)pc.GetDouble() : 0;
             // resets_at is a time on every kind in the 2026-08-15 and 2026-09-23 responses,
-            // weekly_scoped included, but on 2026-08-18 weekly_scoped at 0% sent null, three
-            // samples running. So "no reset time" is a state a payload can report — the
-            // legacy shape below never has one — and it is carried as a flag rather than as
+            // weekly_scoped included, but on 2026-08-18 weekly_scoped at 0% sent null in three
+            // samples in a row. So "no reset time" is a state a payload can report (the
+            // legacy shape below never has one), and it is carried as a flag rather than as
             // an hrs of 0, which reads as "resets right now"
             double hrs = 0; long rsu = 0; bool hasReset = false;
             if (lim.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
@@ -960,8 +947,8 @@ static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
             u.Meters.Add(new Meter(kind, label, scope, new Lim(pct, hrs, hasReset, rsu, sev)));
         }
     } else {
-        // the legacy shape carries utilization but no reset time, so both rows are
-        // genuinely unknown here rather than resetting in zero minutes
+        // the legacy shape carries utilization but no reset time, so both resets are
+        // unknown here, not zero minutes away
         u.Meters.Add(new Meter("session", "5h", "",
             new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, false, 0, "")));
         u.Meters.Add(new Meter("weekly_all", "7d", "",
@@ -972,11 +959,11 @@ static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
     return u;
 }
 
-// 5h and 7d for the two the rows have always been, and the scope's name for the rest — the
-// model it is for, else the surface — falling back to the kind itself, so a meter this
-// binary has never seen can at least be named. With it, what the scope names: "model",
-// "surface", "model+surface" or nothing — the model-scoped weekly_scoped is the only kind of
-// scoped meter that is drawn.
+// 5h and 7d for the two rows there have always been, and the scope's name for the rest
+// (the model it is for, else the surface), falling back to the kind itself, so a meter this
+// binary has never seen can at least be named. Also returns what the scope names: "model",
+// "surface", "model+surface" or nothing. The model-scoped weekly_scoped is the only scoped
+// meter that is drawn.
 static (string label, string scope) MeterLabel(string kind, JsonElement lim) {
     string model = "", surface = "";
     if (lim.TryGetProperty("scope", out var sc) && sc.ValueKind == JsonValueKind.Object) {
@@ -994,8 +981,8 @@ static (string label, string scope) MeterLabel(string kind, JsonElement lim) {
 }
 
 // seven_day_breakdown.rows[]: each product's share of this week's usage, in whole percents
-// that sum to 100 — its window_started_at is exactly seven days before weekly_all's
-// resets_at. Cached as "CC=99;Chat=0;Cowork=1", already cut to what may be shown: the three
+// that sum to 100 (its window_started_at is exactly seven days before weekly_all's
+// resets_at). Cached as "CC=99;Chat=0;Cowork=1", already cut to what may be shown: the three
 // products it has always listed, even at 0%, and "Other" or anything unrecognised only while
 // it is above 0.
 static string Breakdown(JsonElement root) {
@@ -1025,16 +1012,16 @@ static string Breakdown(JsonElement root) {
     } catch { return ""; }
 }
 
-// Usage billed beyond the plan, which the plan exists to prevent — so an alarm, not a
-// figure. Two ways in: money already spent this period (spend.used.amount_minor or
-// extra_usage.used_credits above 0), or a limit at 100% while credits are switched on
+// Usage billed beyond the plan, which the plan is there to prevent, so an alarm and not a
+// figure. It triggers on money already spent this period (spend.used.amount_minor or
+// extra_usage.used_credits above 0), or on a limit at 100% while credits are switched on
 // (spend.enabled or extra_usage.is_enabled), the moment further usage starts to bill.
 //
-// The amount is spend.used where it has one — minor units, with the exponent and currency
-// beside them — and otherwise extra_usage.used_credits, read as minor units too with
-// decimal_places as the exponent: in the August response extra_usage.monthly_limit was 1000
-// where spend.limit.amount_minor was 1000 at exponent 2, and no non-zero used_credits has been
-// seen to confirm it.
+// The amount is spend.used where there is one (minor units, with the exponent and currency
+// beside them), else extra_usage.used_credits, also read as minor units with decimal_places
+// as the exponent. That last part is inferred, not confirmed: in the August response
+// extra_usage.monthly_limit was 1000 where spend.limit.amount_minor was 1000 at exponent 2,
+// and no non-zero used_credits has been seen yet.
 static string Credit(JsonElement root, List<Meter> meters) {
     try {
         bool on = false, haveSpend = false, haveCredits = false;
@@ -1082,38 +1069,37 @@ static string Str(JsonElement o, string name) =>
     o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
 // A string from the server is drawn straight into the terminal, so none of it may act on the
-// terminal: control characters — ESC and the row separator among them — become spaces.
+// terminal: control characters, ESC and the row separator among them, become spaces.
 static string Clean(string s) {
     var sb = new StringBuilder(s.Length);
     foreach (char ch in s) sb.Append(char.IsControl(ch) ? ' ' : ch);
     return sb.ToString().Trim();
 }
 
-// ───────────────────────── session token accounting ─────────────────────────
+// ---------------------------------------------------------------- session token accounting
 //
 // Sub-agent turns are not in the main transcript: every child, at any depth, writes its
-// own file under <sid>\subagents\, so a session total has to walk the tree. Two
-// duplication hazards make a naive sum wrong — one API response is written once per
-// content block (~2.2x), and child transcripts carry verbatim copies of ancestor records
-// (measured up to 26x). uuid does not collapse the first, since every block carries its
-// own. The one correct rule is a single global dedup on message.id across every file.
+// own file under <sid>\subagents\, so a session total has to walk the tree. Two kinds of
+// duplication make a plain sum wrong: one API response is written once per content block
+// (about 2.2x), and child transcripts carry verbatim copies of ancestor records (measured
+// up to 26x). uuid doesn't collapse the first, since every block has its own. What works
+// is a single global dedup on message.id across every file.
 //
 // Parsing is incremental: per-file byte offsets, running totals and the dedup set are
-// cached, so a render only parses bytes appended since the last one. Cold cost on a
-// fresh session is nil; the tail of the corpus runs to hundreds of MB, which is what
-// the per-render byte budget below is for.
+// cached, so a render only parses the bytes appended since the last one. A fresh session
+// costs next to nothing; the biggest sessions run to hundreds of MB, which is what the
+// per-render byte budget below is for.
 
-// Returns the rows and, separately, why there are none. Four of the five ways this
-// produces nothing are failures of the source — no path, an unusable path, no files on
-// disk, an exception — and only the fifth, a grand total of zero in TokRender, is a
-// session that honestly has not spent a token yet. Rendering both as an absent row made
-// them indistinguishable, so the failures now come back with a reason for the ⚠ row and
-// the genuine zero still comes back silent.
+// Returns the rows and, separately, why there are none. Four of the five ways to end up
+// with no rows are failures of the source (no path, an unusable path, no files on disk, an
+// exception); only the fifth, a grand total of zero in TokRender, is a session that hasn't
+// spent a token yet. Showing both as a missing row made them look the same, so the
+// failures come back with a reason for the ⚠ row and the real zero comes back silent.
 //
-// `transcriptMayBeAbsent` buys exactly one of those four an exception, on the argument
-// below: a transcript that does not exist yet — on a session seconds old, or on one that
-// has had no prompt — is not a fault, because Claude Code only writes the file at the first
-// prompt. The other three are not explained by that and are never suppressed by it.
+// `transcriptMayBeAbsent` excuses one of the four, no files on disk: a transcript that
+// doesn't exist yet, on a session seconds old or on one that has had no prompt, is not a
+// fault, because Claude Code only writes the file at the first prompt. It never excuses
+// the other three.
 static (List<string> lines, string err) BuildTokens(string transcriptPath, bool transcriptMayBeAbsent) {
     if (transcriptPath.Length == 0)
         return (new List<string>(), "tokens — no transcript_path in the payload");
@@ -1129,15 +1115,14 @@ static (List<string> lines, string err) BuildTokens(string transcriptPath, bool 
         if (Directory.Exists(subs))
             foreach (var f in Directory.EnumerateFiles(subs, "agent-*.jsonl", SearchOption.AllDirectories)
                                        .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                files.Add((f, false));   // nested workflow agents live deeper — recurse
-        // Nothing on disk to count — a fault, except before the first prompt. Claude Code
-        // writes the transcript when the first prompt is sent, so a brand-new session has
-        // no file for as long as it sits unused, with nothing wrong, and a red row on the
-        // first frame of every session is noise — noise being how a warning row stops being
-        // read at all. While the caller says the file may be absent — a session under 30 s
-        // old, or a payload reporting no messages yet — this therefore renders exactly as a
-        // genuine zero does: silently, with an empty grid. Otherwise the file should be
-        // there, and its absence is stated as loudly as it was before.
+                files.Add((f, false));   // nested workflow agents live deeper, so recurse
+        // Nothing on disk to count: a fault, except before the first prompt. Claude Code
+        // writes the transcript when the first prompt is sent, so a new session has no file
+        // for as long as it sits unused, and a red row on the first frame of every session
+        // would be noise, which is how warning rows stop being read. So while the caller
+        // says the file may be absent (a session under 30 s old, or a payload with no
+        // messages yet) this renders like a real zero: silently, with no token rows.
+        // Otherwise the file should be there, and a missing one is reported.
         if (files.Count == 0)
             return (new List<string>(),
                     transcriptMayBeAbsent ? "" : "tokens — no transcript file '" + Short(transcriptPath) + "'");
@@ -1145,23 +1130,23 @@ static (List<string> lines, string err) BuildTokens(string transcriptPath, bool 
         var st = TokLoad(sid);
         // A file shorter than its stored offset was rewritten rather than appended to.
         // Its message ids are already in the dedup set, so re-reading it would count
-        // nothing — the only sound recovery is to rebuild the whole session from zero.
+        // nothing. The only safe recovery is to rebuild the whole session from zero.
         foreach (var (path, _) in files) {
             if (!st.Off.TryGetValue(path, out long o)) continue;
             try { if (new FileInfo(path).Length < o) { st = new TokState(); break; } } catch { }
         }
 
-        // Drop offsets for files that are no longer there. They cannot affect the totals,
+        // Drop offsets for files that are no longer there. They can't affect the totals,
         // which key off message and tool ids rather than the file table, but without this
-        // the table only ever grows — a deleted session or a renamed transcript would sit
-        // in the cache forever.
+        // the table only grows: a deleted session or a renamed transcript would stay in
+        // the cache forever.
         var live = new HashSet<string>(files.Select(f => f.path), StringComparer.OrdinalIgnoreCase);
         foreach (var gone in st.Off.Keys.Where(k => !live.Contains(k)).ToList()) st.Off.Remove(gone);
 
         bool truncated = TokScan(files, st);
         TokSave(sid, st);
-        // TokRender returns nothing when the grand total is zero. That is the one genuine
-        // zero of the five, so it comes back with no reason attached.
+        // TokRender returns nothing when the grand total is zero. That is the real zero of
+        // the five, so it comes back with no reason attached.
         return (TokRender(st, truncated), "");
     } catch (Exception ex) {
         // was a bare catch: the walk could fail on every file and the rows just vanished
@@ -1185,7 +1170,7 @@ static bool TokScan(List<(string path, bool main)> files, TokState st) {
             int take = (int)Math.Min(Math.Min(len - have, budget), chunk);
             if (buf is null || buf.Length < take) buf = new byte[take];
             long used = TokScanOne(path, have, take, isMain, st, buf);
-            if (used <= 0) break;   // no complete line in the window yet — a live write
+            if (used <= 0) break;   // no complete line in the window yet: a write in progress
             budget -= used;
         }
     }
@@ -1227,10 +1212,10 @@ static void TokLine(byte[] buf, int start, int len, long[] tgt, HashSet<long> se
         if (!root.TryGetProperty("type", out var t) || !t.ValueEquals("assistant")) return;
         if (!root.TryGetProperty("message", out var m) || m.ValueKind != JsonValueKind.Object) return;
 
-        // Tool calls first, and deliberately so: the sibling records of one API response
-        // all repeat its message.id, so the dedup below returns early on every record
-        // after the first — which is exactly where the tool_use blocks live. Their own
-        // toolu_ ids are globally unique, so they need no help from that dedup anyway.
+        // Tool calls first, on purpose: the sibling records of one API response all repeat
+        // its message.id, so the dedup below returns early on every record after the first,
+        // and those are the records the tool_use blocks are in. Their own toolu_ ids are
+        // globally unique, so they don't need that dedup anyway.
         if (m.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Array)
             foreach (var b in content.EnumerateArray()) {
                 if (b.ValueKind != JsonValueKind.Object) continue;
@@ -1301,33 +1286,33 @@ static void TokSave(string sid, TokState st) {
             bw.Write(st.SeenTool.Count);
             foreach (long h in st.SeenTool) bw.Write(h);
         }
-        File.Move(tmp, p, true);   // atomic swap — a concurrent render never sees a torn file
+        File.Move(tmp, p, true);   // atomic swap, so a concurrent render never sees a torn file
     } catch { }
 }
 
-// Two rows on one nine-column grid, split by direction of travel: what left this machine
-// above (fresh prompt, prompt written to cache, tool calls issued), what came back below
-// (generated output, prompt served from cache, totals). Columns 7-9 sit outside that
-// metaphor — they are the summary group, a count above and a total below.
+// Two rows on one nine-column grid, split by direction: what left this machine on top
+// (fresh prompt, prompt written to cache, tool calls issued), what came back below
+// (generated output, prompt served from cache, totals). Columns 7-9 are outside that
+// scheme: they are the summary, a count on top and a total below.
 //
-// Arrows are relative to us, not to the model: 🔺 left, 🔻 came back. 💾 and 📖 carry no
-// arrow at all, because a direction on them invites reading it against the cache rather
-// than against the conversation — the two frames disagree, and the arrow was redundant
-// there anyway since every cache counter is an input token.
+// The arrows are relative to us, not to the model: 🔺 left, 🔻 came back. 💾 and 📖 have
+// no arrow, because a direction there invites reading it against the cache instead of the
+// conversation. The two readings disagree, and the arrow added nothing there anyway, since
+// every cache counter is an input token.
 //
-// Scope holds vertically: 🪵 main in columns 1/4/7, 🌿 sub in 2/5/8, 🌳 tree in 3/6/9,
-// reinforced by the number colour, so a scope reads straight down without parsing a glyph.
+// Scope runs vertically: 🪵 main in columns 1/4/7, 🌿 sub in 2/5/8, 🌳 tree in 3/6/9, with
+// the number colour to match, so a scope reads straight down without parsing a glyph.
 //
-// Cell grammar is uniform — [kind][scope] value. Icons align on a column's left edge,
-// digits on its right. A trailing + on the grand total means the byte budget ran out.
+// Every cell is [kind][scope] value. Icons align on a column's left edge, digits on its
+// right. A trailing + on the grand total means the byte budget ran out.
 static List<string> TokRender(TokState st, bool truncated) {
     long grand = 0;
     for (int i = 0; i < 4; i++) grand += st.Main[i] + st.Sub[i];
     if (grand == 0) return new List<string>();
 
-    const string mn  = "\x1b[38;2;110;115;141m",    // main  — dim
-                 sb_ = "\x1b[38;2;180;190;254m",    // sub   — lavender
-                 tt  = "\x1b[1;38;2;125;207;255m",  // total — bold cyan
+    const string mn  = "\x1b[38;2;110;115;141m",    // main: dim
+                 sb_ = "\x1b[38;2;180;190;254m",    // sub: lavender
+                 tt  = "\x1b[1;38;2;125;207;255m",  // total: bold cyan
                  rst = "\x1b[0m";
     string[] hue = { mn, sb_, tt, mn, sb_, tt, mn, sb_, tt };
 
@@ -1344,10 +1329,10 @@ static List<string> TokRender(TokState st, bool truncated) {
     int avail = TermWidth() - 4;                     // host padding
     var (nm1, nm2, cw) = TokNums(st, grand, truncated, TokFmt, iw);
 
-    // A double-width emoji cannot be aligned with the single-width glyphs that open every
+    // A double-width emoji can't be aligned with the single-width glyphs that open every
     // other row: its ink is inset within a two-column advance, so the offset needed is
-    // half a cell and the grid is integral. Leading with a single-width rule makes
-    // character column and screen column the same number on every row, exactly.
+    // half a cell, and the grid only has whole cells. Leading with a single-width rule
+    // makes character column and screen column the same number on every row.
     const string rule = "\x1b[38;2;110;115;141m│\x1b[0m";
 
     // 1 indent + 1 rule + 2 safety margin; gutters collapse to 2, at which point the
@@ -1384,15 +1369,15 @@ static (string[] a, string[] b, int[] cw) TokNums(TokState st, long grand, bool 
     return (a, b, cw);
 }
 
-// Scaled unit, nl-NL notation, every value exactly six characters: 0,200k  9,440k
-// 241,0k  1,390M  44,60M  112,0G.
+// Scaled unit, nl-NL notation, every value six characters: 0,200k  9,440k  241,0k
+// 1,390M  44,60M  112,0G.
 //
-// A fixed *significant-figure* count cannot give a fixed width — three of them occupy
-// four characters at 9,44 and 41,7 but only three at 241, because once the integer part
-// fills all three digits the comma has nowhere to sit. Padding with a space doesn't help
-// either: it is invisible, and right-alignment was already inserting one. So the mantissa
-// is pinned at five characters instead and the decimals float to fill it, which fixes the
-// glyph count rather than merely the column.
+// A fixed number of significant figures can't give a fixed width: three of them take four
+// characters at 9,44 and 41,7 but only three at 241, because once the integer part fills
+// all three digits there is no comma. Padding with a space doesn't help either, since it
+// is invisible and right-alignment already adds one. So the mantissa is pinned at five
+// characters and the decimals float to fill it. That fixes the glyph count, and with it
+// the column.
 static string TokFmt(long n) {
     double v = n / 1000.0; string u = "k";
     if (v >= 1000) { v /= 1000; u = "M"; }
@@ -1403,17 +1388,17 @@ static string TokFmt(long n) {
 
 sealed class TokState {
     public readonly Dictionary<string, long> Off = new(StringComparer.OrdinalIgnoreCase);
-    public readonly HashSet<long> Seen = new();       // message.id — one per API response
-    public readonly HashSet<long> SeenTool = new();   // toolu id — one per tool call
+    public readonly HashSet<long> Seen = new();       // message.id, one per API response
+    public readonly HashSet<long> SeenTool = new();   // toolu id, one per tool call
     public readonly long[] Main = new long[5];   // in, out, cache-write, cache-read, tool calls
     public readonly long[] Sub = new long[5];
 }
 
 // HasReset is carried explicitly rather than inferred from Hours or ResetsUnix being 0.
 // The legacy five_hour/seven_day fallback shape has no reset time at all, and on 2026-08-18
-// the API sent resets_at: null for weekly_scoped at 0% (it sends a time there at 47% on
-// 2026-09-23) — both used to arrive as Hours 0, which the rows rendered as "↻ 0m", an
-// assertion that the window resets this instant.
+// the API sent resets_at: null for weekly_scoped at 0% (on 2026-09-23, at 47%, it sent a
+// time there). Both used to arrive as Hours 0, which the rows drew as "↻ 0m", a claim that
+// the window resets this instant.
 record struct Lim(int Pct, double Hours, bool HasReset, long ResetsUnix, string Sev);
 
 // One meter as the server sent it: its kind, the label it is drawn or named under, what its
