@@ -10,7 +10,9 @@
        (docs/guide/install.md): its version, URL and SHA-256.
     2. dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o <OutDir>/build
        -p:Version=<version>, into a fresh directory, with no build server left running after it.
-       The exe records the version, and the commit the SDK reads from git.
+       The exe records the version, and the commit the SDK reads from git. Refuse unless
+       THIRD-PARTY-NOTICES.txt names the .NET runtime the build compiled in, and no other: the
+       version of the NativeAOT runtime pack in src/obj/project.assets.json.
     3. Run tests/Test-Renders.ps1 against that exe, in the same PowerShell as this script, with
        its scratch under <OutDir>. Refuse if any render differs, or if the cship it would render
        with is not the pinned download, byte for byte.
@@ -34,8 +36,8 @@
     its own or an earlier run's, so nothing is left behind that this run did not check.
 
     Runs under Windows PowerShell 5.1 and PowerShell 7. Exit code 0 when packaged, 1 when it
-    refused (the version, the CHANGELOG, the cship pin, the render tests or a link in the notes),
-    2 when the build or the packaging itself failed.
+    refused (the version, the CHANGELOG, the cship pin, the runtime the notices name, the render
+    tests or a link in the notes), 2 when the build or the packaging itself failed.
 
 .PARAMETER Version
     The version to package, x.y.z. CHANGELOG.md must have a section for it.
@@ -95,6 +97,27 @@ function Fill([string] $template, [hashtable] $values) {
     $t
 }
 function Say([string] $label, [string] $value) { Write-Host ('{0,-15}: {1}' -f $label, $value) }
+
+# The .NET runtime NativeAOT compiled into the exe: the version of its runtime pack, as the restore
+# that came with the build recorded it.
+function Get-RuntimeVersion {
+    $assets = Join-Path $root 'src\obj\project.assets.json'
+    if (-not (Test-Path -LiteralPath $assets -PathType Leaf)) { throw "The build left no $assets to read the .NET runtime's version from." }
+    $json = (ReadText $assets) | ConvertFrom-Json
+    $found = @()
+    foreach ($fw in $json.project.frameworks.PSObject.Properties) {
+        $deps = $fw.Value.PSObject.Properties['downloadDependencies']
+        if (-not $deps) { continue }
+        foreach ($d in @($deps.Value)) {
+            if ([string] $d.name -eq 'Microsoft.NETCore.App.Runtime.NativeAOT.win-x64' -and [string] $d.version -match '^\[?(?<v>[0-9]+\.[0-9]+\.[0-9]+)') {
+                $found += $Matches['v']
+            }
+        }
+    }
+    $found = @($found | Sort-Object -Unique)
+    if ($found.Count -ne 1) { throw "src/obj/project.assets.json does not name one NativeAOT runtime pack: '$($found -join ', ')'." }
+    $found[0]
+}
 
 # A path as the release command should name it: relative with forward slashes inside the
 # repository, so it works from the repository root in PowerShell and in bash alike.
@@ -329,6 +352,17 @@ function Invoke-Main {
         throw "The build is not $Version`: FileVersion $($vi.FileVersion), ProductVersion $($vi.ProductVersion)."
     }
     Say 'statusai' "FileVersion $($vi.FileVersion), ProductVersion $($vi.ProductVersion)"
+
+    # the notices carry the licences of the runtime compiled in, so they name the one this build has
+    $runtime = Get-RuntimeVersion
+    $noticesText = ReadText (Join-Path $root 'THIRD-PARTY-NOTICES.txt')
+    $named = @([regex]::Matches($noticesText, '(\.NET runtime|NativeAOT\.win-x64) (?<v>[0-9]+\.[0-9]+\.[0-9]+)') |
+               ForEach-Object { $_.Groups['v'].Value } | Sort-Object -Unique)
+    if ($named.Count -eq 0) { Refuse "THIRD-PARTY-NOTICES.txt names no version of the .NET runtime, and the build compiled in $runtime." }
+    if ($named.Count -ne 1 -or $named[0] -ne $runtime) {
+        Refuse "THIRD-PARTY-NOTICES.txt names the .NET runtime $($named -join ' and '), and the build compiled in $runtime. Update its runtime section from the runtime pack Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 $runtime first."
+    }
+    Say 'notices' ".NET runtime $runtime, the one the build compiled in"
 
     # ------------------------------------------------------------------ render tests
     $ps = (Get-Process -Id $PID).Path

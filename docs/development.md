@@ -156,8 +156,11 @@ ends with exit 2 and nothing in place. All of them did what this section says.
 
 It refuses unless `CHANGELOG.md` has a `## 1.0.0 - <date>` section, and unless the cship a friend
 is told to download is the one the render tests pin and the [install guide](guide/install.md)
-fetches: cship 1.8.0, by URL and SHA-256. It publishes the build with that version, runs the render
-tests against it with that same cship, byte for byte the download, and writes to `.work/release/`:
+fetches: cship 1.8.0, by URL and SHA-256. It publishes the build with that version, and refuses
+unless `THIRD-PARTY-NOTICES.txt` names the .NET runtime the build compiled in, which it reads from
+`src/obj/project.assets.json`, so the notices cannot fall behind an SDK update unnoticed. It runs
+the render tests against the build with that same cship, byte for byte the download, and writes to
+`.work/release/`:
 
 | file | holds |
 |---|---|
