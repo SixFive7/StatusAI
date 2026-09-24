@@ -16,11 +16,12 @@ docs/       guide/ for using it, reference/ for how it works, design/ for why, a
 
 ## Build
 
-.NET 10 SDK (developed against 10.0.302), NativeAOT, `net10.0-windows`, x64.
+.NET 10 SDK (developed against 10.0.302; 10.0.401 builds it too), NativeAOT, `net10.0-windows`,
+x64.
 
 ```bash
 cd src && dotnet publish -c Release -r win-x64
-# -> src/bin/Release/net10.0-windows/win-x64/publish/cship-usage.exe   ~4,74 MiB
+# -> src/bin/Release/net10.0-windows/win-x64/publish/cship-usage.exe   ~4,83 MiB
 ```
 
 ## The render tests
@@ -149,10 +150,10 @@ sessions without serving their cached render or touching their history.
 
 **With a `usage.json`** — a usage API response, verbatim or edited — the binary parses it with the
 same `ParseUsage()` as a live fetch, so the meters, the product breakdown, the on-credit alarm and
-the meters notice are under test. `rows.json` then supplies what a live fetch would take from the registry: the clock
-to measure the resets against, the scoped meter already being followed, and the forecast inputs by
-label. Which meters are drawn and which are flagged is the same `Known()` decision a live fetch
-makes; a drawn meter the forecast leaves out is gated.
+the meters notice are under test. `rows.json` then supplies what a live fetch would take from the
+registry: the clock to measure the resets against, the scoped meter already being followed, and the
+forecast inputs by label. Which meters are drawn and which are flagged is the same `Known()`
+decision a live fetch makes; a drawn meter the forecast leaves out is gated.
 
 ```json
 { "fx": 0.876, "now": "2026-09-23T20:14:20Z", "sn": "Fable",

@@ -72,9 +72,10 @@ its predecessor.
 Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json`,
 `statusline-cache.json`.
 
-With `CSHIP_OFFLINE` set — a dev-loop switch, see [development.md](../development.md#offline-beside-live-sessions)
-— none of the three is touched: the rows and the euro rate come from a file in that directory, and
-the token cache and the account files move into it.
+With `CSHIP_OFFLINE` set — a dev-loop switch, see
+[development.md](../development.md#offline-beside-live-sessions) — none of the three is touched: the
+rows and the euro rate come from a file in that directory, and the token cache and the account files
+move into it.
 
 ## Portability
 
@@ -98,7 +99,7 @@ file. The accounting needs no changes.
 | move it to… | what breaks | fix |
 |---|---|---|
 | Linux / macOS | registry, mutex naming, TFM | ~an hour |
-| a different terminal width | `TermWidth()` returns a hardcoded 141 | make it a setting |
+| a different terminal width | `TermWidth()` defaults to 141; `CSHIP_WIDTH` overrides it, set by hand | have the installer set it |
 | a terminal rendering emoji single-width | the grid — `iw[]` declares 4 columns per 2-emoji block | one array |
 | a machine without a Nerd Font | cship/starship glyphs, **not** the token rows | see below |
 | an API-key-only account | the limit rows and the account line | nothing — degrades |
@@ -106,8 +107,9 @@ file. The accounting needs no changes.
 | a machine without an NVIDIA GPU | starship's `custom.gpu` segment | — |
 | a different model | nothing — cost comes from the payload, there is no price table | — |
 
-**The binary itself uses no Nerd Font glyphs** — only emoji plus `│ ● ○ ↻ → ⇢`. All 45 patched
-codepoints come from starship's prompt line. Dropping starship removes ~90 % of the font requirement.
+**The binary itself uses no Nerd Font glyphs** — only emoji plus `│ ● ○ ✗ ↻ → ⇢ · — … ⚠`. All 45
+patched codepoints in the prompt line come from starship's config, and cship's model line adds two
+more. Dropping starship removes ~90 % of the font requirement.
 
 ## Build
 
@@ -117,7 +119,7 @@ codepoints come from starship's prompt line. Dropping starship removes ~90 % of 
 dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <out>
 ```
 
-Output is ~4,74 MiB and genuinely self-contained: no `hostfxr`, no `coreclr`, and no VC++
+Output is ~4,83 MiB and genuinely self-contained: no `hostfxr`, no `coreclr`, and no VC++
 redistributable — NativeAOT statically links the C++ runtime and uses only the in-box UCRT. There is
 **no ARM64 build**, though both cship and starship publish one.
 

@@ -7,8 +7,8 @@ first.
 
 Terminal width comes from `TermWidth()` — `CSHIP_WIDTH` if set, otherwise a hardcoded **141**.
 Claude Code spawns the status line detached, so the attached console reports a phantom 120×30 and OS
-detection is unusable. 141 is a measured value for one machine and **must become a setting** before
-anyone else runs this.
+detection is unusable. 141 is a measured value for one machine; anyone else has to set
+`CSHIP_WIDTH` by hand, in the `env` of Claude Code's `settings.json`, until an installer does it.
 
 ```
 141  terminal
@@ -196,11 +196,11 @@ measurement. It also brackets the two token rows as one block, distinct from the
 in a metric row breaks `Compose()`'s two-column arithmetic silently — the right-hand column shifts
 and nothing errors.
 
-Every glyph currently drawn — `│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF,
-`○` U+25CB, `✗` U+2717, `—` U+2014, `…` U+2026 — is East-Asian-Ambiguous, which renders
-single-width in the terminals this targets. **Check any candidate against that class before using
-it**; anything Wide or Fullwidth is disqualified outright, and emoji are only safe in the token
-grid, where `iw[]` declares two columns per glyph explicitly.
+Every glyph currently drawn — `│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF, `○`
+U+25CB, `✗` U+2717, `—` U+2014, `…` U+2026 — is East-Asian Ambiguous or, for `↻`, `⇢` and `✗`,
+Neutral; both render single-width in the terminals this targets. **Check any candidate's class
+before using it**; anything Wide or Fullwidth is disqualified outright, and emoji are only safe in
+the token grid, where `iw[]` declares two columns per glyph explicitly.
 
 `—` is the one sentinel for *this source reported nothing at all*, as distinct from a source that
 reported zero: the `↻` column when the payload carried no `resets_at`, `⏱` / `💰` when the payload

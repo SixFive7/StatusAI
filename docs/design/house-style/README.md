@@ -1,4 +1,4 @@
-# Documentation templates
+# House style
 
 ## ⚠ Read this before opening `weekly-wall.html`
 
@@ -25,9 +25,9 @@ The house style for visual documentation of the status line:
 
 **Render the terminal as the terminal.** Every character is a fixed `1ch` cell
 (`display:inline-block; width:1ch; text-align:center`), so mockups are correct to the character
-column rather than approximately aligned. This matters more than it sounds: the whole layout
-problem in `docs/reference/layout.md` is column arithmetic, and a mockup that fudges alignment cannot be used
-to check a design.
+column rather than approximately aligned. This matters more than it sounds: the whole layout problem
+in `docs/reference/layout.md` is column arithmetic, and a mockup that fudges alignment cannot be
+used to check a design.
 
 **Take the palette from the source, not from taste.** Every colour in that page is a literal from
 `Program.cs` — `#7DCFFF` cyan, `#E0AF68` amber, `#F7768E` red, `#6E738D` dim, `#A6E3A1` green,
@@ -73,9 +73,9 @@ node -e "const h=require('fs').readFileSync('weekly-wall.html','utf8');
 
 ## Glyph widths
 
-Everything the status line draws is single-width, and any new glyph must be too — see the
-alignment rule in [layout.md](../../reference/layout.md). The marks in the template (`⇥` U+21E5, `┃` U+2503)
-sit in the same East-Asian-Ambiguous class as the glyphs already in use (`│` U+2502, `↻` U+21BB,
-`→` U+2192, `⇢` U+21E2, `●` U+25CF, `○` U+25CB, `✗` U+2717), so they render single-width wherever
-those do. That check is the reason they were safe to propose — it is worth repeating for anything
-new, whatever the fate of the design that introduces it.
+Everything the status line draws is single-width, and any new glyph must be too — see the alignment
+rule in [layout.md](../../reference/layout.md). The marks in the template (`⇥` U+21E5, `┃` U+2503)
+sit in the same narrow East-Asian classes — Neutral and Ambiguous — as the glyphs already in use
+(`│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF, `○` U+25CB, `✗` U+2717), so they render
+single-width wherever those do. That check is the reason they were safe to propose — it is worth
+repeating for anything new, whatever the fate of the design that introduces it.

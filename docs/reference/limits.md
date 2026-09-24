@@ -10,7 +10,7 @@ carries and which of it is drawn. The designs that were rejected are in
 GET https://api.anthropic.com/api/oauth/usage
 Authorization: Bearer <claudeAiOauth.accessToken from ~/.claude/.credentials.json>
 anthropic-beta: oauth-2025-04-20
-User-Agent: claude-code/<version>
+User-Agent: claude-code/2.1.90
 ```
 
 Undocumented, like everything else this project reads. Three-second timeout, and every failure
