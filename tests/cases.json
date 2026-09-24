@@ -18,7 +18,7 @@
       "home": "live",
       "payload": "fresh",
       "widths": [100, 120, 137, 141, 160],
-      "checks": "The live usage response of 2026-09-23 22:14 as it was sent: the three meters, and CC 99% · Chat 0% · Cowork 1% after the account — without its 0% entry at 120, on a row of its own when the rows stack at 100."
+      "checks": "The live usage response of 2026-09-23 22:14 as it was sent: the three meters, and CC 99% · Chat 0% · Cowork 1% after the account, without its 0% entry at 120 and on a row of its own when the rows stack at 100."
     },
     "overshoot-7d": {
       "home": "overshoot-7d",
@@ -36,7 +36,7 @@
       "home": "maxed-5h",
       "payload": "fresh",
       "widths": [100, 120, 137, 141, 160],
-      "checks": "A 5h at 100% and still burning: → maxed, and its whole ⇢ segment dim — the glyph, every ● and ✗ cell, and the percentage."
+      "checks": "A 5h at 100% and still burning: → maxed, and its whole ⇢ segment dim (the glyph, every ● and ✗ cell, and the percentage)."
     },
     "legacy-shape": {
       "home": "legacy-shape",
@@ -96,7 +96,7 @@
       "home": "long-email-35",
       "payload": "fresh",
       "widths": [100, 120, 137, 141, 160],
-      "checks": "A 35-character address: the breakdown in whole entries or none — gone at 120, without its 0% entry at 137 and 141, whole at 160."
+      "checks": "A 35-character address, and the breakdown in whole entries or none: gone at 120, without its 0% entry at 137 and 141, whole at 160."
     },
     "long-email-46": {
       "home": "long-email-46",
@@ -174,7 +174,7 @@
       "home": "rows-shot",
       "payload": "fresh",
       "widths": [141],
-      "checks": "A new session, 12 s old, before its first response — used_percentage, remaining_percentage and current_usage all null: no ⚠ row, no token rows."
+      "checks": "A new session, 12 s old, before its first response, with used_percentage, remaining_percentage and current_usage all null: no ⚠ row, no token rows."
     },
     "fresh-idle": {
       "home": "rows-shot",
@@ -258,7 +258,7 @@
       "home": "rows-shot",
       "payload": "string-pct",
       "widths": [141],
-      "checks": "used_percentage as a string: cship prints nothing, so the block stands alone under a row opening with —, and the ⚠ row names both failures."
+      "checks": "used_percentage as a string: cship prints nothing, so the block stands alone under a row opening with '—', and the ⚠ row names both failures."
     },
     "minimal": {
       "home": "rows-shot",
@@ -270,7 +270,7 @@
       "home": "rows-shot",
       "payload": "unreadable",
       "widths": [141],
-      "checks": "A payload that is not JSON: the block alone under — ⏱ — 💰 —, and its three reasons, too long to share a row, one row each."
+      "checks": "A payload that is not JSON: the block alone under '— ⏱ — 💰 —', and its three reasons, too long to share a row, one row each."
     }
   }
 }

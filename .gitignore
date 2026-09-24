@@ -5,7 +5,7 @@ publish/
 Releases/
 *.pdb
 
-# scratch — test renders, builds, downloads, anything throwaway
+# scratch: test renders, builds, downloads, anything throwaway
 .work/
 
 # local state: a token cache a stray render writes (statusline-tokens/<sid>.bin), IDE files
