@@ -11,7 +11,7 @@ works, why it looks the way it does, and how to change it. New here? Start with
 | page | for |
 |---|---|
 | [guide/reading-the-status-line.md](guide/reading-the-status-line.md) | what every row, glyph and colour on the status line means |
-| [guide/install.md](guide/install.md) | downloading or building it, putting it in place, and taking it out again |
+| [guide/install.md](guide/install.md) | downloading or building it, putting it in place, what to do when something is missing, and taking it out again |
 
 ## Reference
 

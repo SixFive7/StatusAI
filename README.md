@@ -87,36 +87,45 @@ shared copy rather than wait.
 `cship-usage.exe` and its configuration. You need
 
 - Windows 10 or 11, on x64;
-- Claude Code, signed in with your Claude account;
-- a terminal that draws emoji two columns wide, such as Windows Terminal;
-- a [Nerd Font](https://www.nerdfonts.com), such as JetBrainsMono Nerd Font, for the model line's two
+- Claude Code in a terminal, signed in with your Claude account — the VS Code extension's chat
+  panel shows no status line, but Claude Code in VS Code's own terminal does;
+- a terminal that draws emoji two columns wide, such as Windows Terminal, with a
+  [Nerd Font](https://www.nerdfonts.com) such as JetBrainsMono Nerd Font for the model line's two
   icons;
 - [cship](https://github.com/stephenleo/cship) 1.8.0, which draws the model line StatusAI's rows go
   under. The install block fetches it for you.
 
 Then:
 
-1. **Extract the zip, open PowerShell in that folder, and paste the block** from the
-   [install guide](docs/guide/install.md#download). It puts `cship-usage.exe` and cship in
-   `%USERPROFILE%\.local\bin`, which has to be on your PATH, and `cship.toml` in
-   `%USERPROFILE%\.config`.
-2. **Tell Claude Code**, in `%USERPROFILE%\.claude\settings.json`:
+1. **Extract the zip and open PowerShell in the extracted folder.** If your browser warns that the
+   zip is not commonly downloaded, keep it: it is new and unsigned. On Windows 11, right-click
+   inside the extracted folder and choose *Open in Terminal*.
+2. **Paste the block** from the [install guide](docs/guide/install.md#download). It puts
+   `cship-usage.exe` and cship in `%USERPROFILE%\.local\bin`, which has to be on your PATH, and
+   `cship.toml` in `%USERPROFILE%\.config`.
+3. **Tell Claude Code**: add this entry to `%USERPROFILE%\.claude\settings.json`, inside its outer
+   braces.
 
    ```json
    "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
    ```
 
-   If your terminal is not 141 columns wide, add its width: `"env": { "CSHIP_WIDTH": "120" }`.
-3. **Restart Claude Code.**
+   If your terminal is not 141 columns wide, add its width as well: `"env": { "CSHIP_WIDTH": "120" }`.
+4. **Restart Claude Code.**
 
-**Early days.** This is 0.1.0. Numbers are in Dutch notation (`1.234,56`), the token grid needs a
-terminal at least 121 columns wide, and there is no installer or auto-update yet.
+The [install guide](docs/guide/install.md) has each step in full, what to expect at first,
+[what to do when something is missing](docs/guide/install.md#when-something-is-missing), and how to
+take it out again.
+
+**Early days.** This is 0.1.0. Numbers are in Dutch notation (`1.234,56`), the width is not detected
+yet, the token grid needs a terminal at least 121 columns wide, and there is no installer or
+auto-update yet.
 
 ## Learn more
 
 - [Reading the status line](docs/guide/reading-the-status-line.md): every row, glyph and colour.
-- [Install](docs/guide/install.md): the download, building from source, the optional prompt line,
-  and taking it out again.
+- [Install](docs/guide/install.md): the download step by step, the optional prompt line, and
+  building from source.
 - [All the documentation](docs/README.md): how the tokens are counted, how the forecast is made, and
   why it all looks the way it does.
 - [Changelog](CHANGELOG.md).

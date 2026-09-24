@@ -12,16 +12,32 @@ is [packaging-plan.md](../design/packaging-plan.md).
 ## Before you start
 
 - **Windows 10 or 11, x64.** There is no ARM64 build.
-- **Claude Code, signed in with a Claude account.** The limit rows and the account line read the
-  sign-in Claude Code keeps in `%USERPROFILE%\.claude`. With an API key the token rows still work,
-  and the account line reads `👤 not signed in`.
-- **Numbers are in Dutch notation** — `1.234,56`, `$9,32` — and there is no setting for it yet.
-- **The width is 141 columns** unless you set `CSHIP_WIDTH`, below. Claude Code runs the status line
-  detached from the terminal, so it cannot ask the terminal how wide it is.
+- **Claude Code in a terminal.** The status line belongs to Claude Code's command-line interface, in
+  Windows Terminal or in VS Code's own terminal; the VS Code extension's chat panel does not show
+  one.
+- **Signed in with a Claude account.** The limit rows and the account line read the sign-in Claude
+  Code keeps in `%USERPROFILE%\.claude`. With an API key the token rows still work, and the account
+  line reads `👤 not signed in`.
 - **A terminal that draws emoji two columns wide**, as Windows Terminal does; the token grid is laid
   out on that assumption.
+- **The width is 141 columns** unless you set `CSHIP_WIDTH`, below: StatusAI does not read the
+  terminal's width yet.
+- **Numbers are in Dutch notation** — `1.234,56`, `$9,32` — and there is no setting for it yet.
+- **The Microsoft Visual C++ Redistributable, for cship.** cship is built against it and cannot start
+  without it. Windows does not include it, but most PCs have it from some other program, and the
+  block checks.
 - **Neither `cship-usage.exe` nor cship is signed.** The block checks the cship it downloads
-  against a pinned SHA-256, and each release publishes the zip's own.
+  against a pinned SHA-256, and each release publishes the zip's own. Your browser may warn that the
+  zip is not commonly downloaded: in Edge choose *Keep*, then *Keep anyway*; in Chrome,
+  *Download suspicious file*. The block removes the mark Windows puts on downloaded files, and Claude
+  Code starts both programs directly, never through Explorer, so SmartScreen's *Windows protected
+  your PC* does not come up.
+- **Smart App Control blocks them.** Where Windows Security › *App & browser control* ›
+  *Smart App Control settings* says *On*, Windows 11 blocks unsigned programs it does not know,
+  however they are started, and has no way to allow just one, so the status line cannot run until
+  it is set to *Off*.
+  That lowers the protection for every program; recent Windows 11 updates let you switch it on
+  again on the same page, where before only a reset of Windows could. *Evaluation* blocks nothing.
 
 ## Download
 
@@ -31,8 +47,10 @@ The repository is private for now, so the download works only for people who hav
    [latest release](https://github.com/SixFive7/StatusAI/releases/latest) and extract it: in
    Explorer, right-click it and choose *Extract All*. The release lists the zip's SHA-256 in
    `StatusAI-<version>-win-x64.zip.sha256`, and `Get-FileHash <zip>` prints the one you have.
-2. **Open PowerShell in the extracted folder**, or `cd` to it, **and paste this block.** Windows
-   PowerShell 5.1, which every Windows 10 and 11 has, and PowerShell 7 both run it.
+2. **Open PowerShell in the extracted folder and paste this block.** On Windows 11, right-click
+   inside the folder and choose *Open in Terminal*; on Windows 10, choose *File* › *Open Windows
+   PowerShell*. Windows PowerShell 5.1, which every Windows 10 and 11 has, and PowerShell 7 both run
+   it; if Windows Terminal warns that the text has several lines, paste it anyway.
 
    ```powershell
    & {
@@ -58,6 +76,10 @@ The repository is private for now, so the download works only for people who hav
      Unblock-File "$bin\cship-usage.exe", "$bin\cship.exe"
      if (Test-Path "$conf\cship.toml") { Write-Warning "$conf\cship.toml exists and was left as it is." }
      else { Copy-Item .\cship.toml $conf }
+     $v = try { & "$bin\cship.exe" --version 2>$null } catch { }
+     if ("$v" -notlike 'cship*') {
+       Write-Warning 'cship.exe does not start here: see "When something is missing" in the guide.'
+     }
      $found = Get-Command cship-usage -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
      if ($found -eq "$bin\cship-usage.exe") { "Done. PATH leads to $found." }
      else { Write-Warning "Done, but PATH does not lead to $bin\cship-usage.exe: see step 3." }
@@ -69,7 +91,8 @@ The repository is private for now, so the download works only for people who hav
    above. It removes the mark Windows puts on downloaded files from both programs, and copies
    `cship.toml`, which draws the model line and the context bar, to `%USERPROFILE%\.config`. cship
    reads it there, or from `.config` under `HOME` when that variable is set; with none it draws
-   nothing, and the status line says so in a `⚠` row.
+   nothing, and the status line says so in a `⚠` row. Then it starts cship once, to ask its
+   version, and warns if cship cannot start on this PC.
 
    cship-usage runs the `cship.exe` in its own folder before any on your PATH, which is why the
    download is saved under that name beside it. With no cship to run, the status line prints the
@@ -88,14 +111,17 @@ The repository is private for now, so the download works only for people who hav
    folder the way Claude Code's
    [Verify your PATH](https://code.claude.com/docs/en/troubleshoot-install#verify-your-path)
    describes, and start Claude Code from a new terminal: a program keeps the PATH it started with.
-4. **Tell Claude Code** in `%USERPROFILE%\.claude\settings.json`:
+4. **Tell Claude Code** in `%USERPROFILE%\.claude\settings.json`. The entry goes inside the file's
+   outer braces, with a comma between it and any setting already there; if there is no such file,
+   create it with the entry between `{` and `}`.
 
    ```json
    "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
    ```
 
-   and, if your terminal is not 141 columns wide, its width, in the `env` block if the file has one
-   already:
+   If your terminal is not 141 columns wide, add its width as well, in the `env` block if the file
+   has one already. In PowerShell, `$Host.UI.RawUI.WindowSize.Width` prints the width of the window
+   it runs in.
 
    ```json
    "env": { "CSHIP_WIDTH": "120" }
@@ -111,7 +137,10 @@ fails. Your `cship.toml` is kept.
 
 ### Build
 
-The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), then:
+The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and Visual Studio 2022 or
+later with its *Desktop development with C++* workload, which
+[NativeAOT needs](https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites) to
+link. Then:
 
 ```powershell
 dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <dir>
@@ -154,8 +183,23 @@ Nerd Font the few icons in cship's model line show as boxes; nothing StatusAI dr
   `⚠` row.
 - **The limit rows read `→ early` for about ten minutes.** A trend needs four samples across ten
   minutes, and there is one a minute while a session is open.
-- **Anything missing is named.** A red `⚠` row at the foot says which source failed; see
-  [reading the status line](reading-the-status-line.md#when-a-row-says-).
+- **A figure that could not be read is named.** A red `⚠` row at the foot says which source
+  failed; see [reading the status line](reading-the-status-line.md#when-a-row-says-), and the table
+  below for what to do.
+
+## When something is missing
+
+| what you see | what to do |
+|---|---|
+| the block stops: the file *contains a virus or potentially unwanted software* | Microsoft Defender has taken a new, unsigned program for malware, as it sometimes does with programs built the way `cship-usage.exe` is. Check the zip's SHA-256 against the release's `.sha256` file, and tell whoever sent you here. |
+| the block warns that `cship.exe` does not start | Windows could not run cship. Most often the Microsoft Visual C++ Redistributable is missing: install the x64 one from [Microsoft](https://aka.ms/vc14/vc_redist.x64.exe) and run the block again. Otherwise Smart App Control is *On* (see [Before you start](#before-you-start)). |
+| no status line at all | Check that a new terminal finds the program: `where.exe cship-usage` should print `C:\Users\<you>\.local\bin\cship-usage.exe` (step 3). Claude Code runs a status line only in its terminal interface, and only in a folder you have trusted; `claude --debug` logs the exit code and error of its first run in a session. Smart App Control, if it is *On*, blocks it (see [Before you start](#before-you-start)). |
+| the session's raw JSON where the model line should be | cship is not beside `cship-usage.exe`. Run the block again. |
+| `⚠ cship — no output`, and no model line | cship ran and drew nothing. Either `%USERPROFILE%\.config\cship.toml` is missing — copy it from the zip — or cship cannot start: without the Microsoft Visual C++ Redistributable it cannot, so install it from [Microsoft](https://aka.ms/vc14/vc_redist.x64.exe), the x64 one. |
+| boxes instead of the model line's two icons | The terminal's font is not a Nerd Font. |
+| rows that wrap or run past the edge | Set `CSHIP_WIDTH` to the terminal's width (step 4). |
+| every limit row reads `→ early` | Nothing is wrong: for the first ten minutes there is no trend yet. |
+| `👤 not signed in`, and no limit rows | Claude Code is signed in with an API key rather than a Claude account; the limit rows need the account. |
 
 ## Uninstall
 

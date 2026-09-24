@@ -145,7 +145,9 @@ StatusAI {VERSION} for Windows x64
 {SITE}
 
 A status line for Claude Code: the tokens of the whole agent tree, the usage
-limits, the account, and the session's time and cost.
+limits, the account, and the session's time and cost. It shows in Claude
+Code's terminal interface; the VS Code extension's chat panel shows no status
+line.
 
 In this zip
   cship-usage.exe  the status line. x64 only, and unsigned.
@@ -161,24 +163,32 @@ it from cship's own release:
   {URL}
   SHA-256 {SHA}
 
-and save it as cship.exe in the same folder as cship-usage.exe. cship-usage
-runs the cship in its own folder; the download's own name is not found.
+and save it as cship.exe in the same folder as cship-usage.exe: cship-usage
+runs the cship.exe beside it before any other, and the download's own name is
+not one it looks for. cship needs the Microsoft Visual C++ Redistributable
+(x64), which most PCs already have:
+
+  https://aka.ms/vc14/vc_redist.x64.exe
+
+Neither program is signed. Where Windows 11's Smart App Control is on, it
+blocks them both; the install guide says what to do.
 
 Installing, in brief
   1. Put cship-usage.exe in %USERPROFILE%\.local\bin. That folder must be on
      PATH; Claude Code's native installer keeps claude.exe there.
-  2. Download cship as above, save it in the same folder as cship.exe, and
-     check its SHA-256.
+  2. Download cship as above, check its SHA-256, and save it in that same
+     folder as cship.exe.
   3. Copy cship.toml to %USERPROFILE%\.config\cship.toml, unless you already
      have one.
-  4. Add this to %USERPROFILE%\.claude\settings.json:
+  4. Add this to %USERPROFILE%\.claude\settings.json, inside its outer braces:
        "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
      and, if your terminal is not 141 columns wide, its width:
        "env": { "CSHIP_WIDTH": "120" }
   5. Restart Claude Code.
 
-The install guide does steps 1 to 3 with one PowerShell block, checks the hash,
-and says what to expect and how to uninstall:
+The install guide does steps 1 to 3 with one PowerShell block, checks the hash
+and that cship starts, and says what to expect, what to do when something is
+missing, and how to uninstall:
   {GUIDE}
 
 Do not run cship's own installer or "cship uninstall": both delete the
