@@ -1,0 +1,12 @@
+# LF in the repository and in the working tree, whatever core.autocrlf says: the repo had
+# CRLF churn from core.autocrlf=true, and every tool here reads LF.
+* text=auto eol=lf
+
+# The render tests compare these byte for byte, so they are never converted.
+*.ansi -text
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.webp binary
