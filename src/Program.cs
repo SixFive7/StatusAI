@@ -675,14 +675,16 @@ static int BarFill(int pct) {
     return f < 0 ? 0 : f;
 }
 
-static string Bar(int pct, int padTo = 0, int cap = 15) {
+// `muted` draws every cell dim — filled, ✗ and empty alike — for a bar that is shown but does
+// not apply; the glyphs, and so the width, are exactly those of the coloured bar.
+static string Bar(int pct, int padTo = 0, int cap = 15, bool muted = false) {
     int fill = BarFill(pct);
     int len = Math.Min(cap, Math.Max(10, fill));
     var sb = new StringBuilder();
     string cur = "";
     for (int i = 1; i <= len; i++) {
         bool on = i <= fill;
-        string col = on ? ZoneColor(i) : "\x1b[38;2;110;115;141m";
+        string col = on && !muted ? ZoneColor(i) : "\x1b[38;2;110;115;141m";
         if (col != cur) { sb.Append(col); cur = col; }
         sb.Append(on ? (i >= 11 ? '✗' : '●') : '○');
     }
@@ -799,7 +801,12 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
         sb.Append($" {Bar(x.now, wNowBar[c], capNowBar)} {PctColor(x.now)}{x.now.ToString().PadLeft(wNow[c])}%{rst}");
         sb.Append($" \x1b[38;2;166;227;161m↻{rst} \x1b[38;2;198;246;193m{x.reset.PadRight(wReset[c])}{rst}");
         sb.Append($" {(x.tone == 1 ? red : x.tone == 2 ? Forest : dim)}→ {x.to100.PadRight(wTo100[c])}{rst}");
-        sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar[c], capBar)} {(x.proj > 100 ? red : dim)}{x.proj.ToString().PadLeft(wProj[c])}%{rst}");
+        // A row at 100% is blocked until its window resets, so where it is heading does not
+        // apply for now. The ⇢ segment is kept, so the row keeps its shape and the pace stays
+        // readable, but drawn wholly dim — the glyph, every bar cell including the ✗ marks,
+        // and the percentage — the way a disabled control is greyed rather than removed.
+        bool blocked = x.now >= 100;
+        sb.Append($" {dim}⇢{rst} {Bar(x.proj, wBar[c], capBar, blocked)} {(blocked || x.proj <= 100 ? dim : red)}{x.proj.ToString().PadLeft(wProj[c])}%{rst}");
         outLines.Add(sb.ToString());
     }
     return string.Join("\n", outLines);

@@ -189,6 +189,16 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant.
   They now render `↻ —`, and while a row is in that state its projection is suppressed and its
   `→` is neither red nor forest — there is no deadline to test against.
+- **A row at 100%** is blocked until its window resets, so where it is heading does not apply for
+  now. `→` reads `maxed` — `early` if there is no trend yet — and the `⇢` segment is kept but drawn
+  wholly dim `#6E738D`: the glyph, every bar cell including the `✗` marks, and the percentage, which
+  would otherwise be red past 100%. Greyed like a disabled control rather than removed, so the row
+  keeps its shape and the pace stays readable. Decided on 2026-09-24; the glyphs, and so the width,
+  are exactly those of the coloured segment.
+
+```
+5h ●●●●●●●●●● 100% ↻ 3h36m → maxed ⇢ ●●●●●●●●●●✗✗✗✗✗       143%
+```
 
 ### History invalidation
 
