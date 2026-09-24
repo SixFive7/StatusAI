@@ -58,7 +58,7 @@ build wrote it. Beside it, `bd`, `cr` and `ig` hold the product breakdown, the o
 the meters it did not draw from the same fetch, already reduced to what is shown: where the
 breakdown and the notice fit depends on the render, so they are laid out per render, and a cache
 hit must still draw all three. On a machine with a live session that is the trap described in
-[development.md](development.md): a freshly built binary will happily serve a render produced by
+[development.md](../development.md): a freshly built binary will happily serve a render produced by
 its predecessor.
 
 ## State
@@ -72,7 +72,7 @@ its predecessor.
 Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json`,
 `statusline-cache.json`.
 
-With `CSHIP_OFFLINE` set — a dev-loop switch, see [development.md](development.md#offline-beside-live-sessions)
+With `CSHIP_OFFLINE` set — a dev-loop switch, see [development.md](../development.md#offline-beside-live-sessions)
 — none of the three is touched: the rows and the euro rate come from a file in that directory, and
 the token cache and the account files move into it.
 

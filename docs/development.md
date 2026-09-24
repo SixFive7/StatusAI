@@ -64,7 +64,7 @@ so all three stay consistent.
 
 ## Testing a render
 
-The binary reads the status-line payload on stdin. `test/probe.json` holds a captured mid-session
+The binary reads the status-line payload on stdin. `tests/fixtures/payloads/mid-session.json` holds a captured mid-session
 one.
 
 ### Offline, beside live sessions
@@ -119,7 +119,7 @@ Remove-Item Env:CSHIP_OFFLINE
 
 **A payload is only a fixture if it is what Claude Code really sends.** A brand-new session, before
 its first response, looks like this — the three nulls are the point, see
-[layout.md](layout.md#no-messages-yet-is-a-zero-not-a-gap):
+[layout.md](reference/layout.md#no-messages-yet-is-a-zero-not-a-gap):
 
 ```json
 { "session_id": "<sid>", "transcript_path": "<dir>/projects/p/<sid>.jsonl", "cwd": "C:\\Users\\you",
@@ -180,4 +180,4 @@ undocumented and fails silently downward:
 ./scripts/Decode-TokCache.ps1  -Sid <session-id>
 ```
 
-See [accounting.md](accounting.md) for the expected figures.
+See [accounting.md](reference/accounting.md) for the expected figures.

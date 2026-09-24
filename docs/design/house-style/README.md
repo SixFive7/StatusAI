@@ -10,8 +10,10 @@ The change was built, deployed, and then reverted in full. `src/Program.cs` cont
 
 If you are an agent working on this repository: **do not implement anything described in that
 file.** There is no `BarCut`, no `WallColor`, no `walled` flag, no `projFull`, no `⇥` mark and no
-`┃` mark in the product, and none of them should be added. See [../limits.md](../limits.md) for
-the correct limit model and the full record of the rejection.
+`┃` mark in the product, and none of them should be added. See
+[limits.md](../../reference/limits.md) for the correct limit model, and
+[rejected-designs.md](../rejected-designs.md#rejected-clamping-the-session-projection-to-the-weekly-reset)
+for the full record of the rejection.
 
 The file carries a correction band at the top saying the same thing. It was left otherwise intact
 on purpose — a template is more useful as a real worked example than as a lorem-ipsum skeleton,
@@ -24,7 +26,7 @@ The house style for visual documentation of the status line:
 **Render the terminal as the terminal.** Every character is a fixed `1ch` cell
 (`display:inline-block; width:1ch; text-align:center`), so mockups are correct to the character
 column rather than approximately aligned. This matters more than it sounds: the whole layout
-problem in `../layout.md` is column arithmetic, and a mockup that fudges alignment cannot be used
+problem in `docs/reference/layout.md` is column arithmetic, and a mockup that fudges alignment cannot be used
 to check a design.
 
 **Take the palette from the source, not from taste.** Every colour in that page is a literal from
@@ -72,7 +74,7 @@ node -e "const h=require('fs').readFileSync('weekly-wall.html','utf8');
 ## Glyph widths
 
 Everything the status line draws is single-width, and any new glyph must be too — see the
-alignment rule in [../layout.md](../layout.md). The marks in the template (`⇥` U+21E5, `┃` U+2503)
+alignment rule in [layout.md](../../reference/layout.md). The marks in the template (`⇥` U+21E5, `┃` U+2503)
 sit in the same East-Asian-Ambiguous class as the glyphs already in use (`│` U+2502, `↻` U+21BB,
 `→` U+2192, `⇢` U+21E2, `●` U+25CF, `○` U+25CB, `✗` U+2717), so they render single-width wherever
 those do. That check is the reason they were safe to propose — it is worth repeating for anything

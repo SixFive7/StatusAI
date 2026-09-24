@@ -64,7 +64,8 @@ conversation, and the two frames disagree.
 ## Status
 
 Working, installed, and verified — but currently a **single-machine setup**, not a product.
-See [PLAN.md](PLAN.md) for the packaging and distribution plan.
+See [docs/design/packaging-plan.md](docs/design/packaging-plan.md) for the packaging and
+distribution plan.
 
 Two things must change before anyone else runs it:
 
@@ -73,34 +74,37 @@ Two things must change before anyone else runs it:
 
 `src/Program.cs` is byte-identical to the source behind the deployed binary. One change has been
 attempted since the initial commit — clamping the 5h projection to the weekly reset — and it was
-reverted in full because the premise was false; [docs/limits.md](docs/limits.md) records why so it
+reverted in full because the premise was false;
+[docs/design/rejected-designs.md](docs/design/rejected-designs.md) records why so it
 is not re-derived. All work since the accounting was written has been presentation.
 
 ## Layout
 
 ```
-src/       Program.cs and the csproj — the whole implementation
-config/    cship.toml and starship.toml as currently deployed
-scripts/   independent PowerShell implementations used to verify the accounting
-test/      a captured status-line stdin payload for offline rendering
-docs/      architecture, accounting rules, layout rules
+src/              Program.cs and the csproj — the whole implementation
+config/           cship.toml and starship.toml as currently deployed
+scripts/          independent PowerShell implementations used to verify the accounting
+tests/            fixtures for offline rendering: a captured status-line stdin payload
+docs/reference/   architecture, accounting rules, layout rules, the limit rows
+docs/design/      the decisions page, rejected designs, the packaging plan, the house style
 ```
 
 ## Documentation
 
 | doc | covers |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | components, the render chain, data sources, portability |
-| [docs/accounting.md](docs/accounting.md) | how tokens and tool calls are counted, the traps, verification |
-| [docs/layout.md](docs/layout.md) | the grid, number formatting, alignment, width budgets |
-| [docs/limits.md](docs/limits.md) | the OAuth usage endpoint, the limit rows, the product breakdown, the on-credit alarm, the projection, one rejected design |
+| [docs/reference/architecture.md](docs/reference/architecture.md) | components, the render chain, data sources, portability |
+| [docs/reference/accounting.md](docs/reference/accounting.md) | how tokens and tool calls are counted, the traps, verification |
+| [docs/reference/layout.md](docs/reference/layout.md) | the grid, number formatting, alignment, width budgets |
+| [docs/reference/limits.md](docs/reference/limits.md) | the OAuth usage endpoint, the limit rows, the product breakdown, the on-credit alarm, the projection |
 | [docs/development.md](docs/development.md) | build, deploy and test on a live machine |
-| [docs/templates/](docs/templates/) | house style for visual documentation |
-| [PLAN.md](PLAN.md) | packaging, Velopack auto-update, install surface, landmines |
+| [docs/design/rejected-designs.md](docs/design/rejected-designs.md) | the limit-row designs that were rejected, and why |
+| [docs/design/house-style/](docs/design/house-style/) | house style for visual documentation |
+| [docs/design/packaging-plan.md](docs/design/packaging-plan.md) | packaging, Velopack auto-update, install surface, landmines |
 
-> **Agents working in this repository:** `docs/templates/weekly-wall.html` documents a feature that
+> **Agents working in this repository:** `docs/design/house-style/weekly-wall.html` documents a feature that
 > was **reverted because its premise was false**. It is kept as a style reference only. Read
-> [docs/templates/README.md](docs/templates/README.md) before opening it, and never implement
+> [docs/design/house-style/README.md](docs/design/house-style/README.md) before opening it, and never implement
 > anything it describes.
 
 ## Verification

@@ -2,7 +2,7 @@
 //
 //   node limits-decisions.gen.js limits-decisions.html
 //
-// House style (templates/README.md): every terminal character is a fixed 1ch cell, every colour
+// House style (house-style/README.md): every terminal character is a fixed 1ch cell, every colour
 // is a literal from Program.cs, before/after panes share one width, callouts sit on measured
 // columns, the terminal and the charts are devices that stay dark in both themes.
 //
@@ -747,7 +747,7 @@ const secQ3 = `
     <p><b>Decided 2026-09-23: keep today’s method.</b> One pace, the last 60 minutes, keeps driving both <code>→</code> and
     <code>⇢</code> on every row. c and its two variants were not built. The replay they were judged on is the
     <a href="#rejected-c">rejected block</a> above; the record is in
-    <a href="limits.md#rejected-a-window-average-projection-option-c">limits.md</a>.</p>
+    <a href="rejected-designs.md#rejected-a-window-average-projection-option-c">rejected-designs.md</a>.</p>
   </div>
   <p class="primer">Today one number — the pace of the last 60 minutes — drives both <code>→</code> (how soon 100% comes
   if this continues) and <code>⇢</code> (where the week ends). Over a 57-hour horizon that number swings between 0 and
@@ -981,8 +981,8 @@ const secMethod = `
       (worst ΔE ${F.palette_check.cvd_worst}), normal vision (${F.palette_check.normal_worst}) and contrast (≥ ${F.palette_check.contrast_min}:1),
       and fails its lightness band — every Program.cs hue is lighter than the band on a dark ground — and the chroma floor for the
       context line. The Program.cs rule wins here.</td></tr>
-    <tr><td>Regenerate</td><td><code>node docs/limits-decisions.gen.js docs/limits-decisions.html</code> — Node only; data in
-      <code>docs/limits-decisions.data.json</code>.</td></tr>
+    <tr><td>Regenerate</td><td><code>node docs/design/limits-decisions.gen.js docs/design/limits-decisions.html</code> — Node only; data in
+      <code>docs/design/limits-decisions.data.json</code>.</td></tr>
   </tbody></table>
 </section>`;
 
@@ -1036,7 +1036,7 @@ code{font-family:var(--mono); font-size:.86em; background:var(--sunken); padding
 .dtab td:last-child{white-space:nowrap; font-size:13px}
 .dtab tr.open td:nth-child(3) b{color:var(--accent)}
 
-/* the correction band, as in templates/weekly-wall.html */
+/* the correction band, as in house-style/weekly-wall.html */
 .warn{border:1px solid var(--warn-line); background:var(--warn-bg); border-radius:6px; padding:24px 26px; display:grid; gap:12px}
 .warn-tag{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; color:var(--warn-ink)}
 .warn h2{margin:0; color:var(--warn-ink); font-size:19px; line-height:1.3; font-family:"Segoe UI",system-ui,sans-serif;
@@ -1207,7 +1207,7 @@ const script = `
 })();`;
 
 const DECISIONS = [
-  ['q3', 'Q3', 'Switch the weekly rows to c?', '<b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code>⇢</code>.', 'decided 2026-09-23 · recorded in limits.md'],
+  ['q3', 'Q3', 'Switch the weekly rows to c?', '<b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code>⇢</code>.', 'decided 2026-09-23 · recorded in rejected-designs.md'],
   ['q4', 'Q4', 'What → shows when 100% would come after the row’s own reset', '<b>The user’s variant.</b> Keep the time; draw <code>→</code> and it forest green <code>#28A428</code>.', '3a801e1 · 2026-09-24'],
   ['q5', 'Q5', 'Show more of what the usage API returns?', '<b>c, extended.</b> <code>CC 99% · Chat 0% · Cowork 1%</code> after the account; a red <code>⚠</code> row when on credit. Its “every meter” part was superseded by Q9.', 'a84bd3a · 2026-09-24'],
   ['', 'Q6', 'This page', '<b>a.</b> It stays in <code>docs/</code> as the record of these decisions.', 'b63d40d'],
@@ -1230,7 +1230,7 @@ const html = `<!doctype html>
     <p>Rows labelled <b>bd399ae</b> are what the binary drew when Q3 – Q5 were asked, <b>${AB.commit}</b> the binary after Q4
     and Q5 (superseded in part), and <b>${AB2.commit}</b> the binary deployed now. Every other row is an option drawn by the
     same cell rules. The limit model is
-    in <a href="limits.md">limits.md</a>; the house style is <a href="templates/README.md">templates/README.md</a>. Q8 was
+    in <a href="../reference/limits.md">limits.md</a>; the house style is <a href="house-style/README.md">house-style/README.md</a>. Q8 was
     about a different subject and is not recorded here.</p>
   </div>
 
@@ -1251,7 +1251,7 @@ const html = `<!doctype html>
       The replay below found it <b>steadier and more accurate</b>, but <b>slower to react</b>, under-forecasting a week that
       sped up, and drawing an <code>→</code> and a <code>⇢</code> that disagreed on the same row ${P0(DG.A_share + DG.B_share)} of the
       time. <b>The user chose the current behaviour.</b> Nothing below was built; it is kept so the design does not have to be
-      re-derived. The record is in <a href="limits.md#rejected-a-window-average-projection-option-c">limits.md</a>.</p>
+      re-derived. The record is in <a href="rejected-designs.md#rejected-a-window-average-projection-option-c">rejected-designs.md</a>.</p>
     </div>
     ${secChange}
     ${secWeek}

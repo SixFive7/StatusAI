@@ -51,7 +51,7 @@ output. Two things are worth carrying forward anyway:
    assumption was wrong, and that choice is the only reason it would have stayed diagnosable.
 
 The visual treatment is preserved as a documentation style example in
-[templates/weekly-wall.html](templates/weekly-wall.html) — which carries its own correction band,
+[house-style/weekly-wall.html](house-style/weekly-wall.html) — which carries its own correction band,
 because the page argues for the design as though it were correct.
 
 ## Rejected: a window-average projection (option c)

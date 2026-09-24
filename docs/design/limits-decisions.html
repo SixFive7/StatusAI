@@ -50,7 +50,7 @@ code{font-family:var(--mono); font-size:.86em; background:var(--sunken); padding
 .dtab td:last-child{white-space:nowrap; font-size:13px}
 .dtab tr.open td:nth-child(3) b{color:var(--accent)}
 
-/* the correction band, as in templates/weekly-wall.html */
+/* the correction band, as in house-style/weekly-wall.html */
 .warn{border:1px solid var(--warn-line); background:var(--warn-bg); border-radius:6px; padding:24px 26px; display:grid; gap:12px}
 .warn-tag{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; color:var(--warn-ink)}
 .warn h2{margin:0; color:var(--warn-ink); font-size:19px; line-height:1.3; font-family:"Segoe UI",system-ui,sans-serif;
@@ -180,7 +180,7 @@ details.tv[open] > table{display:table}
     <div class="band-tag">Decided 23–24 Sep 2026 · nothing pending</div>
     <h2>The forecast stays as it is. The harmless → turns forest green. The three known meters are drawn, and anything else is flagged for review.</h2>
     <table class="dtab"><tbody>
-    <tr class=""><td><a href="#q3">Q3</a></td><td>Switch the weekly rows to c?</td><td><b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code><span class="gl">⇢</span></code>.</td><td>decided 2026-09-23 · recorded in limits.md</td></tr>
+    <tr class=""><td><a href="#q3">Q3</a></td><td>Switch the weekly rows to c?</td><td><b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code><span class="gl">⇢</span></code>.</td><td>decided 2026-09-23 · recorded in rejected-designs.md</td></tr>
     <tr class=""><td><a href="#q4">Q4</a></td><td>What → shows when 100% would come after the row’s own reset</td><td><b>The user’s variant.</b> Keep the time; draw <code>→</code> and it forest green <code>#28A428</code>.</td><td>3a801e1 · 2026-09-24</td></tr>
     <tr class=""><td><a href="#q5">Q5</a></td><td>Show more of what the usage API returns?</td><td><b>c, extended.</b> <code>CC 99% · Chat 0% · Cowork 1%</code> after the account; a red <code>⚠</code> row when on credit. Its “every meter” part was superseded by Q9.</td><td>a84bd3a · 2026-09-24</td></tr>
     <tr class=""><td>Q6</td><td>This page</td><td><b>a.</b> It stays in <code>docs/</code> as the record of these decisions.</td><td>b63d40d</td></tr>
@@ -192,7 +192,7 @@ details.tv[open] > table{display:table}
     <p>Rows labelled <b>bd399ae</b> are what the binary drew when Q3 – Q5 were asked, <b>a84bd3a</b> the binary after Q4
     and Q5 (superseded in part), and <b>878a8e4</b> the binary deployed now. Every other row is an option drawn by the
     same cell rules. The limit model is
-    in <a href="limits.md">limits.md</a>; the house style is <a href="templates/README.md">templates/README.md</a>. Q8 was
+    in <a href="../reference/limits.md">limits.md</a>; the house style is <a href="house-style/README.md">house-style/README.md</a>. Q8 was
     about a different subject and is not recorded here.</p>
   </div>
 
@@ -297,7 +297,7 @@ details.tv[open] > table{display:table}
       The replay below found it <b>steadier and more accurate</b>, but <b>slower to react</b>, under-forecasting a week that
       sped up, and drawing an <code>→</code> and a <code><span class="gl">⇢</span></code> that disagreed on the same row 39% of the
       time. <b>The user chose the current behaviour.</b> Nothing below was built; it is kept so the design does not have to be
-      re-derived. The record is in <a href="limits.md#rejected-a-window-average-projection-option-c">limits.md</a>.</p>
+      re-derived. The record is in <a href="rejected-designs.md#rejected-a-window-average-projection-option-c">rejected-designs.md</a>.</p>
     </div>
     
 <section class="sec gapped" id="change">
@@ -513,7 +513,7 @@ details.tv[open] > table{display:table}
     <p><b>Decided 2026-09-23: keep today’s method.</b> One pace, the last 60 minutes, keeps driving both <code>→</code> and
     <code><span class="gl">⇢</span></code> on every row. c and its two variants were not built. The replay they were judged on is the
     <a href="#rejected-c">rejected block</a> above; the record is in
-    <a href="limits.md#rejected-a-window-average-projection-option-c">limits.md</a>.</p>
+    <a href="rejected-designs.md#rejected-a-window-average-projection-option-c">rejected-designs.md</a>.</p>
   </div>
   <p class="primer">Today one number — the pace of the last 60 minutes — drives both <code>→</code> (how soon 100% comes
   if this continues) and <code><span class="gl">⇢</span></code> (where the week ends). Over a 57-hour horizon that number swings between 0 and
@@ -877,8 +877,8 @@ details.tv[open] > table{display:table}
       (worst ΔE 8.7), normal vision (16.1) and contrast (≥ 6.8:1),
       and fails its lightness band — every Program.cs hue is lighter than the band on a dark ground — and the chroma floor for the
       context line. The Program.cs rule wins here.</td></tr>
-    <tr><td>Regenerate</td><td><code>node docs/limits-decisions.gen.js docs/limits-decisions.html</code> — Node only; data in
-      <code>docs/limits-decisions.data.json</code>.</td></tr>
+    <tr><td>Regenerate</td><td><code>node docs/design/limits-decisions.gen.js docs/design/limits-decisions.html</code> — Node only; data in
+      <code>docs/design/limits-decisions.data.json</code>.</td></tr>
   </tbody></table>
 </section>
 </div>
