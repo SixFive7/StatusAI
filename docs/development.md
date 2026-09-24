@@ -12,6 +12,65 @@ cd src && dotnet publish -c Release -r win-x64
 # -> src/bin/Release/net10.0-windows/win-x64/publish/cship-usage.exe   ~4,74 MiB
 ```
 
+## The render tests
+
+`tests/` renders every fixture through a built binary, offline, and compares the output byte for
+byte with the render recorded when that behaviour was decided. Run them after every build, and
+against the deployed binary before replacing it:
+
+```powershell
+./tests/Test-Renders.ps1                                        # the publish output above
+./tests/Test-Renders.ps1 -Exe (Get-Command cship-usage).Source  # the deployed binary
+```
+
+143 renders of 44 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
+case and what it checks, and prints the lines that differ with their colours stripped — or says
+that only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the
+home it ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
+
+**Nothing live is touched.** Every render runs in a fresh copy of its home under
+`.work/test-renders/`, with `CSHIP_OFFLINE` pointing at it — see
+[offline, beside live sessions](#offline-beside-live-sessions) — so the registry cache, the usage
+lock, the prediction history and the network are never touched, and nothing is written to `tests/`.
+The binary is copied beside a `cship.exe` first, because cship-usage runs the cship in its own
+directory: the one beside `-Exe`, else the one on PATH, else `-Cship <path>`.
+
+**cship gets a config without starship.** `HOME` points cship at `tests/cship.toml`, which is the
+shipped `config/cship.toml` without the starship line: that line draws the working directory, git,
+the clock, RAM and the GPU, and is never the same twice. The model line it keeps is the real host
+line the block is inserted under. The expected renders were recorded with cship 1.8.0, as
+`cases.json` says; a run with another version says so first, because it may draw that line
+differently.
+
+| path | holds |
+|---|---|
+| `tests/cases.json` | every case: its home, its payload, its widths, and one line on what it checks |
+| `tests/fixtures/homes/<home>/` | a `CSHIP_OFFLINE` directory: `rows.json`, usually a `usage.json`, the account files, and a transcript tree where the case counts tokens |
+| `tests/fixtures/payloads/<payload>.json` | a status-line stdin payload, with a `transcript_path` relative to the home |
+| `tests/expected/<case>.w<width>.ansi` | the exact bytes that case draws at that width |
+| `tests/cship.toml` | cship's config for the renders |
+
+The fixtures carry no credentials — `.credentials.json` holds the plan fields and nothing else —
+and every address in them is an `example.com` one.
+
+**What they cover.** The `showcase` case draws every row at once, its token grid over a main thread
+and two sub-agents, one a nested workflow agent, whose files carry both
+[duplication traps](reference/accounting.md#the-two-duplication-traps); the scripts under
+[verifying the accounting](#verifying-the-accounting) agree with its totals. The rest: the limit
+rows through a usage response and through `rows.json` alone, the meters notice, the breakdown
+against the width, the on-credit alarm, and the payloads — fresh sessions that must stay quiet and
+broken ones that must still warn, one of them so broken that cship prints nothing. **What they
+cannot cover**: the live fetch, the registry cache and the history. The forecast is an input to a
+fixture, so the window checks and the slope are not under test.
+
+**A deliberate change of output** is recorded with `-Update`, which rewrites `tests/expected` and
+removes any render no case produces; read the diff before committing it. To add a case, add a home
+or a payload, give it an entry in `cases.json`, and run `-Update -Case <name>`.
+
+**To look at a render**, `-Case showcase -Show` prints it with its colours, and `-OutDir <dir>`
+writes every render it makes as `<case>.w<width>.ansi` — the source for any figure of the status
+line.
+
 ## Trap 1 — the cache serves output from the *previous* binary
 
 **This will make a working change look broken, and a broken change look fine.**
@@ -64,8 +123,8 @@ so all three stay consistent.
 
 ## Testing a render
 
-The binary reads the status-line payload on stdin. `tests/fixtures/payloads/mid-session.json` holds a captured mid-session
-one.
+The binary reads the status-line payload on stdin. `tests/fixtures/payloads/` holds a captured
+mid-session one, `mid-session.json`, beside the rest the [render tests](#the-render-tests) use.
 
 ### Offline, beside live sessions
 
@@ -180,4 +239,12 @@ undocumented and fails silently downward:
 ./scripts/Decode-TokCache.ps1  -Sid <session-id>
 ```
 
-See [accounting.md](reference/accounting.md) for the expected figures.
+See [accounting.md](reference/accounting.md) for the expected figures. The two walkers also take
+`-ProjectsRoot`, so they check the render tests' showcase tree as well, where they must agree with
+its token rows — 60.333.978 main, 5.081.453 sub, 101 and 129 tool calls:
+
+```powershell
+$root = (Resolve-Path tests/fixtures/homes/showcase/projects).Path
+./scripts/Split-MainVsTree.ps1 -Sid 22222222-fixt-fixt-fixt-000000000002 -ProjectsRoot $root
+./scripts/Verify-Tools.ps1     -Sid 22222222-fixt-fixt-fixt-000000000002 -ProjectsRoot $root
+```

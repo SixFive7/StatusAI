@@ -216,8 +216,9 @@ not a bug report.
 ## Known gaps
 
 - **The history cannot be run offline.** `CSHIP_OFFLINE` takes a usage response through the same
-  `ParseUsage()` as a live fetch and draws it, and `tests/fixtures/payloads/mid-session.json` is a status-line *stdin* payload
-  — but the forecast inputs come from the fixture, so the window checks and the slope cannot be
+  `ParseUsage()` as a live fetch and draws it, and the
+  [render tests](../development.md#the-render-tests) pin that parse and the drawing — but the
+  forecast inputs come from the fixture, so the window checks and the slope cannot be
   regression-tested. See [development.md](../development.md#offline-beside-live-sessions).
 - **`is_active` and `group` are parsed past and discarded.**
 - **A new meter is not drawn until its code is reviewed.** Only the session, `weekly_all` and one

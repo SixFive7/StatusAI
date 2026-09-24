@@ -130,6 +130,11 @@ two network calls.
 That figure has held across every rebuild since the accounting was written — all subsequent work was
 presentation.
 
+The [render tests](../development.md#the-render-tests) pin the same rules on every build. Their
+showcase fixture is a main transcript and two sub-agents, one a nested workflow agent, carrying
+both traps above — block-split records and verbatim copies of ancestor records — and the scripts
+agree with the token rows it draws.
+
 ## Fragility
 
 Ranked by risk, and all three fail the same way: **silently and downward**.

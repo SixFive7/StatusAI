@@ -1,0 +1,47 @@
+{
+ "fx": 0.8763473841030585,
+ "now": "2026-09-23T17:58:13Z",
+ "forecast": {
+  "5h": {
+   "rate": 10.4232,
+   "gated": false
+  },
+  "7d": {
+   "rate": 2.4,
+   "gated": false
+  },
+  "Fable": {
+   "rate": 0.0,
+   "gated": false
+  }
+ },
+ "rows": [
+  {
+   "label": "5h",
+   "pct": 22,
+   "hrs": 3.3833333333333333,
+   "hasReset": true,
+   "rate": 10.4232,
+   "gated": false,
+   "sev": "normal"
+  },
+  {
+   "label": "7d",
+   "pct": 89,
+   "hrs": 57.08,
+   "hasReset": true,
+   "rate": 2.4,
+   "gated": false,
+   "sev": "critical"
+  },
+  {
+   "label": "Fable",
+   "pct": 24,
+   "hrs": 57.08,
+   "hasReset": true,
+   "rate": 0.0,
+   "gated": false,
+   "sev": "normal"
+  }
+ ]
+}

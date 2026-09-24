@@ -1,0 +1,23 @@
+{
+ "fx": 0.8763473841030585,
+ "rows": [
+  {
+   "label": "5h",
+   "pct": 22,
+   "hrs": 3.3833333333333333,
+   "hasReset": true,
+   "rate": 10.4232,
+   "gated": false,
+   "sev": "normal"
+  },
+  {
+   "label": "7d",
+   "pct": 89,
+   "hrs": 57.08,
+   "hasReset": true,
+   "rate": 2.4,
+   "gated": false,
+   "sev": "critical"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "fx": 0.867,
+ "now": "2026-09-23T17:58:13Z",
+ "sn": "Fable",
+ "forecast": {
+  "5h": {
+   "rate": 12.0,
+   "gated": false
+  },
+  "7d": {
+   "rate": 4.0,
+   "gated": false
+  },
+  "Fable": {
+   "rate": 0.0,
+   "gated": false
+  }
+ }
+}

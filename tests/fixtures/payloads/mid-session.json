@@ -1,7 +1,7 @@
 {
   "cwd": "C:/Users/you/Downloads",
-  "session_id": "a5c44785-50ec-4ccc-b3c9-cf26bbb7bb08",
-  "transcript_path": "C:/Users/you/.claude/projects/C--Users-you-Downloads/a5c44785-50ec-4ccc-b3c9-cf26bbb7bb08.jsonl",
+  "session_id": "22222222-fixt-fixt-fixt-000000000002",
+  "transcript_path": "projects/p/22222222-fixt-fixt-fixt-000000000002.jsonl",
   "version": "2.1.227",
   "exceeds_200k_tokens": false,
   "model": { "id": "claude-opus-5", "display_name": "Opus 5 (1M context)" },

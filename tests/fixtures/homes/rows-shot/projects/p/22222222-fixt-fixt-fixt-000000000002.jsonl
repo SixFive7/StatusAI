@@ -1,0 +1,2 @@
+{"type": "user", "message": {"role": "user", "content": "hi"}}
+{"type": "assistant", "message": {"id": "msg_fixture_0001", "role": "assistant", "model": "claude-opus-5-5", "content": [{"type": "text", "text": "hello"}], "usage": {"input_tokens": 238, "output_tokens": 286900, "cache_creation_input_tokens": 1447000, "cache_read_input_tokens": 58600000}}}

@@ -1,0 +1,32 @@
+# cship's configuration for the render tests: config/cship.toml without the starship line and
+# without the two modules that line does not use. The model line stays exactly as shipped, so the
+# host line the block is inserted under is the real one; the prompt line goes, because starship
+# draws the working directory, git, the clock, RAM and the GPU — none of it this repo's, and none
+# of it the same twice. Test-Renders.ps1 points cship here through HOME.
+[cship]
+lines = [
+  " $cship.model $cship.effort $cship.context_bar",
+]
+
+[cship.model]
+symbol = " "
+style  = "bold cyan"
+
+[cship.effort]
+symbol      = "⚡ "
+style       = "fg:#7dcfff"
+high_style  = "fg:#e0af68"
+xhigh_style = "bold fg:#e0af68"
+max_style   = "bold fg:#f7768e"
+
+[cship.context_bar]
+symbol             = " "
+filled_char        = "●"
+empty_char         = "○"
+format             = "[$symbol$value]($style)"
+width              = 30
+style              = "fg:#7dcfff"
+warn_threshold     = 40.0
+warn_style         = "fg:#e0af68"
+critical_threshold = 70.0
+critical_style     = "bold fg:#f7768e"

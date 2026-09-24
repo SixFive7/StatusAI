@@ -1,0 +1,52 @@
+{
+ "fx": 0.8763473841030585,
+ "now": "2026-09-23T20:14:20Z",
+ "forecast": {
+  "5h": {
+   "rate": 28.8,
+   "gated": false
+  },
+  "7d": {
+   "rate": 6.7039,
+   "gated": false
+  },
+  "Fable": {
+   "rate": 0.0,
+   "gated": false
+  },
+  "Opus": {
+   "rate": 2.0,
+   "gated": false
+  }
+ },
+ "rows": [
+  {
+   "label": "5h",
+   "pct": 29,
+   "hrs": 3.594454933611111,
+   "hasReset": true,
+   "rate": 28.8,
+   "gated": false,
+   "sev": "normal"
+  },
+  {
+   "label": "7d",
+   "pct": 54,
+   "hrs": 106.76112160666666,
+   "hasReset": true,
+   "rate": 6.7039,
+   "gated": false,
+   "sev": "normal"
+  },
+  {
+   "label": "Opus",
+   "pct": 61,
+   "hrs": 106.76112165583334,
+   "hasReset": true,
+   "rate": 2.0,
+   "gated": false,
+   "sev": "warning"
+  }
+ ],
+ "sn": "Fable"
+}

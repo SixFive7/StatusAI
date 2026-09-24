@@ -1,0 +1,270 @@
+{
+  "about": "One render per case and width: the payload on stdin, a copy of the home as CSHIP_OFFLINE and HOME, CSHIP_WIDTH set. The bytes are in expected/<case>.w<width>.ansi. Run Test-Renders.ps1; see docs/development.md.",
+  "cship": "1.8.0",
+  "cases": {
+    "showcase": {
+      "home": "showcase",
+      "payload": "mid-session",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Every row at once: the meta segment; the token grid over a main thread and two sub-agents, one a nested workflow agent, carrying both duplication traps; 5h with a forest →, 7d with a red → and ✗ past 100%, Fable at never; the account, plan and breakdown. Below 121 columns the grid keeps its two-column gutters and runs past the width."
+    },
+    "shot": {
+      "home": "shot",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "The 19:57 screenshot of 2026-09-23: 5h's → 7h29m in forest, because its reset comes first; 7d's → 4h35m red and ⇢ 226%; Fable's 24% right after its own bar, not padded to the left column's width."
+    },
+    "live": {
+      "home": "live",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "The live usage response of 2026-09-23 22:14 as it was sent: the three meters, and CC 99% · Chat 0% · Cowork 1% after the account — without its 0% entry at 120, on a row of its own when the rows stack at 100."
+    },
+    "overshoot-7d": {
+      "home": "overshoot-7d",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A 7d that reaches 100% before its reset, red → and ✗ past 100%, beside a 5h whose reset comes first, forest →; a breakdown with no 0% entry to drop, so it shows whole where it fits (100, 160) and not at all between."
+    },
+    "edges": {
+      "home": "edges",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A 5h without a reset time (↻ —, → dim, no projection), a 7d at 100% (→ maxed, ⇢ greyed) and a gated Fable (→ early)."
+    },
+    "maxed-5h": {
+      "home": "maxed-5h",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A 5h at 100% and still burning: → maxed, and its whole ⇢ segment dim — the glyph, every ● and ✗ cell, and the percentage."
+    },
+    "legacy-shape": {
+      "home": "legacy-shape",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "The legacy five_hour / seven_day shape, without limits[]: two rows, ↻ —, no projection."
+    },
+    "no-session": {
+      "home": "no-session",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "No session meter in limits[]: the 7d and Fable rows, one row fewer and nothing else lost."
+    },
+    "fourth-meter": {
+      "home": "fourth-meter",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A fourth, surface-scoped meter: not drawn, and named in the amber meters notice under the rows."
+    },
+    "two-scoped-followed": {
+      "home": "two-scoped-followed",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Two model-scoped meters, the history following Fable (sn): Fable is drawn, the higher Opus is flagged."
+    },
+    "two-scoped-highest": {
+      "home": "two-scoped-highest",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Two model-scoped meters and no history to follow: the higher, Opus, is drawn and Fable is flagged."
+    },
+    "model-and-surface": {
+      "home": "model-and-surface",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A meter scoped to both a model and a surface: flagged; the model-only Fable stays drawn."
+    },
+    "unknown-kinds": {
+      "home": "unknown-kinds",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Two meters of kinds never seen, named by their surface and by their kind, and only counted where the names do not fit; an unknown product at 2% joins the breakdown where there is room, one at 0% never does."
+    },
+    "many-ignored": {
+      "home": "many-ignored",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Six ignored meters: the notice names as many as fit, whole, then counts the rest as +N more."
+    },
+    "only-unknown": {
+      "home": "only-unknown",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Only meters this status line does not draw: no limit rows at all, every meter named in the notice."
+    },
+    "long-email-35": {
+      "home": "long-email-35",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A 35-character address: the breakdown in whole entries or none — gone at 120, without its 0% entry at 137 and 141, whole at 160."
+    },
+    "long-email-46": {
+      "home": "long-email-46",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A 46-character address: no breakdown from 120 to 141, and at 160 only without its 0% entry."
+    },
+    "long-email-57": {
+      "home": "long-email-57",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A 57-character address: the rows stack at 120 and 137, where the account gets a row of its own and its breakdown with it; at 141 and 160 two columns leave the breakdown no room."
+    },
+    "credit-spent": {
+      "home": "credit-spent",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "$12,40 spent beyond the plan: the red on-credit alarm, the last row of the block."
+    },
+    "credit-at-100": {
+      "home": "credit-at-100",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "5h at 100% while usage credits are on: the alarm names the limit that bills from now on."
+    },
+    "credit-extra-usage": {
+      "home": "credit-extra-usage",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "Money reported only in extra_usage.used_credits, in euros: the alarm reads it as minor units."
+    },
+    "credit-off-at-100": {
+      "home": "credit-off-at-100",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "5h at 100% with credits off: no alarm, and the maxed row's ⇢ greyed."
+    },
+    "fourth-meter-and-credit": {
+      "home": "fourth-meter-and-credit",
+      "payload": "fresh",
+      "widths": [100, 120, 137, 141, 160],
+      "checks": "A flagged meter and money on credit together: the amber notice above the red alarm, which stays last."
+    },
+    "rows-shot": {
+      "home": "rows-shot",
+      "payload": "fresh",
+      "widths": [120, 137, 141, 160],
+      "checks": "The screenshot's rows handed to RenderRows directly, through rows.json alone: no breakdown, no alarm, no notice."
+    },
+    "rows-no-scoped": {
+      "home": "rows-no-scoped",
+      "payload": "fresh",
+      "widths": [120, 141, 160],
+      "checks": "No scoped row: the account is the right column's only cell, beside 5h."
+    },
+    "rows-big-right": {
+      "home": "rows-big-right",
+      "payload": "fresh",
+      "widths": [120, 141, 160],
+      "checks": "The right-hand row carries the long projection: its bar takes the room, the left column stays aligned."
+    },
+    "rows-early": {
+      "home": "rows-early",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "Every row before a trend exists: → early on all three."
+    },
+    "fresh": {
+      "home": "rows-shot",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A new session, 12 s old, before its first response — used_percentage, remaining_percentage and current_usage all null: no ⚠ row, no token rows."
+    },
+    "fresh-idle": {
+      "home": "rows-shot",
+      "payload": "fresh-idle",
+      "widths": [141],
+      "checks": "The same session left idle for 3m05s before anyone types: still no ⚠, because the transcript is written at the first prompt."
+    },
+    "fresh-devdoc": {
+      "home": "rows-shot",
+      "payload": "fresh-devdoc",
+      "widths": [141],
+      "checks": "development.md's fresh-session example, field for field: no ⚠."
+    },
+    "mid-session": {
+      "home": "rows-shot",
+      "payload": "mid-session",
+      "widths": [141],
+      "checks": "A captured mid-session payload: the whole meta segment (⏱ 📝 💸 💰), and the token rows of a one-record transcript with the sub-agent columns at zero."
+    },
+    "post-compact": {
+      "home": "rows-shot",
+      "payload": "post-compact",
+      "widths": [141],
+      "checks": "Measured before, then the three nulls again after /compact: no ⚠."
+    },
+    "no-context-window": {
+      "home": "rows-shot",
+      "payload": "no-context-window",
+      "widths": [141],
+      "checks": "No context_window at all: ⚠ context, because cship's 0% bar is then not a reading."
+    },
+    "context-window-null": {
+      "home": "rows-shot",
+      "payload": "context-window-null",
+      "widths": [141],
+      "checks": "context_window: null: the same ⚠."
+    },
+    "no-used-percentage": {
+      "home": "rows-shot",
+      "payload": "no-used-percentage",
+      "widths": [141],
+      "checks": "A context_window without used_percentage: the same ⚠."
+    },
+    "null-pct-with-usage": {
+      "home": "rows-shot",
+      "payload": "null-pct-with-usage",
+      "widths": [141],
+      "checks": "A null used_percentage beside a current_usage that holds a measurement: the same ⚠."
+    },
+    "fresh-no-context-window": {
+      "home": "rows-shot",
+      "payload": "fresh-no-context-window",
+      "widths": [141],
+      "checks": "A 12 s session without context_window: the ⚠, young or not."
+    },
+    "fresh-null-pct-with-usage": {
+      "home": "rows-shot",
+      "payload": "fresh-null-pct-with-usage",
+      "widths": [141],
+      "checks": "A fresh session whose null sits beside a measured current_usage: the ⚠."
+    },
+    "no-transcript": {
+      "home": "rows-shot",
+      "payload": "no-transcript",
+      "widths": [141],
+      "checks": "A measured session 44 minutes old whose transcript file is missing: ⚠ tokens."
+    },
+    "fresh-no-duration": {
+      "home": "rows-shot",
+      "payload": "fresh-no-duration",
+      "widths": [141],
+      "checks": "No messages yet, but no total_duration_ms: ⚠ duration, and ⏱ —."
+    },
+    "fresh-no-transcript-path": {
+      "home": "rows-shot",
+      "payload": "fresh-no-transcript-path",
+      "widths": [141],
+      "checks": "An empty transcript_path on an idle new session: ⚠ tokens, which no young or unprompted session excuses."
+    },
+    "string-pct": {
+      "home": "rows-shot",
+      "payload": "string-pct",
+      "widths": [141],
+      "checks": "used_percentage as a string: cship prints nothing, so the block stands alone under a row opening with —, and the ⚠ row names both failures."
+    },
+    "minimal": {
+      "home": "rows-shot",
+      "payload": "minimal",
+      "widths": [141],
+      "checks": "development.md's minimal payload: cship draws only a context bar, the meta segment is empty and left out, and one ⚠ row names the two fields missing."
+    },
+    "unreadable": {
+      "home": "rows-shot",
+      "payload": "unreadable",
+      "widths": [141],
+      "checks": "A payload that is not JSON: the block alone under — ⏱ — 💰 —, and its three reasons, too long to share a row, one row each."
+    }
+  }
+}
