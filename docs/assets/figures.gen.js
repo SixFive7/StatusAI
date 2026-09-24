@@ -11,13 +11,13 @@
 // device that stays dark in both themes. Here it is also the only thing on a transparent ground, so
 // a figure reads the same on GitHub's light and dark pages.
 //
-// Nothing on a terminal line is typed. Each figure names renders in tests/expected — the exact
-// bytes the deployed binary drew for a fixture at a width, which the render tests hold every build
-// to — and which of their lines and columns to show. So a figure cannot drift from the binary
-// without the render tests failing first, and a change of output recorded with
-// `Test-Renders.ps1 -Update` is the one reason to regenerate. The generator refuses to run on a
-// colour outside the palette, a glyph whose width it does not know, a callout whose text it cannot
-// find, a crop through a two-column cell, or a label that leaves its device or meets another.
+// Nothing on a terminal line is typed: each figure names renders in tests/expected (the exact bytes
+// the deployed binary drew for a fixture at a width, which the render tests hold every build to) and
+// which of their lines and columns to show. So a figure cannot drift from the binary without the
+// render tests failing first, and a change of output recorded with `Test-Renders.ps1 -Update` is the
+// one reason to regenerate. The generator refuses to run on a colour outside the palette, a glyph
+// whose width it does not know, a callout whose text it cannot find, a crop through a two-column
+// cell, or a label that leaves its device or meets another.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -28,7 +28,7 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const EXPECTED = path.join(ROOT, 'tests', 'expected');
 const WORK = path.join(ROOT, '.work', 'figures');
 
-// ───────────────────────────────────────────── ANSI → cells
+// ---- ANSI to cells
 // Program.cs's palette, by the SGR triple it writes. cship adds one colour of its own: the model name
 // is "bold cyan" in config/cship.toml, ANSI colour 6, whose RGB is up to the terminal's scheme; it is
 // drawn as the palette's cyan, the colour the same config gives the context bar. Text with no colour
@@ -37,7 +37,7 @@ const RGB = { '125;207;255': 'cy', '224;175;104': 'or', '247;118;142': 'rd', '11
               '198;246;193': 'lg', '169;177;214': 'tx', '180;190;254': 'lv', '40;164;40': 'fo' };
 const ANSI = { 36: 'cy' };
 // How many columns Windows Terminal gives each character the renders contain. Wide: East-Asian Wide
-// with emoji presentation — the token grid is laid out on that assumption (install.md). Narrow:
+// with emoji presentation, which is what the token grid is laid out for (install.md). Narrow:
 // Neutral or Ambiguous, and the Private Use Area, where cship's two Nerd Font icons live. Anything
 // else stops the generator until someone has looked its width up.
 const NARROW = new Set([0xB7, 0x2014, 0x2026, 0x20AC, 0x2192, 0x21BB, 0x21E2, 0x23F1, 0x2502, 0x25CB, 0x25CF, 0x26A0, 0x2717]);
@@ -72,7 +72,7 @@ function toCells(line) {
   return out;
 }
 const width = cells => cells.reduce((n, c) => n + c.w, 0);
-// The plain text with one UTF-16 unit per column — a wide emoji is already two, ⚡ gets a filler —
+// The plain text with one UTF-16 unit per column (a wide emoji is already two, ⚡ gets a filler),
 // so a regex match index is a column. Match without the u flag.
 const colText = cells => cells.map(c => c.w === 2 && c.ch.length === 1 ? c.ch + '\u200B' : c.ch).join('');
 function span(cells, re, from = 0) {
@@ -86,7 +86,7 @@ function crop(cells, c0, c1 = Infinity) {
   for (const c of cells) {
     const a = col, b = col + c.w; col = b;
     if (b <= c0 || a >= c1) continue;
-    if (a < c0 || b > c1) throw new Error(`a crop at columns ${c0}–${c1} splits ${JSON.stringify(c.ch)} at ${a}`);
+    if (a < c0 || b > c1) throw new Error(`a crop at columns ${c0}-${c1} splits ${JSON.stringify(c.ch)} at ${a}`);
     out.push(c);
   }
   return out;
@@ -109,11 +109,11 @@ const LEFT = /^ (\S.*?\d%)(?=  \S)/;
 function leftCol(cells, from = 1) { const s = span(cells, LEFT); return crop(cells, from, s.col + s.len); }
 function rightCol(cells) { const s = span(cells, LEFT); return crop(cells, s.col + s.len + 2); }
 
-// ───────────────────────────────────────────── scenes
+// ---- scenes
 // A scene is a device: lines of cells, each optionally with a gutter label and callouts. A callout
 // is a bracket on exact columns of its line, below it (or above, with up), and a label at the
-// bracket's start; labels share a strip row unless given row 1. Cells are 8 px wide at 13,33 px, JetBrains Mono's own advance, so a
-// glyph's box and its cell are the same thing.
+// bracket's start; labels share a strip row unless given row 1. Cells are 8 px wide at 13,33 px,
+// JetBrains Mono's own advance, so a glyph's box and its cell are the same thing.
 const CW = 8, LH = 24, FS = 13.333;
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const mk = (s, text, tone = 'or', o = {}) => ({ col: s.col, len: s.len, text, tone, ...o });
@@ -142,39 +142,39 @@ const SCENES = [];
 // id, what it shows (the index's description and the default alt text), how it is drawn
 function scene(id, shows, build) { SCENES.push({ id, shows, build }); }
 
-// ─── plain: the hero's render with nothing added, exactly what the terminal shows
+// plain: the hero's render with nothing added, exactly what the terminal shows
 scene('plain', 'The whole status line exactly as the terminal shows it at the default 141 columns, with nothing added.', () => {
   const R = 'showcase.w141';
   return terminal({ big: true, lines: [0, 1, 2, 3, 4].map(i => ({ cells: line(R, i) })) });
 });
 
-// ─── the hero: every row at once, at the default width
+// hero: every row at once, at the default width
 scene('hero', 'The whole status line at the default 141 columns: the model line with the meta segment, the token grid, the limit rows with the account and the breakdown.', () => {
   const R = 'showcase.w141', L = [0, 1, 2, 3, 4].map(i => line(R, i));
   return terminal({ big: true, lines: [
-    { cells: L[0], marks: [mk(span(L[0], /\S.*?\d+%/), 'model · effort · context', 'cy'),
-                           mk(span(L[0], /⏱.*\S/), 'session time · lines · cost per hour · cost', 'tx')] },
+    { cells: L[0], marks: [mk(span(L[0], /\S.*?\d+%/), 'model, effort, context', 'cy'),
+                           mk(span(L[0], /⏱.*\S/), 'session time, lines, cost per hour, cost', 'tx')] },
     { cells: L[1] },
-    { cells: L[2], marks: [mk(span(L[2], /│.*\S/), 'tokens and tool calls: this conversation 🪵 · its sub-agents 🌿 · the whole tree 🌳', 'lv')] },
+    { cells: L[2], marks: [mk(span(L[2], /│.*\S/), 'tokens and tool calls: 🪵 this conversation, 🌿 its sub-agents, 🌳 the whole tree', 'lv')] },
     { cells: L[3] },
-    { cells: L[4], marks: [mk(span(L[4], /7d.*?\d%(?=  )/), 'your limits: now · reset · 100% in · at the reset', 'or'),
-                           mk(span(L[4], /Fable.*\S/), 'one model’s week', 'or')] },
+    { cells: L[4], marks: [mk(span(L[4], /7d.*?\d%(?=  )/), 'your limits: now, reset, 100% in, at the reset', 'or'),
+                           mk(span(L[4], /Fable.*\S/), "one model's week", 'or')] },
   ] });
 });
 
-// ─── limits: the left column of the shot fixture — the screenshot of 23 September, 19:57 — every segment named
+// limits: the left column of the shot fixture (the screenshot of 23 September, 19:57), every segment named
 scene('limits', 'The 5h and 7d rows of the `shot` fixture, every segment named: 7d at 89% runs out in 4h35m, before its reset, so the time is red; 5h resets before it would, so its time is forest green.', () => {
   const R = 'shot.w141', a = leftCol(line(R, 1)), b = leftCol(line(R, 2));
   return terminal({ lines: [
-    { cells: a, marks: [mk(span(a, /→ \S+/), '100% in · forest: the reset comes first', 'fo', { up: true })] },
+    { cells: a, marks: [mk(span(a, /→ \S+/), '100% in: forest, the reset comes first', 'fo', { up: true })] },
     { cells: b, marks: [mk(span(b, /●.*?\d+%/), 'used now', 'cy'), mk(span(b, /↻ \S+/), 'resets in', 'gr'),
                         mk(span(b, /⇢.*%/), 'at the reset, at this pace', 'rd'),
-                        mk(span(b, /→ \S+/), '100% in · red: before the reset', 'rd', { row: 1 })] },
+                        mk(span(b, /→ \S+/), '100% in: red, before the reset', 'rd', { row: 1 })] },
   ] });
 });
 
-// ─── the → traffic light, a row of each kind
-scene('states', 'One limit row per state of →: red, forest, never, early, and maxed with its ⇢ segment greyed.', () => {
+// states: the → traffic light, a row of each kind
+scene('states', 'One limit row per state of `→`: red, forest, never, early, and maxed with its `⇢` segment greyed.', () => {
   const rows = [['red', leftCol(line('shot.w141', 2)), 'rd', '100% comes before the reset'],
                 ['forest', leftCol(line('shot.w141', 1)), 'fo', 'the reset comes first'],
                 ['never', rightCol(line('shot.w141', 2)), 'dm', 'not moving'],
@@ -183,29 +183,29 @@ scene('states', 'One limit row per state of →: red, forest, never, early, and 
   return terminal({ gut: 8, lines: rows.map(([g, cells, tone, note]) => ({ cells: trimEnd(cells), gut: g, marks: [mk(span(cells, /→ \S+/), note, tone)] })) });
 });
 
-// ─── a first session: no token rows before the first reply, no ⚠ row, and no trend yet
-scene('first-run', 'A session seconds old, before its first reply, with no history yet: the model line, then the limit rows, every one reading → early; no token rows and no ⚠ row.', () => {
+// first-run: a new session has no token rows before the first reply, no ⚠ row, and no trend yet
+scene('first-run', 'A session seconds old, before its first reply, with no history yet: the model line, then the limit rows, every one reading `→ early`; no token rows and no ⚠ row.', () => {
   const R = 'rows-early.w141', L = [0, 1, 2].map(i => trimEnd(line(R, i)));
   return terminal({ lines: [{ cells: L[0] }, { cells: L[1] },
     { cells: L[2], marks: [mk(span(L[2], /→ early/), 'early: a trend needs ten minutes of history', 'tx')] }] });
 });
 
-// ─── the rows stacked, at 100 columns
+// stacked: the limit rows at 100 columns
 scene('stacked', 'At 100 columns the limit rows stack, with the account on a line of its own.', () =>
   terminal({ lines: [3, 4, 5, 6].map(i => ({ cells: trimEnd(line('showcase.w100', i)) })) }));
 
-// ─── the account and where the week went
-scene('breakdown', 'The account line: the signed-in address, the plan, and how this week’s usage split across products.', () => {
+// breakdown: the account, and where the week went
+scene('breakdown', "The account line: the signed-in address, the plan, and how this week's usage split across products.", () => {
   const a = rightCol(line('showcase.w141', 3));
-  return terminal({ lines: [{ cells: a, marks: [mk(span(a, /👤.*Max 20/), 'account · plan', 'tx'), mk(span(a, /CC.*\S/), 'where this week went', 'cy')] }] });
+  return terminal({ lines: [{ cells: a, marks: [mk(span(a, /👤.*Max 20/), 'account and plan', 'tx'), mk(span(a, /CC.*\S/), 'where this week went', 'cy')] }] });
 });
 scene('breakdown-fit', 'The breakdown in whole entries or none: every entry, then without its 0% entries, then none, as the address grows.', () => {
   const rows = [['all', 'showcase.w141', 3], ['no 0%', 'long-email-35.w141', 1], ['none', 'long-email-46.w141', 1]];
   return terminal({ gut: 7, lines: rows.map(([g, R, i]) => ({ cells: rightCol(line(R, i)), gut: g })) });
 });
 
-// ─── cship's half of the model line, and the meta segment StatusAI appends to it
-scene('model', 'cship’s model line: the model, the effort level and a 30-cell context bar.', () => {
+// model, meta, context-cost: cship's half of the model line, and the meta segment StatusAI appends to it
+scene('model', "cship's model line: the model, the effort level and a 30-cell context bar.", () => {
   const L = line('showcase.w141', 0), m = span(L, /\S.*?\d+%/), c = crop(L, 0, m.col + m.len);
   return terminal({ lines: [{ cells: c, marks: [mk(span(c, /\S Opus.*?\)/), 'model', 'cy'), mk(span(c, /⚡\u200B \S+/), 'effort', 'rd'),
                                                   mk(span(c, /●.*%/), 'context used', 'cy')] }] });
@@ -216,13 +216,13 @@ scene('meta', 'The meta segment: session time, lines added and removed, cost per
                                                   mk(span(c, /💸 \S+/), 'cost per hour', 'tx'), mk(span(c, /💰 \S+/), 'cost so far', 'tx')] }] });
 });
 
-scene('context-cost', 'The model line from its context bar on: how full the context is, then the meta segment — session time, lines changed, cost per hour and cost so far.', () => {
+scene('context-cost', 'The model line from its context bar on: how full the context is, then the meta segment (session time, lines changed, cost per hour and cost so far).', () => {
   const L = line('showcase.w141', 0), s = span(L, /●.*\S/), c = crop(L, s.col, s.col + s.len);
   return terminal({ lines: [{ cells: c, marks: [mk(span(c, /●.*?%/), 'context used', 'cy'), mk(span(c, /⏱ \S+/), 'session', 'lv'),
     mk(span(c, /📝 \S+ \S+/), 'lines', 'gr'), mk(span(c, /💸 \S+/), 'cost per hour', 'tx'), mk(span(c, /💰 \S+/), 'cost so far', 'tx')] }] });
 });
 
-// ─── the token grid at 120 columns, its gutters at their narrowest
+// tokens: the token grid at 120 columns, its gutters at their narrowest
 scene('tokens', 'The token grid: three groups of three columns, each group one kind of count, each column one scope.', () => {
   const R = 'showcase.w120', a = line(R, 1), b = line(R, 2);
   const group = (re, text) => mk(span(a, re), text, 'tx', { up: true });
@@ -235,7 +235,7 @@ scene('tokens', 'The token grid: three groups of three columns, each group one k
   ] });
 });
 
-// ─── warnings: all three kinds of ⚠ row, in their order
+// warnings: all three kinds of ⚠ row, in their order
 scene('warnings', 'The three kinds of ⚠ row, in the order they come: a source that failed, in red; a limit this status line does not draw yet, in amber; usage billed beyond the plan, in red and always last.', () => {
   const R = 'every-warning.w120', w = [3, 4, 5].map(i => trimEnd(line(R, i)));
   return terminal({ lines: [{ cells: leftCol(line(R, 2), 0) },
@@ -244,11 +244,10 @@ scene('warnings', 'The three kinds of ⚠ row, in the order they come: a source 
     { cells: w[2], marks: [mk(span(w[2], /⚠.*\S/), 'billed beyond the plan: always the last row', 'rd')] }] });
 });
 
-// ─── one usage fetch for every open session: the rule in Program.cs, played out
+// sessions: one usage fetch for every open session, the rule in Program.cs played out.
 // GetUsage(): a render draws the cached rows while they are under 50 s old; otherwise the one render
 // that wins the lock fetches, and every other draws the last cached rows rather than wait. The
-// render times are an illustration — three sessions, the middle one busy — and the rule is the
-// code's.
+// render times are an illustration (three sessions, the middle one busy); the rule is the code's.
 const RENDER_TIMES = [[8, 68, 128, 188, 248], [21, 33, 47, 60, 84, 97, 139, 152, 170, 199, 216, 244, 262, 279], [55, 115, 175, 235, 295]];
 function playFetches(times, fresh = 50) {
   const ev = times.flatMap((ts, s) => ts.map(t => ({ t, s }))).sort((x, y) => x.t - y.t);
@@ -280,16 +279,16 @@ scene('sessions', 'An illustration of three open sessions over five minutes: eac
   const n = ev.filter(e => e.fetch).length;
   const svg = `<svg viewBox="0 0 ${Wd} ${H}" width="${Wd}" height="${H}" role="img">${g}</svg>`;
   const legend = `<div class="legend"><span><i class="dot on"></i>fetched, for every session</span><span><i class="dot"></i>drew the shared copy</span>`
-               + `<span><i class="band"></i>fresh for 50 s</span><span class="sum">an illustration · ${ev.length} renders · ${n} fetches</span></div>`;
+               + `<span><i class="band"></i>fresh for 50 s</span><span class="sum">an illustration: ${ev.length} renders, ${n} fetches</span></div>`;
   return { html: `<div class="dev viz">${legend}${svg}</div>`, from: 'the rule in `GetUsage()`, played out over invented render times' };
 });
 
-// ─── the download button
+// download: the button
 scene('download', 'A button: Download for Windows.', () => ({ html: `<div class="btn"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
   <path d="M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="#16161E" stroke-width="2.2"
   stroke-linecap="round" stroke-linejoin="round"/></svg><span>Download for Windows</span></div>`, shotClass: 'bt', from: 'the palette: cyan on the terminal ground' }));
 
-// ─── the decisions page, as it draws itself: its week chart
+// decisions-week: the week chart of the decisions page, as the page draws it
 scene('decisions-week', 'The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03.', () => ({
   capture: { file: path.join(ROOT, 'docs', 'design', 'limits-decisions.html'), selector: '#week-viz', width: 1044,
              // only the chart: the page around it keeps its layout but is not drawn, and the hint to
@@ -298,7 +297,7 @@ scene('decisions-week', 'The week chart from the decisions page: the 7d meter an
                 + '#week-viz, #week-viz *{visibility:visible!important} #week-viz #xh{visibility:hidden!important} .vizhelp{display:none} '
                 + '#week-viz{box-shadow:0 1px 2px rgba(10,12,20,.14),0 6px 16px rgba(10,12,20,.14)!important}' } }));
 
-// ───────────────────────────────────────────── page
+// ---- page
 const css = `
 @font-face{font-family:Term; src:local("JetBrainsMono NF"), local("JetBrainsMono NF Regular"), local("JetBrainsMonoNF-Regular"); font-weight:400}
 @font-face{font-family:Term; src:local("JetBrainsMono NF Bold"), local("JetBrainsMonoNF-Bold"); font-weight:700}
@@ -339,10 +338,10 @@ body{font-family:"Segoe UI",system-ui,sans-serif}
 const page = (body, title) =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
 
-// ───────────────────────────────────────────── Edge, headless, over the DevTools protocol
-// One browser with its own profile in .work, on a port the OS picks, so it never meets the user's
-// Edge or another agent's. Each figure is a clip of one element at twice the density, on a
-// transparent background.
+// ---- Edge, headless, over the DevTools protocol
+// One browser with its own profile in .work, on a port the OS picks, so it never meets your own Edge
+// or one that something else started. Each figure is a clip of one element at twice the density, on
+// a transparent background.
 function findEdge() {
   const c = [process.env.EDGE, 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
              'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'].filter(Boolean);
@@ -447,7 +446,7 @@ const CLIP = (sel, css) => `(() => {
   return { x, y, width: Math.ceil(b.right + 18) - x, height: Math.ceil(b.bottom + scrollY + 26) - y };
 })()`;
 
-// ───────────────────────────────────────────── run
+// ---- run
 async function main() {
   const args = process.argv.slice(2), check = args.includes('--check'), only = args.filter(a => !a.startsWith('--'));
   const outDir = check ? path.join(WORK, 'check') : __dirname;
@@ -482,7 +481,7 @@ async function main() {
     }
   } finally { await close(); }
   for (const r of report)
-    console.log(`${r.id.padEnd(15)} ${String(r.w).padStart(5)} × ${String(r.h).padEnd(4)} CSS px  ${(r.bytes / 1024).toFixed(0).padStart(4)} KB`
+    console.log(`${r.id.padEnd(15)} ${String(r.w).padStart(5)} x ${String(r.h).padEnd(4)} CSS px  ${(r.bytes / 1024).toFixed(0).padStart(4)} KB`
               + (r.cols ? `  widest line ${r.cols} columns` : '') + `  ${r.src.join(', ')}`);
   console.log(`${report.length} figures, ${(report.reduce((n, r) => n + r.bytes, 0) / 1024).toFixed(0)} KB`);
   if (check) {
@@ -498,8 +497,8 @@ async function main() {
   if (!checkPages()) process.exitCode = 1;
 }
 // Every <img> of a figure in the Markdown pages: the figure exists, it has alt text, and its width
-// attribute is its CSS width — half the PNG's — so GitHub draws it at its own size, or narrower
-// where the column is.
+// attribute is its CSS width (half the PNG's), so GitHub draws it at its own size, or narrower where
+// the column is.
 function checkPages() {
   const pages = ['README.md'], walk = d => fs.readdirSync(d, { withFileTypes: true }).forEach(e => {
     const p = path.join(d, e.name);
@@ -527,24 +526,24 @@ function checkPages() {
 // docs/assets/README.md: what each figure shows, what it is drawn from, and its size
 function index(report) {
   const rows = report.map(r => `| [${r.id}.png](${r.id}.png) | ${r.shows} | ${[...r.src.map(s => /^[\w-]+\.w\d+$/.test(s) ? `\`${s}\``
-    : `[${path.basename(s)}](${path.relative(__dirname, path.join(ROOT, s)).replace(/\\/g, '/')})`), ...(r.from ? [r.from] : [])].join(', ')} | ${r.w} × ${r.h} |`);
-  fs.writeFileSync(path.join(__dirname, 'README.md'), `<sub>[StatusAI](../../README.md) › [Documentation](../README.md)</sub>
+    : `[${path.basename(s)}](${path.relative(__dirname, path.join(ROOT, s)).replace(/\\/g, '/')})`), ...(r.from ? [r.from] : [])].join(', ')} | ${r.w} x ${r.h} |`);
+  fs.writeFileSync(path.join(__dirname, 'README.md'), `<sub>[StatusAI](../../README.md) / [Documentation](../README.md)</sub>
 
 # Figures
 
-Every image here is generated. [figures.gen.js](figures.gen.js) draws them from the render tests'
-expected output — the exact bytes the binary draws for each fixture, in
-[tests/expected](../../tests/expected) — in the [house style](../design/house-style/README.md), and
-Microsoft Edge, headless, turns each into a PNG at twice its size. Regenerate them all with
+Every image here is generated. [figures.gen.js](figures.gen.js) draws them in the
+[house style](../design/house-style/README.md) from the render tests' expected output, the exact
+bytes the binary draws for each fixture, which are kept in [tests/expected](../../tests/expected).
+Microsoft Edge, headless, then turns each one into a PNG at twice its size. Once a change of output
+has been recorded with \`Test-Renders.ps1 -Update\`, regenerate them all with
 
 \`\`\`bash
 node docs/assets/figures.gen.js
 \`\`\`
 
-after a change of output is recorded with \`Test-Renders.ps1 -Update\`; \`--check\` draws them into
-\`.work/figures/check\` and compares them with these, byte for byte. It needs Node, Edge and
-JetBrainsMono Nerd Font, and refuses to run on a colour outside the palette, a glyph whose width it
-does not know, or a callout that does not land.
+With \`--check\` it draws them into \`.work/figures/check\` instead and compares them with these, byte
+for byte. It needs Node, Edge and JetBrainsMono Nerd Font, and refuses to run on a colour outside the
+palette, a glyph whose width it does not know, or a callout that does not land.
 
 A render is named \`<case>.w<width>\`: the case in [tests/cases.json](../../tests/cases.json), drawn
 at that many columns. Sizes are CSS pixels; each PNG has twice as many.
@@ -553,7 +552,7 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 |---|---|---|---|
 ${rows.join('\n')}
 
-The generator rewrites this page on every full run: edit the generator, not the page.
+The generator rewrites this page on every full run, so make changes in the generator and not here.
 `);
 }
 module.exports = { toCells, span, crop, width, colText, launch, playFetches, RENDER_TIMES };
