@@ -106,12 +106,12 @@ bold red.
 
 ### Three meters are drawn; any other is flagged
 
-**Status:** ignored and flagged pending review, decided on 2026-09-24. For one commit (`a84bd3a`)
-every entry in `limits[]` got a row. That part was reverted: the code should be reviewed whenever a
-new meter turns up, so it keeps working for the three known meters and ignores any other for now. A
-meter this binary has never been checked against is not drawn on trust. It is named instead, so that
-the code gets reviewed before it shows the meter. That is why a fourth meter is missing from the
-rows, and why that is a decision, not a regression.
+**Status:** ignored and flagged pending review, decided on 2026-09-24. In one build, deployed for
+two hours that morning, every entry in `limits[]` got a row. That part was reverted: the code should
+be reviewed whenever a new meter turns up, so it keeps working for the three known meters and
+ignores any other for now. A meter this binary has never been checked against is not drawn on
+trust. It is named instead, so that the code gets reviewed before it shows the meter. That is why a
+fourth meter is missing from the rows, and why that is a decision, not a regression.
 
 - What is drawn: `session` as `5h`, `weekly_all` as `7d`, and one model-scoped `weekly_scoped` (a
   `scope.model` with a name and no `scope.surface`) under its model's name. The scoped row stays

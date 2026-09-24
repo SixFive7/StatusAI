@@ -134,9 +134,9 @@ flagged instead, pending a review of the code; see
 for a meter: a fourth one is named in [the meters notice](#the-meters-notice), and the rows it would
 have taken stay exactly as they are.
 
-For one commit (`a84bd3a`) a fourth meter took a line of its own in the right column, under the
-scoped row, and the right column's rows shared their widths. Reverting that is why the right column
-holds the scoped row alone again.
+In one build, deployed for two hours on 2026-09-24, a fourth meter took a line of its own in the
+right column, under the scoped row, and the right column's rows shared their widths. Reverting that
+is why the right column holds the scoped row alone again.
 
 ## The account line and the breakdown
 
