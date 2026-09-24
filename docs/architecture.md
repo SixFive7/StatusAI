@@ -35,7 +35,7 @@ get their own config rather than the shipped one.
 | prompt line | starship, via cship — includes RAM (`memory_usage`) and GPU (`custom.gpu`, shells out to `nvidia-smi` **every render**) |
 | model line | cship (`$cship.model $cship.effort $cship.context_bar`) + our meta segment (⏱ 📝 💸 💰) |
 | two token rows | this repo |
-| 5h / 7d / scoped rows and every further meter, account line and product breakdown, on-credit ⚠ row | this repo, from the OAuth usage endpoint — see [limits.md](limits.md) |
+| 5h / 7d / scoped rows, account line and product breakdown, the meters notice and the on-credit ⚠ row | this repo, from the OAuth usage endpoint — see [limits.md](limits.md) |
 
 ## Update cadence
 
@@ -44,7 +44,7 @@ Four clocks, stacked:
 | layer | interval | trigger |
 |---|---|---|
 | Claude Code → `cship-usage` | `refreshInterval: 60` | plus every new assistant message, after `/compact`, on permission-mode change; debounced 300 ms |
-| OAuth limit bars, product breakdown, on-credit alarm | cached **50 s** | `FreshVal`: `now - t < 50`, else re-fetch behind a named mutex |
+| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s** | `FreshVal`: `now - t < 50`, else re-fetch behind a named mutex |
 | EUR rate | cached **24 h** | ECB daily feed |
 | token rows, account line | **every render** | incremental parse of appended bytes only |
 
@@ -54,9 +54,10 @@ during bursts. Setting the cache to ~70 s, or `refreshInterval` to 45, would mak
 
 **The cache holds the fully rendered, ANSI-coloured string — not the underlying numbers.** That
 keeps a cache hit free of all formatting work, but it means a cached entry belongs to whichever
-build wrote it. Beside it, `bd` and `cr` hold the product breakdown and the on-credit alarm from the
-same fetch, already reduced to what is shown: where the breakdown fits depends on the render, so it
-is laid out per render, and a cache hit must still draw both. On a machine with a live session that is the trap described in
+build wrote it. Beside it, `bd`, `cr` and `ig` hold the product breakdown, the on-credit alarm and
+the meters it did not draw from the same fetch, already reduced to what is shown: where the
+breakdown and the notice fit depends on the render, so they are laid out per render, and a cache
+hit must still draw all three. On a machine with a live session that is the trap described in
 [development.md](development.md): a freshly built binary will happily serve a render produced by
 its predecessor.
 
@@ -64,7 +65,7 @@ its predecessor.
 
 | location | contents |
 |---|---|
-| `HKCU\Software\cshipUsage` | limit-bar cache (`ts`, `val`, `bd`, `cr`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
+| `HKCU\Software\cshipUsage` | limit-bar cache (`ts`, `val`, `bd`, `cr`, `ig`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
 | `~/.claude/statusline-tokens/<sid>.bin` | `CTK2` token cache — offsets, running totals, two dedup sets |
 | named mutex `Global\cshipUsage.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 
@@ -101,7 +102,7 @@ file. The accounting needs no changes.
 | a terminal rendering emoji single-width | the grid — `iw[]` declares 4 columns per 2-emoji block | one array |
 | a machine without a Nerd Font | cship/starship glyphs, **not** the token rows | see below |
 | an API-key-only account | the limit rows and the account line | nothing — degrades |
-| an Enterprise plan | untested: every meter it sends is drawn, but only a session, a `weekly_all` and one `weekly_scoped` can carry a trend | — |
+| an Enterprise plan | untested: whatever of the session, `weekly_all` and a model-scoped `weekly_scoped` it sends is drawn; anything else is flagged for review | — |
 | a machine without an NVIDIA GPU | starship's `custom.gpu` segment | — |
 | a different model | nothing — cost comes from the payload, there is no price table | — |
 

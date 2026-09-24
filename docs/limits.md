@@ -1,7 +1,7 @@
 # Limits
 
 The limit rows: where the numbers come from, how the projection is built, what else the response
-carries that is drawn, and one design that was shipped and reverted.
+carries and which of it is drawn, and the designs that were rejected.
 
 ## The endpoint
 
@@ -69,34 +69,36 @@ plans and surfaces this account does not have. Do not add rows for them speculat
 
 `kind` values seen in the wild: `session`, `weekly_all`, `weekly_scoped`.
 
-### Every meter is drawn
+`severity` drives the label colour through `SevColor` — `normal` plain, `warning` amber,
+`critical` bold red.
 
-Every entry in `limits[]` gets a row, in the order the server sends them. Nothing is dropped: a
-fourth meter, a second scoped one or a kind this binary has never seen used to vanish without a
-trace, because only the session, `weekly_all` and the highest `weekly_scoped` were read.
+### Three meters are drawn; any other is flagged
 
-- **Labels.** `session` is `5h` and `weekly_all` is `7d`, as always. Every other meter is named by
-  its scope — `scope.model.display_name`, else `scope.surface.display_name` — and failing both, by
-  its kind: `scoped` for a `weekly_scoped`, the kind itself for anything else. Names are drawn with
-  every control character replaced, so nothing the server sends can act on the terminal.
-- **Where they go.** The first two meters are the left column, as 5h over 7d. The third sits right
-  of 7d as the scoped row always has, and every one after it goes on a line of its own beneath it
-  in the right column; see [layout.md](layout.md#more-than-three-meters).
-- **Colours.** `severity` drives the label colour through `SevColor` — `normal` plain, `warning`
-  amber, `critical` bold red — for every meter alike.
-- **Trends.** The history holds three series: the session, `weekly_all` and one scoped meter, so at
-  most three rows have a trend. The scoped series stays with the meter it has been following
-  (`sn`) for as long as the server still sends it, and otherwise takes the highest, as the single
-  scoped row always did. Any other meter is drawn with `→ —` and its bar at its current value:
-  `—` is the sentinel for a source that reported nothing, and the source of every forecast here —
-  the history — has nothing for it.
-- **No longer required.** `Fetch()` used to return nothing unless both the session and
-  `weekly_all` were present, so an account without them lost every row; any non-empty `limits[]`
-  is now drawn. A series whose meter is absent from one response records `-1`, which the slope
-  skips.
+**Status: decided on 2026-09-24 — ignored and flagged, pending review.** For one commit
+(`a84bd3a`) every entry in `limits[]` got a row. The user reverted that part: "I want to review our
+code if there is ever a new meter. Keep the code working for our three meters and ignore any other
+meters for now." A meter this binary has never been checked against is not drawn on trust. It is
+named instead, so that the code gets reviewed before it shows the meter — which is why a fourth
+meter is missing from the rows, and why that is a decision, not a regression.
 
-Today's three meters render exactly as they did before; the change shows only when a response
-carries more.
+- **Drawn:** `session` as `5h`, `weekly_all` as `7d`, and one model-scoped `weekly_scoped` — a
+  `scope.model` with a name and no `scope.surface` — under its model's name. The scoped row stays
+  with the meter the history has been following (`sn`) for as long as the server still sends it,
+  and otherwise takes the highest, as it always has. The three are drawn in that order whatever
+  order the server sends them in, and each has its own history series.
+- **Flagged:** everything else — a kind never seen, a surface-scoped meter, a meter scoped to both a
+  model and a surface, a second model-scoped one. None is drawn; each is named in an amber `⚠`
+  row at the foot of the block, `Cowork (weekly_scoped, surface)`: the name it would be drawn
+  under — model, else surface, else the kind — then its kind and what its scope names. See
+  [layout.md](layout.md#the-meters-notice).
+- **Missing meters:** `Fetch()` once returned nothing without both the session and `weekly_all`, so
+  an account lacking either lost every row. Any non-empty `limits[]` counts now: a missing meter
+  only means one row fewer, a response with none of the three draws no rows and flags what it
+  has, and a series whose meter is absent records `-1`, which the slope skips.
+
+Names are drawn with every control character replaced, so nothing the server sends can act on the
+terminal. The flag is cached beside the rendered rows, registry value `ig`, one meter per line, so
+a cache hit still shows it.
 
 ### The product breakdown
 
@@ -116,7 +118,8 @@ block, with the amount spent. It fires on either of two conditions:
   `⚠ on credit — $12,40 spent beyond the plan this period`.
 - **A limit at 100% while credits are on** (`spend.enabled` or `extra_usage.is_enabled`): usage
   from then on bills — `⚠ on credit — 5h at 100% with usage credits on; $0,00 spent so far this
-  period`.
+  period`. Any meter in the response counts, a flagged one included: a limit that bills is
+  reported whether or not it is drawn.
 
 The amount is `spend.used` when it has one — minor units with their own `exponent` and `currency`
 — and otherwise `extra_usage.used_credits`, read as minor units too with `decimal_places` as the
@@ -194,7 +197,7 @@ A series is only meaningful within one account and one window. `WindowCheck` dis
 impossible organically inside a window, so it means the window rolled. An account switch clears
 `hist` outright.
 
-That last one is visible in practice: switch accounts and every row with a trend immediately reads
+That last one is visible in practice: switch accounts and all three rows immediately read
 `→ early`, because the whole series was foreign and was thrown away. It is correct behaviour and
 not a bug report.
 
@@ -299,7 +302,7 @@ correction band.
   — but the forecast inputs come from the fixture, so the window checks and the slope cannot be
   regression-tested. See [development.md](development.md#offline-beside-live-sessions).
 - **`is_active` and `group` are parsed past and discarded.**
-- **A fourth meter has no trend.** Only three series are kept, so a meter past them draws `→ —`.
-  None has been seen yet.
-- **Enterprise is untested.** Every meter it sends is now drawn, under its scope name or its kind,
-  but only a session, a `weekly_all` and one `weekly_scoped` can carry a trend.
+- **A new meter is not drawn until its code is reviewed.** Only the session, `weekly_all` and one
+  model-scoped `weekly_scoped` are; anything else is named in the amber `⚠` row instead — see
+  [above](#three-meters-are-drawn-any-other-is-flagged). None has been seen yet.
+- **Enterprise is untested.** Whatever it sends of the three is drawn, and the rest is flagged.

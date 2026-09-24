@@ -78,11 +78,11 @@ written, the usage lock is never taken, and nothing is fetched, so a dev build c
 sessions without serving their cached render or touching their history.
 
 **With a `usage.json`** — a usage API response, verbatim or edited — the binary parses it with the
-same `ParseUsage()` as a live fetch, so every meter, the product breakdown and the on-credit alarm
-are under test. `rows.json` then supplies what a live fetch would take from the registry: the clock
+same `ParseUsage()` as a live fetch, so the meters, the product breakdown, the on-credit alarm and
+the meters notice are under test. `rows.json` then supplies what a live fetch would take from the registry: the clock
 to measure the resets against, the scoped meter already being followed, and the forecast inputs by
-label. Which meters get a trend is the same `Tracked()` decision a live fetch makes; a tracked
-meter the forecast leaves out is drawn gated.
+label. Which meters are drawn and which are flagged is the same `Known()` decision a live fetch
+makes; a drawn meter the forecast leaves out is gated.
 
 ```json
 { "fx": 0.876, "now": "2026-09-23T20:14:20Z", "sn": "Fable",
@@ -92,7 +92,7 @@ meter the forecast leaves out is drawn gated.
 ```
 
 **Without one**, `rows.json` holds what `RenderRows` is given — the output of the fetch, the window
-checks and the slope — and there is no breakdown and no credit state to draw:
+checks and the slope — and there is no breakdown, no credit state and no meters notice to draw:
 
 ```json
 { "fx": 0.876,
@@ -101,8 +101,7 @@ checks and the slope — and there is no breakdown and no credit state to draw:
             { "label": "Fable", "pct": 24, "hrs": 57.08, "hasReset": true, "rate": 0,     "gated": false, "sev": "normal"   } ] }
 ```
 
-A row may add `"trend": false` for a meter no history series follows. Either way the forecast is an
-input, so the window checks and the slope are not under test.
+Either way the forecast is an input, so the window checks and the slope are not under test.
 
 **Keep the hours exact when comparing builds.** A `usage.json` and a `rows.json` that are meant to
 draw the same rows must agree on the hours to each reset to the last bit: .NET's `TotalHours` is

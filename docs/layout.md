@@ -33,9 +33,9 @@ Current rows measure 133.
 
 ## The metric rows solve for their own bar width
 
-The limit rows — 5h, 7d, the scoped row and any meter after it — use a different mechanism from the
-token grid: everything except the two projection bars is known, so `RenderRows` solves for the bar
-length that exactly fills the terminal, and recomputes it every render.
+The 5h / 7d / scoped rows use a different mechanism from the token grid: everything except the two
+projection bars is known, so `RenderRows` solves for the bar length that exactly fills the
+terminal, and recomputes it every render.
 
 ```
 fixedPart = 4 + 1 + 2 + 2·rowConst + wLbl[0] + wLbl[1] + 2·(wNow + wReset + wTo100 + wProj + wNowBar)
@@ -72,8 +72,8 @@ design note for these rows is not finished until it states its character cost.
 
 Column widths are computed per render as the max needed across the rows **of one column**, so
 nothing is padded wider than the current values require. The left column's rows stack — `5h` above
-`7d` — and have to agree to line up; so do the right column's, the scoped row and every meter under
-it. A row beside another has nothing to line up with.
+`7d` — and have to agree to line up. The right column holds the scoped row alone, beside `7d`, and
+a row beside another has nothing to line up with.
 
 Only the labels used to be kept apart this way, so `5h` / `7d` never inherit the width of a longer
 label like `Fable`. The other five widths were shared across both columns, which aligned nothing
@@ -97,22 +97,17 @@ so is the guarantee: a column's own widths can only be narrower than that, never
 right-hand row stops spending is simply not spent. `Compose()` only needs the two left-column rows
 to be one width, which they still are, since the right column starts after them.
 
-### More than three meters
+### Three rows, never more
 
-Every meter the server sends gets a row (see [limits.md](limits.md#every-meter-is-drawn)). The first
-two are the left column; the third sits right of `7d`; each one after it takes a line of its own in
-the right column, under the one before, with the left column left blank:
+Only the session, `weekly_all` and one model-scoped `weekly_scoped` are drawn — any other meter is
+flagged instead, pending review of the code; see
+[limits.md](limits.md#three-meters-are-drawn-any-other-is-flagged). So the block never grows a row
+for a meter: a fourth one is named in [the meters notice](#the-meters-notice), and the rows it would
+have taken stay exactly as they are.
 
-```
-5h ●●●○○○○○○○ 29% ↻ 3h36m → 2h28m ⇢ ●●●●●●●●●●✗✗✗✗         133%  👤 another@example.com · Max 20 · CC 99% · Chat 0% · Cowork 1%
-7d ●●●●●●○○○○ 54% ↻ 4d10h → 6h52m ⇢ ●●●●●●●●●●✗✗✗✗✗✗✗✗✗✗✗✗ 300%  Fable  ●●●●●○○○○○ 47% ↻ 4d10h → never ⇢ ●●●●●○○○○○ 47%
-                                                                 Cowork ●●○○○○○○○○ 12% ↻ 4d10h → —     ⇢ ●●○○○○○○○○ 12%
-```
-
-The cost is one line per extra meter, and the right column's widths — `Cowork` against `Fable`
-here — which the solver charges like any other. The two-column test counts every right-hand row as
-well as the account, so a long enough label takes the block to the stacked layout rather than past
-the edge. Stacked, every meter is a row of its own, in order.
+For one commit (`a84bd3a`) a fourth meter took a line of its own in the right column, under the
+scoped row, and the right column's rows shared their widths. Reverting that is why the right column
+holds the scoped row alone again.
 
 ## The account line and the breakdown
 
@@ -208,9 +203,9 @@ it**; anything Wide or Fullwidth is disqualified outright, and emoji are only sa
 grid, where `iw[]` declares two columns per glyph explicitly.
 
 `—` is the one sentinel for *this source reported nothing at all*, as distinct from a source that
-reported zero: the `↻` column when the payload carried no `resets_at`, the `→` column of a meter no
-history series follows, `⏱` / `💰` when the payload carried no `cost` block, and the marker opening
-the standalone render below, where the source that reported nothing is cship itself. It is never wider than the value it replaces, so no column it
+reported zero: the `↻` column when the payload carried no `resets_at`, `⏱` / `💰` when the payload
+carried no `cost` block, and the marker opening the standalone render below, where the source that
+reported nothing is cship itself. It is never wider than the value it replaces, so no column it
 appears in can grow. `…` only ever appears inside a truncated `⚠` reason.
 
 ## Icon vocabulary
@@ -256,7 +251,7 @@ WCAG ratio against each.
 | colour | where | Campbell | lightest wallpaper | `#16161E` |
 |---|---|---|---|---|
 | `#7DCFFF` cyan | bar cells 1–7, percentages under 70; bold, the token-grid totals | 11,40 | 9,05 | 10,48 |
-| `#E0AF68` amber | bar cells 8–9, percentages 70–89, `warning` labels | 9,78 | 7,76 | 8,99 |
+| `#E0AF68` amber | bar cells 8–9, percentages 70–89, `warning` labels, the meters notice | 9,78 | 7,76 | 8,99 |
 | `#F7768E` red | bold: bar cells 10+ and `✗`, percentages 90+, `critical` labels, `→` when 100% lands before the reset, projections past 100%, `⚠` rows; plain: removed lines | 7,39 | 5,87 | 6,80 |
 | `#28A428` forest | `→` when the row's own reset comes before 100% would | 5,99 | 4,75 | 5,51 |
 | `#A6E3A1` green | `↻`, added lines | 13,16 | 10,44 | 12,10 |
@@ -306,6 +301,23 @@ not a source that failed but usage being billed that the plan should have covere
 spent in it — `⚠ on credit — $12,40 spent beyond the plan this period`. What triggers it is in
 [limits.md](limits.md#on-credit). Same red, same budget, and cut the same way as any other reason
 if the terminal is too narrow for it.
+
+### The meters notice
+
+A meter the usage API sent that this status line does not draw is named in a row of its own, in
+**amber** `#E0AF68` rather than red: it is a notice to review the code, not a failed source and not
+money. It sits under the red failure rows and above the credit alarm, which stays last.
+
+```
+⚠ meters — the usage API sent a meter this status line ignores: Cowork (weekly_scoped, surface) · review cship-usage
+⚠ meters — the usage API sent 6 meters this status line ignores: Claude Design (weekly_scoped, surface) +5 more · review cship-usage
+```
+
+It has the `⚠` rows' budget, `term − 6` for `⚠` and the text, and fills it with whole names: as
+many as fit, in the server's order, then `+N more` for the rest. If not even one name fits it only
+counts them — `⚠ meters — the usage API sent 6 meters this status line ignores · review
+cship-usage`, 84–85 columns — and only below that would it be cut like any other reason. At the
+default 141 columns one name of up to 50 characters fits; `Cowork (weekly_scoped, surface)` is 31.
 
 ### "No messages yet" is a zero, not a gap
 

@@ -5,7 +5,7 @@
 | [architecture.md](architecture.md) | components, the render chain, data sources, portability |
 | [accounting.md](accounting.md) | how tokens and tool calls are counted, the traps, verification |
 | [layout.md](layout.md) | the grid, number formatting, alignment, width budgets |
-| [limits.md](limits.md) | the OAuth usage endpoint, every meter it sends, the product breakdown, the on-credit alarm, the projection, one rejected design |
+| [limits.md](limits.md) | the OAuth usage endpoint, the three meters drawn and the flag for any other, the product breakdown, the on-credit alarm, the projection, the rejected designs |
 | [development.md](development.md) | build, deploy and test on a live machine — and the traps that waste an hour |
 | [templates/](templates/) | house style for visual documentation. **Read its README first — the example's subject matter is wrong on purpose.** |
 
