@@ -34,7 +34,6 @@ Why it is the way it is, and what was tried and rejected.
 | [design/rejected-designs.md](design/rejected-designs.md) | the limit-row designs that were rejected, and why |
 | [design/house-style/](design/house-style/) | the house style for visual documentation. **Read its README first — the example's subject matter is wrong on purpose.** |
 | [design/packaging-plan.md](design/packaging-plan.md) | packaging, Velopack auto-update, the install surface, the landmines |
-| [design/evidence/](design/evidence/) | the scripts and reports behind the limit-row commits of 23–24 September 2026, kept as a record |
 
 ## Development
 
