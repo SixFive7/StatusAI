@@ -1,3 +1,5 @@
+# Based on the cship.toml of cship 1.8.0 (https://github.com/stephenleo/cship), under the Apache
+# License 2.0, and changed for StatusAI. The licence is in StatusAI's THIRD-PARTY-NOTICES.txt.
 [cship]
 lines = [
   "$starship_prompt",

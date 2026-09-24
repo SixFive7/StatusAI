@@ -1,3 +1,5 @@
+# Based on starship's Catppuccin Powerline preset (https://starship.rs), under the ISC License,
+# and changed for StatusAI. The licence is in StatusAI's THIRD-PARTY-NOTICES.txt.
 "$schema" = 'https://starship.rs/config-schema.json'
 
 format = """
