@@ -2,12 +2,16 @@
 
 # Install
 
-There is no installer yet. Each release is a zip on GitHub holding `cship-usage.exe` and the
-configuration it is used with, and this page puts them in place with a short PowerShell block you
-can read before you paste it. The block also fetches [cship](https://github.com/stephenleo/cship),
-which draws the model line that StatusAI's rows sit under, from cship's own release. Building from
-source is the [second path](#build-from-source). The plan for a one-click install with auto-update
-is [packaging-plan.md](../design/packaging-plan.md).
+Each release is a zip on GitHub holding `cship-usage.exe` and the configuration it is used with,
+and this page puts them in place with a short PowerShell block you can read before you paste it.
+The block also fetches [cship](https://github.com/stephenleo/cship), which draws the model line
+that StatusAI's rows sit under, from cship's own release. Building from source is the
+[second path](#build-from-source).
+
+> [!NOTE]
+> The install works, but we know it is rough: you extract a zip, paste a PowerShell block and add a
+> line to `settings.json` by hand. A proper installer with auto-update may come later, and
+> [packaging-plan.md](../design/packaging-plan.md) is the plan for it.
 
 ## Before you start
 
