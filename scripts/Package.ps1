@@ -22,7 +22,8 @@
        back and every entry checked against its source by SHA-256.
     5. Write <zip>.sha256, one line "<sha256>  <name>" as sha256sum writes it, and
        notes-v<version>.md: the CHANGELOG section of the version without its heading, every
-       relative link pointed at the tag on GitHub, and a footer pointing at the install guide. A
+       relative link pointed at the tag on GitHub, and a footer pointing at the install guide,
+       with every paragraph on one line because GitHub shows each line break of release notes. A
        relative link to a path the repository does not have refuses.
 
     Nothing is tagged, pushed or uploaded; the last lines print the gh command that would publish
@@ -137,6 +138,26 @@ function Convert-Links([string] $md, [string] $tag, [System.Collections.Generic.
         param($m)
         $m.Groups['lead'].Value + (Convert-Target $m.Groups['target'].Value $false $tag $missing)
     })
+}
+
+# GitHub shows release notes the way it shows comments: every line break in the source is a line
+# break on the page. The CHANGELOG is wrapped at 100 columns, so each paragraph and list item is
+# joined back into one line. Blank lines, headings, rules, table rows, list items and fenced code
+# keep their own lines.
+function Join-SoftWraps([string] $md) {
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    $fence = $false
+    foreach ($line in $md.Replace("`r", '').Split("`n")) {
+        $t = $line.TrimStart()
+        if ($t.StartsWith('```')) { $fence = -not $fence; $out.Add($line); continue }
+        if ($fence -or $out.Count -eq 0) { $out.Add($line); continue }
+        $prev = $out[$out.Count - 1].TrimStart()
+        $newBlock = $t.Length -eq 0 -or $t -match '^(#|>|\||---|\*\*\*|[-*+] |[0-9]+[.)] )'
+        $prevEnds = $prev.Length -eq 0 -or $prev -match '^(#|\||---|\*\*\*|```)'
+        if ($newBlock -or $prevEnds) { $out.Add($line) }
+        else { $out[$out.Count - 1] = $out[$out.Count - 1].TrimEnd() + ' ' + $t }
+    }
+    return ($out -join "`n")
 }
 
 # ---------------------------------------------------------------------- README.txt and the notes' footer
@@ -360,7 +381,7 @@ function Invoke-Main {
 
     # ------------------------------------------------------------------ release notes
     $footer = Fill $NotesFooter @{ ZIP = "$name.zip"; SITE = $Site; TAG = $tag; CSHIP = $CshipVersion }
-    WriteText $notes ($body + "`n" + $footer + "`n")
+    WriteText $notes ((Join-SoftWraps ($body + "`n" + $footer)) + "`n")
 
     # ------------------------------------------------------------------ report
     $size = (Get-Item -LiteralPath $zip).Length
