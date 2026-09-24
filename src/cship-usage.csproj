@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>cship-usage</AssemblyName>
+    <Product>StatusAI</Product>
+    <Copyright>Copyright (c) 2026 Jori Huisman</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PublishAot>true</PublishAot>
     <OptimizationPreference>Speed</OptimizationPreference>
     <InvariantGlobalization>true</InvariantGlobalization>
