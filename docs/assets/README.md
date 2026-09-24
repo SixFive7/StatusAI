@@ -36,6 +36,6 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 | [warnings.png](warnings.png) | The three kinds of ⚠ row, in the order they come: a source that failed, in red; a limit this status line does not draw yet, in amber; usage billed beyond the plan, in red and always last. | `every-warning.w120` | 754 x 255 |
 | [sessions.png](sessions.png) | An illustration of three open sessions over five minutes: each render either fetches the usage (only when the shared copy is 50 seconds old or more) or draws the shared copy. | the rule in `GetUsage()`, played out over invented render times | 794 x 283 |
 | [download.png](download.png) | A button: Download for Windows. | the palette: cyan on the terminal ground | 300 x 71 |
-| [decisions-week.png](decisions-week.png) | The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03. | [limits-decisions.html](../design/limits-decisions.html) | 998 x 467 |
+| [decisions-week.png](decisions-week.png) | The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03. | [limits-decisions.html](../design/limits-decisions.html) | 998 x 468 |
 
 The generator rewrites this page on every full run, so make changes in the generator and not here.
