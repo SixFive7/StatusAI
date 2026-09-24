@@ -4,6 +4,11 @@ StatusAI is Claude Code's status line: cship's model line with a meta segment ap
 tokens for the whole agent tree, and a row for each usage limit. This page reads them top to
 bottom.
 
+<img src="../assets/hero.png" width="1146" alt="The whole status line at 141 columns: the model line with the meta segment, the two token rows, and the 5h, 7d and Fable limit rows beside the account and this week's breakdown, with a callout under each part.">
+
+<details>
+<summary>The same sample, as text</summary>
+
 ```
   Opus 5 (1M context) ⚡ max  ●●●●●●●●●●○○○○○○○○○○○○○○○○○○○○ 34%   ⏱ 44m   📝 +220 -0   💸 $12,71/€11,02/h   💰 $9,32/€8,08
  │🔺🪵 0,238k    🔺🌿 9,444k    🔺🌳 9,682k    💾🪵 1,447M    💾🌿 240,7k    💾🌳 1,687M    🔧🪵    101    🔧🌿    129    🔧🌳    230
@@ -12,10 +17,13 @@ bottom.
  7d ●●●●●●○○○○ 54% ↻ 1d02h → 11h30m ⇢ ●●●●●●●●●●✗✗✗✗✗✗ 159%  Fable ●●○○○○○○○○ 17% ↻ 1d02h → never ⇢ ●●○○○○○○○○ 17%
 ```
 
+</details>
+
 The sample is drawn by the current binary from the render tests' `showcase` fixture: a
 mid-session payload, a main thread with two sub-agents, and an example set of limits. In a
 terminal every figure has its colour, and several of the colours mean something; they are described
-below, row by row.
+below, row by row. Every picture on this page is a render the tests hold the binary to, drawn cell
+for cell by the [figure generator](../assets/README.md).
 
 ## Why the whole tree
 
@@ -32,8 +40,13 @@ StatusAI walks the whole tree. How it counts, and why the obvious ways double-co
 
 ## The model line
 
-The model line is cship's: the model, the effort level and the context bar. StatusAI appends the
-meta segment to it:
+The model line is cship's: the model, the effort level and the context bar.
+
+<img src="../assets/model.png" width="610" alt="cship's model line: Opus 5 (1M context), effort max in red, and a 30-cell context bar at 34%.">
+
+StatusAI appends the meta segment to it:
+
+<img src="../assets/meta.png" width="530" alt="The meta segment: 44 minutes, 220 lines added and none removed, $12,71 or €11,02 an hour, $9,32 or €8,08 so far.">
 
 | | shows |
 |---|---|
@@ -50,6 +63,11 @@ With starship installed, a prompt line comes before the model line — the direc
 GPU and the time. The sample leaves it out; [install.md](install.md) says what it needs.
 
 ## The token grid
+
+<img src="../assets/tokens.png" width="1018" alt="The sample's two token rows at 120 columns: three groups of three columns, labelled fresh prompt and output, cache writes and cache reads, tool calls and all tokens, with the first group's columns labelled main, sub-agents and whole tree.">
+
+The figure is the sample's grid drawn at 120 columns, where its gutters are two spaces; at 141 they
+are four. The gutters are all that changes with the width.
 
 **Two rows, split by direction of travel.**
 
@@ -91,12 +109,10 @@ conversation, and the two frames disagree.
 
 Up to three rows, one per usage limit: `5h` is the five-hour session, `7d` the week, and the third,
 named after its model — `Fable` in the sample — is the weekly limit scoped to one model. Each reads
-left to right:
+left to right. The rows in this figure are the render tests' `shot` fixture, which draws both
+colours of `→`:
 
-```
-7d ●●●●●●○○○○ 54% ↻ 1d02h → 11h30m ⇢ ●●●●●●●●●●✗✗✗✗✗✗ 159%
-   now        now  resets  100% in   at the reset, at this pace
-```
+<img src="../assets/limits.png" width="586" alt="Two limit rows. 5h: 22% used, resets in 3h23m, 100% in 7h29m in forest green because the reset comes first, 57% at the reset. 7d: 89% used, resets in 2d09h, 100% in 4h35m in red because that comes first, 226% at the reset, drawn as red crosses past the tenth cell.">
 
 - **Now.** Ten cells, one per tenth begun: cyan, amber from the eighth, red on the tenth. The
   percentage turns amber at 70% and red at 90%, and the label takes the colour the server gives
@@ -111,21 +127,32 @@ left to right:
   bar grows `✗` cells in red. A row already at 100% draws this whole segment grey, like a
   disabled control: it is blocked until the reset, so where it is heading does not apply yet.
 
+Every state `→` can be in, each a row the render tests draw:
+
+<img src="../assets/states.png" width="650" alt="Five limit rows, one per state of the time to 100%: red, 4h35m, when 100% comes before the reset; forest green, 7h29m, when the reset comes first; never, when the limit is not moving; early, before there is enough history for a trend; and maxed at 100%, with the whole projection segment greyed.">
+
 When the line is wide enough the rows sit in two columns — `5h` beside the account, `7d` beside the
-scoped row — and otherwise they stack. How the projection is built, and which of the server's
-meters are drawn, is in [limits.md](../reference/limits.md).
+scoped row — and otherwise they stack, with the account on a line of its own. This is the sample at
+100 columns:
+
+<img src="../assets/stacked.png" width="554" alt="The sample's limit rows at 100 columns, stacked: 5h, 7d and Fable, one under the other, then the account line.">
+
+How the projection is built, and which of the server's meters are drawn, is in
+[limits.md](../reference/limits.md).
 
 ## The account line
 
-```
-👤 you@example.com · Max 20 · CC 99% · Chat 0% · Cowork 1%
-```
+<img src="../assets/breakdown.png" width="546" alt="The account line: you@example.com, Max 20, then this week's usage by product: CC 99%, Chat 0%, Cowork 1%.">
 
 The signed-in account and its plan, then how this week's usage splits across products: Claude Code,
 chats, Cowork, and any other product while it is above 0%. The split is shown in whole entries or
-not at all — without its 0% entries first, then none — so it never wraps. `👤 not signed in` means
-Claude Code is not signed in to a Claude account, with an API key for instance; the limit rows need
-one.
+not at all — without its 0% entries first, then none — so it never wraps. Here it is beside
+longer and longer addresses, at 141 columns:
+
+<img src="../assets/breakdown-fit.png" width="682" alt="Three account lines at 141 columns: with you@example.com, every entry; with a 35-character address, CC 99% and Cowork 1% but not Chat 0%; with a 46-character address, no breakdown at all.">
+
+`👤 not signed in` means Claude Code is not signed in to a Claude account, with an API key for
+instance; the limit rows need one.
 
 ## When a row says ⚠
 
@@ -141,5 +168,9 @@ Two more rows can appear there, and neither is a failure:
   named, pending a review of the code, rather than drawn on trust.
 - **A red on-credit alarm**, always last, when usage is being billed beyond the plan:
   `⚠ on credit — $12,40 spent beyond the plan this period`.
+
+All three at once, in their order, under the last limit row:
+
+<img src="../assets/warnings.png" width="754" alt="Three warning rows under a limit row. In red: tokens — no transcript_path in the payload. In amber: the usage API sent a meter this status line ignores. In red: on credit — $12,40 spent beyond the plan this period.">
 
 Every reason and when it appears is in [layout.md](../reference/layout.md#the--row).
