@@ -1,14 +1,14 @@
 # Development
 
-Building, deploying and testing a change to the status line on a live machine. Three of the four
-traps below cost real time; the first one is the expensive one.
+Building, deploying, releasing and testing a change to the status line on a live machine. Three of
+the four traps below cost real time; the first one is the expensive one.
 
 ## The repository
 
 ```
 src/        Program.cs and the csproj — the whole implementation
 tests/      the render tests: fixtures, expected renders, Test-Renders.ps1
-scripts/    Deploy.ps1, and independent PowerShell implementations that verify the accounting
+scripts/    Deploy.ps1, Package.ps1, and independent PowerShell implementations that verify the accounting
 config/     the cship and starship configuration the status line is used with
 docs/       guide/ for using it, reference/ for how it works, design/ for why, assets/ for the
             figures, and this page
@@ -102,6 +102,35 @@ failed and the backup is back in place, 3 when even that failed, the backup inta
 
 It was written on 2026-09-24 from the procedure that day's deploys used, and has not been run
 itself yet: read its output the first time.
+
+## Releasing
+
+```powershell
+./scripts/Package.ps1 -Version 0.1.0
+```
+
+It refuses unless `CHANGELOG.md` has a `## 0.1.0 — <date>` section, and unless the cship a friend
+is told to download is the one the render tests pin and the [install guide](guide/install.md)
+fetches: cship 1.8.0, by URL and SHA-256. It publishes the build with that version, runs the render
+tests against it with that same cship, byte for byte the download, and writes to `.work/release/`:
+
+| file | holds |
+|---|---|
+| `StatusAI-0.1.0-win-x64.zip` | `cship-usage.exe`, `cship.toml` and `starship.toml` from `config/`, and a plain-text `README.txt`, at the root of the zip |
+| `StatusAI-0.1.0-win-x64.zip.sha256` | the zip's SHA-256, one line as `sha256sum` writes it |
+| `notes-v0.1.0.md` | the release page's text: the version's CHANGELOG section with its links pointed at the tag, and a footer pointing at the install guide |
+
+cship is linked, not bundled: it statically links some 43 crates whose notices a redistributor
+would owe, so the install guide fetches it from cship's own release instead — see
+[packaging-plan.md](design/packaging-plan.md#licensing).
+
+**It publishes nothing.** Its last line is the `gh release create` command that would, to run from
+the repository root once the release commit is pushed. The exe records the commit it was built at,
+as `0.1.0+<commit>` in its product version, so package from that commit; the script says so when
+the working tree has uncommitted changes. `-OutDir` writes elsewhere and `-Cship` names the cship to
+test with. Exit code 0 when packaged, 1 when it refused, 2 when the build or the packaging failed;
+a run that does not finish leaves no zip of that version behind. Windows PowerShell 5.1 and
+PowerShell 7 both run it.
 
 ## Trap 1 — the cache serves output from the *previous* binary
 

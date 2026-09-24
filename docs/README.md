@@ -8,7 +8,7 @@ New here? Start with [reading the status line](guide/reading-the-status-line.md)
 | page | for |
 |---|---|
 | [guide/reading-the-status-line.md](guide/reading-the-status-line.md) | what every row, glyph and colour on the status line means |
-| [guide/install.md](guide/install.md) | building it, putting it in place, and taking it out again |
+| [guide/install.md](guide/install.md) | downloading or building it, putting it in place, and taking it out again |
 
 ## Reference
 
@@ -37,7 +37,7 @@ Why it is the way it is, and what was tried and rejected.
 
 | page | covers |
 |---|---|
-| [development.md](development.md) | the repository, building, the render tests, deploying and testing on a live machine — and the traps that waste an hour |
+| [development.md](development.md) | the repository, building, the render tests, deploying, releasing and testing on a live machine — and the traps that waste an hour |
 
 The figures in [assets/](assets/) are drawn from the render tests' output by a generator; its
 [README](assets/README.md) lists them and gives the command that regenerates them.

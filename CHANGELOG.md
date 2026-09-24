@@ -1,7 +1,32 @@
 # Changelog
 
-What changed, newest first, with the commits it came from. There are no releases yet, so entries
-are by date.
+What changed, newest first, with the commits it came from. Releases are headed by their version;
+the entries before the first release are by date.
+
+## 0.1.0 — 2026-09-24
+
+The first release: a zip with `cship-usage.exe` and the configuration it is used with.
+[install.md](docs/guide/install.md) puts it in place and fetches
+[cship](https://github.com/stephenleo/cship) 1.8.0 beside it. It draws:
+
+- **Tokens for the whole agent tree** — the main conversation and every sub-agent at any depth,
+  workflows included — in two rows of nine: fresh prompt, cache writes and tool calls above; output,
+  cache reads and all tokens below; each for the main thread, the sub-agents and the whole tree.
+- **Three usage limits** — the five hours, the week, and the week for one model — each with where
+  it stands, when it resets, when 100% arrives at the pace of the last hour, and where it will
+  stand at the reset. The time to 100% is red when it comes before the reset and forest green when
+  the reset comes first.
+- **The account, and where the week went**: `👤 you@example.com · Max 20 · CC 99% · Chat 0% ·
+  Cowork 1%`.
+- **Time and money**: how long the session has run, the lines it changed, its cost per hour and its
+  cost so far, in dollars and euros.
+- **Warnings that say why**: a red `⚠` row names every source that failed, an amber one names a
+  limit it does not draw yet, and a red alarm appears if usage is ever billed beyond the plan.
+- **One usage fetch for every open session**, at most once every 50 seconds.
+
+Known limits: numbers are in Dutch notation (`1.234,56`); the width is 141 columns unless
+`CSHIP_WIDTH` says otherwise, and the token grid needs at least 121; the binary is x64 only and
+unsigned; there is no installer or auto-update yet.
 
 ## 2026-09-24
 
