@@ -49,7 +49,7 @@ dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/cship-usage.exe
 ```
 
-154 renders of 51 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
+164 renders of 58 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
@@ -89,12 +89,13 @@ sub-agents, one of them a nested workflow agent, whose files carry both
 [verifying the accounting](#verifying-the-accounting) agree with its totals. The other cases cover
 the limit rows through a usage response and through `rows.json` alone, the meters notice, the
 breakdown against the width, the on-credit alarm, the order of the `⚠` rows, where the width comes
-from (`COLUMNS`, `CSHIP_WIDTH` before it, a value that is not a width, `statusLine.padding`), and
-the payloads:
-fresh sessions that must stay quiet, and broken ones that must still warn, one of them so broken
-that cship prints nothing. What the tests cannot cover is the live fetch, the registry cache and
-the history. The forecast is an input to a fixture, so the window checks and the slope are not
-under test.
+from (`COLUMNS`, `CSHIP_WIDTH` before it, a value that is not a width, `statusLine.padding`), a
+usage fetch that fails once, twice, in another session and before any has worked, then recovers,
+and the payloads: fresh sessions that must stay quiet, and broken ones that must still warn, one of
+them so broken that cship prints nothing. What the tests cannot cover is the live fetch itself, the
+registry cache and the history. A failed fetch is the fixture's word, so the count and its row are
+under test and the network is not. The forecast is an input to a fixture, so the window checks and
+the slope are not under test.
 
 A deliberate change of output is recorded with `-Update`, which rewrites `tests/expected` and
 removes any render no case produces; read the diff before committing it. To add a case, add a home
@@ -244,6 +245,21 @@ checks and the slope), and there is no breakdown, no credit state and no meters 
 ```
 
 Either way the forecast is an input, so the window checks and the slope are not under test.
+
+A `fetch` in either shape stands in for the count of failed fetches the shared state keeps, and for
+the fetch this render makes (see [limits.md](reference/limits.md#when-a-fetch-fails)):
+
+```json
+"fetch": { "fails": 1, "why": "timeout", "attempt": "timeout", "okAt": "2026-09-23T20:12:20Z" }
+```
+
+`fails` and `why` are the failures in a row so far and the latest reason, as the registry's `fail`
+and `why` hold them. `attempt` is this render's fetch: `ok`, the default, draws the response at
+`now`; `none` makes no attempt, as when another session holds the lock; anything else fails with
+that reason, as `timeout`, `offline`, `no token`, `http 429` or any text. `okAt` is when the last
+good fetch was made, the registry's `ts`. A render without a good fetch of its own draws the rows as
+that fetch measured them, or none if the fixture has none. The count moves and the row reads as in
+a live render, through the same `AfterFetch()` and `FetchWarn()`.
 
 Keep the hours exact when comparing builds. A `usage.json` and a `rows.json` that should draw the
 same rows must agree on the hours to each reset down to the last bit: .NET's `TotalHours` is

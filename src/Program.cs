@@ -69,7 +69,7 @@ try {
 // The columns the block may use, measured once: see Avail().
 int avail = Avail();
 
-var (usage, usageErr) = GetUsage();
+var (usage, usageErr, fetchErr) = GetUsage();
 string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
 var (acctLine, signedIn) = BuildAccount();
 // A session a few seconds old may not have its transcript yet. That is a race, not a
@@ -92,6 +92,9 @@ var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession || noMessa
 var warns = new List<string>();
 if (stdinErr.Length > 0) warns.Add(stdinErr);
 if (usageErr.Length > 0) warns.Add(usageErr);
+// A usage fetch that has failed twice in a row. With nobody signed in there is no token to fetch
+// with and no limit rows to miss, and the account line already says so, so it stays quiet then.
+if (fetchErr.Length > 0 && signedIn) warns.Add(fetchErr);
 if (stdinErr.Length == 0) {
     if (!haveCost && !haveDur) warns.Add("cost, duration — no cost block in the payload");
     else if (!haveCost) warns.Add("cost — no cost.total_cost_usd in the payload");
@@ -261,9 +264,9 @@ static int Padding() {
 // so the account line reads its .claude.json, statusLine.padding comes from its
 // .claude/settings.json and the token cache goes in its .claude folder.
 // HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken and
-// nothing is fetched. So a dev build run this way can't draw a live session's cached rows or
-// push a sample into the shared prediction history, both of which a plain test run on a live
-// machine does.
+// nothing is fetched. So a dev build run this way can't draw a live session's cached rows,
+// count a failed fetch against them, or push a sample into the shared prediction history,
+// all of which a plain test run on a live machine does.
 static string? Offline() {
     string? d = Environment.GetEnvironmentVariable("CSHIP_OFFLINE");
     return string.IsNullOrEmpty(d) ? null : d;
@@ -290,23 +293,36 @@ static string RunCship(string input) {
 // different security context can never deny us access. If the lock still fails, fetching
 // is suspended and a loud error line is rendered. Never an unguarded parallel fetch: that
 // would corrupt the prediction history.
-static (Cached c, string err) GetUsage() {
+//
+// Besides the rows and a lock failure it returns the reason for a fetch that has failed
+// twice in a row or more (FetchWarn), read from the shared state, so every session shows the
+// same row whether or not it was the one that fetched. A fresh cache means the last fetch
+// worked, so it comes with none. A failed fetch leaves the cache stale, so the next render
+// to take the lock is the retry. There is no second attempt inside one render, which would
+// double the 3 s a render can already spend waiting.
+static (Cached c, string err, string fetchErr) GetUsage() {
     if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    if (FreshVal(now) is Cached fresh) return (fresh, "");
+    if (FreshVal(now) is Cached fresh) return (fresh, "", "");
     Mutex? mx = null; bool owned = false;
     try {
         mx = new Mutex(false, LockName());
         try { owned = mx.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
     } catch (Exception ex) {
         mx?.Dispose();
-        return (AnyVal() ?? Cached.None, LockError(ex));
+        return (AnyVal() ?? Cached.None, LockError(ex), "");
     }
     try {
-        if (!owned) return (AnyVal() ?? Cached.None, "");
-        now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (FreshVal(now) is Cached fresh2) return (fresh2, "");
-        return (FetchAndSave(now) ?? AnyVal() ?? Cached.None, "");
+        if (owned) {
+            now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (FreshVal(now) is Cached fresh2) return (fresh2, "", "");
+            if (FetchAndSave(now) is Cached got) return (got, "", "");
+        }
+        // another session holds the lock, or this fetch failed: the last good rows, and the
+        // failures counted so far
+        var last = AnyVal();
+        return (last ?? Cached.None, "", FetchWarn(RegInt("fail"), RegStr("why"),
+                                                   last is null ? 0 : RegLong("ts"), now));
     } finally {
         if (owned) { try { mx!.ReleaseMutex(); } catch { } }
         mx?.Dispose();
@@ -331,21 +347,38 @@ static (Cached c, string err) GetUsage() {
 //     "rows": [ { "label": "5h", "pct": 22, "hrs": 3.38, "hasReset": true,
 //                 "rate": 10.4, "gated": false, "sev": "normal" }, ... ] }
 //
+// Either shape can carry a "fetch", standing in for the shared state and for the fetch this
+// render makes. "fails" and "why" are the failures in a row so far and the latest reason, as
+// the registry's fail and why hold them. "attempt" is this render's fetch: "ok", the
+// default, draws the response at "now"; "none" makes no attempt, as when another session
+// holds the lock; anything else fails with that reason. "okAt" is when the last good fetch
+// was made, the registry's ts. A render without a good fetch of its own draws the rows as
+// that fetch measured them, or none if the fixture has none to draw.
+//
+//   "fetch": { "fails": 1, "why": "timeout", "attempt": "timeout", "okAt": "2026-09-23T20:12:20Z" }
+//
 // Either way the forecast is an input, not computed from a history. This path is here to
-// test the parsing and the drawing. The rows also pass through the string the registry
-// keeps them in, so RowsOut and RowsIn are under test too.
-static (Cached c, string err) OfflineRows(string dir) {
+// test the parsing, the drawing and the count of failed fetches: the count moves by the
+// live code's AfterFetch and the reason is its FetchWarn. The rows also pass through the
+// string the registry keeps them in, so RowsOut and RowsIn are under test too.
+static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
     try {
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
         var root = d.RootElement;
         var now = Time(root, "now") ?? DateTimeOffset.UtcNow;
+        bool sim = root.TryGetProperty("fetch", out var fe) && fe.ValueKind == JsonValueKind.Object;
+        int fails = sim && fe.TryGetProperty("fails", out var fl) && fl.ValueKind == JsonValueKind.Number ? fl.GetInt32() : 0;
+        string why = sim ? Str(fe, "why") : "", attempt = sim ? Str(fe, "attempt") : "";
+        if (attempt.Length == 0) attempt = "ok";
+        var okAt = (sim ? Time(fe, "okAt") : null) ?? now;
+        bool ok = attempt == "ok";
 
         Cached? c = null;
         string usagePath = Path.Combine(dir, "usage.json");
         if (File.Exists(usagePath)) {
             using var ud = JsonDocument.Parse(File.ReadAllText(usagePath));
-            var u = ParseUsage(ud.RootElement, now);
-            if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters");
+            var u = ParseUsage(ud.RootElement, ok ? now : okAt);
+            if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters", "");
             var (iS, iW, iF, ignored) = Known(u.Meters, Str(root, "sn"));
             var fc = root.TryGetProperty("forecast", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
             var rows = new List<RowIn>();
@@ -366,14 +399,18 @@ static (Cached c, string err) OfflineRows(string dir) {
                                    r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
                                    r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
                                    r.GetProperty("sev").GetString() ?? ""));
-            if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows");
+            if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows", "");
             c = new Cached(list, "", "", "");
-        } else return (Cached.None, "offline — no usage.json and no rows in rows.json");
+        } else if (ok) return (Cached.None, "offline — no usage.json and no rows in rows.json", "");
 
-        return (c with { Rows = RowsIn(RowsOut(c.Rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote") }, "");
+        if (c is not null)
+            c = c with { Rows = RowsIn(RowsOut(c.Rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote") };
+        (fails, why) = AfterFetch(fails, why, attempt);
+        return (c ?? Cached.None, "", FetchWarn(fails, why, c is null ? 0 : okAt.ToUnixTimeSeconds(),
+                                                now.ToUnixTimeSeconds()));
     } catch (Exception ex) {
         // a broken fixture is loud, like every other failed source
-        return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message));
+        return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message), "");
     }
 }
 
@@ -514,7 +551,8 @@ static List<RowIn>? RowsIn(string s) {
 }
 
 static Cached? FetchAndSave(long now) {
-    if (!Fetch(out var u) || u is null) return null;
+    var (u, why) = Fetch();
+    if (u is null) { SaveFailure(why); return null; }
     string acct = AccountInfo().uuid;
     var hist = LoadHist();
     string oldAcct = RegStr("acct"), oldName = RegStr("sn");
@@ -553,6 +591,44 @@ static Cached? FetchAndSave(long now) {
     Save(acct.Length > 0 ? acct : oldAcct, scopedName.Length > 0 ? scopedName : oldName,
          rsS, rsW, rsF, vfS, vfW, vfF, hist, c, now);
     return c;
+}
+
+// The count of failed fetches in a row after an attempt: a success clears it, a failure adds
+// one and keeps its reason, and "none", no attempt, leaves both as they were. The ⚠ row waits
+// for the second failure in a row (FetchWarn), so a single lost fetch stays quiet and the
+// next attempt is its retry.
+static (int fails, string why) AfterFetch(int fails, string why, string attempt) =>
+    attempt == "ok" ? (0, "") : attempt == "none" ? (fails, why) : (Math.Min(fails, 999_999) + 1, attempt);
+
+// The ⚠ reason once the fetch has failed twice in a row or more, and "" before that: the
+// usage source, why the latest attempt failed, and how old the rows still drawn are, from
+// okAt, the time of the last good fetch; 0 means there are no rows to draw.
+static string FetchWarn(int fails, string why, long okAt, long now) {
+    if (fails < 2) return "";
+    return "usage — " + FetchWhy(why) + "; "
+         + (okAt > 0 ? "the limit rows are " + Hm((now - okAt) / 3600.0) + " old" : "no limit rows yet");
+}
+
+// A failed fetch in words. The registry's why holds a short kind for the failures the row has
+// words for, and a description of anything else, which is shown as it is.
+static string FetchWhy(string why) => why switch {
+    "timeout" => "timed out after 3 s",
+    "offline" => "offline, api.anthropic.com not reached",
+    "no token" => "no OAuth token in .credentials.json",
+    "" => "the fetch failed",
+    _ when why.StartsWith("http ", StringComparison.Ordinal) => "HTTP " + why.Substring(5) + " from api.anthropic.com",
+    _ => why
+};
+
+// A failed fetch leaves the cache as it was, stale, so the next render to take the lock tries
+// again. Only the count of failures in a row and the latest reason are written.
+static void SaveFailure(string why) {
+    try {
+        var (fails, w) = AfterFetch(RegInt("fail"), RegStr("why"), why);
+        using var rk = Registry.CurrentUser.CreateSubKey(@"Software\cshipUsage");
+        rk.SetValue("fail", fails.ToString(CultureInfo.InvariantCulture));
+        rk.SetValue("why", w);
+    } catch { }
 }
 
 // The three meters this status line draws (the session, weekly_all and one model-scoped
@@ -668,9 +744,11 @@ static string RegStr(string name) {
 
 static long RegLong(string name) => long.TryParse(RegStr(name), out long v) ? v : 0;
 
-// A good fetch: the rows and what came with them, and the history. val, the drawn rows
-// builds before this one cached, is removed, so that a build restored from a backup fetches
-// afresh rather than drawing rows from before the switch.
+static int RegInt(string name) => int.TryParse(RegStr(name), out int v) ? v : 0;
+
+// A good fetch: the rows and what came with them, the history, and a cleared count of
+// failures. val, the drawn rows builds before this one cached, is removed, so that a build
+// restored from a backup fetches afresh rather than drawing rows from before the switch.
 static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, long vfS, long vfW, long vfF,
                  List<(long t, int s, int w, int f)> hist, Cached c, long now) {
     try {
@@ -684,6 +762,8 @@ static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, l
         rk.SetValue("bd", c.Bd);
         rk.SetValue("cr", c.Cr);
         rk.SetValue("ig", c.Ig);
+        rk.SetValue("fail", "0");   // a good fetch clears the count, as AfterFetch has it
+        rk.SetValue("why", "");
         rk.DeleteValue("val", false);
         rk.SetValue("ts", now.ToString());   // freshness gate: must be the last write
     } catch { }
@@ -964,29 +1044,48 @@ static string Hm(double hours) {
     return h > 0 ? $"{h}h{m:D2}m" : $"{m}m";
 }
 
-static bool Fetch(out Usage? u) {
-    u = null;
+// One call to the usage API. On a failure the usage is null and why says what went wrong, as
+// a kind FetchWhy has words for where there is one: no token, timeout, offline, http <status>.
+static (Usage? u, string why) Fetch() {
+    string token = "";
     try {
-        string home = Home();
-        string credJson = File.ReadAllText(Path.Combine(home, ".claude", ".credentials.json"));
-        string token;
-        using (var cd = JsonDocument.Parse(credJson))
-            token = cd.RootElement.GetProperty("claudeAiOauth").GetProperty("accessToken").GetString() ?? "";
-        if (token.Length == 0) return false;
+        using var cd = JsonDocument.Parse(File.ReadAllText(Path.Combine(Home(), ".claude", ".credentials.json")));
+        token = cd.RootElement.GetProperty("claudeAiOauth").GetProperty("accessToken").GetString() ?? "";
+    } catch { }
+    if (token.Length == 0) return (null, "no token");
+    string body;
+    try {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
         req.Headers.Add("Authorization", "Bearer " + token);
         req.Headers.Add("anthropic-beta", "oauth-2025-04-20");
         req.Headers.Add("User-Agent", "claude-code/2.1.90");
         using var resp = http.Send(req);
-        if (!resp.IsSuccessStatusCode) return false;
-        string body;
+        if (!resp.IsSuccessStatusCode) return (null, "http " + (int)resp.StatusCode);
         using (var rs = resp.Content.ReadAsStream())
         using (var sr = new StreamReader(rs, Encoding.UTF8)) body = sr.ReadToEnd();
+    } catch (Exception ex) { return (null, FailKind(ex)); }
+    try {
         using var doc = JsonDocument.Parse(body);
-        u = ParseUsage(doc.RootElement, DateTimeOffset.UtcNow);
-        return u.Meters.Count > 0;
-    } catch { return false; }
+        var u = ParseUsage(doc.RootElement, DateTimeOffset.UtcNow);
+        return u.Meters.Count > 0 ? (u, "") : (null, "the response has no meters");
+    } catch (Exception ex) { return (null, "unreadable response, " + ex.GetType().Name); }
+}
+
+// What a failed request comes down to: "timeout" for HttpClient's own 3 s limit, "offline"
+// when the name did not resolve or the network is down or out of reach, and otherwise the
+// exception's type and message.
+static string FailKind(Exception ex) {
+    for (Exception? e = ex; e is not null; e = e.InnerException) {
+        if (e is TimeoutException) return "timeout";
+        if (e is System.Net.Sockets.SocketException se && se.SocketErrorCode is
+                System.Net.Sockets.SocketError.HostNotFound or System.Net.Sockets.SocketError.TryAgain
+                or System.Net.Sockets.SocketError.NoData or System.Net.Sockets.SocketError.NetworkDown
+                or System.Net.Sockets.SocketError.NetworkUnreachable or System.Net.Sockets.SocketError.HostUnreachable)
+            return "offline";
+    }
+    if (ex is TaskCanceledException) return "timeout";
+    return Clean(ex.GetType().Name + " " + Short(ex.Message, 48));
 }
 
 // Everything this binary draws from the usage response, measured against `utc`. Pure: the

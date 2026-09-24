@@ -31,7 +31,7 @@
   hour, in red if that is before it resets and in forest green if the reset comes first, and where
   it will stand when it resets.
 - It never shows a missing figure as a zero. You get `—` instead, plus a red row that says which
-  source failed and why.
+  source failed and why, and how old the limit rows are when your usage could not be fetched.
 - It stays out of the way. It is one native `.exe` that needs no .NET installed, and all your open
   Claude Code sessions share a single usage fetch.
 
@@ -78,8 +78,9 @@ read one scope straight down.
 <img src="docs/assets/warnings.png" width="754" alt="Three warning rows under a limit row. In red: 'tokens — no transcript_path in the payload'. In amber: the usage API sent a meter this status line ignores. In red: 'on credit — $12,40 spent beyond the plan this period'.">
 
 When a figure could not be read, you get a red `⚠` row naming its source and the reason, not a zero
-that looks real. An amber row appears when Anthropic's usage API sends a limit StatusAI does not
-draw yet, and a red alarm, always last, if your usage is ever billed beyond your plan.
+that looks real. When fetching your usage fails twice in a row, the row says why and how old the
+limit rows still shown are. An amber row appears when Anthropic's usage API sends a limit StatusAI
+does not draw yet, and a red alarm, always last, if your usage is ever billed beyond your plan.
 
 ### One fetch for all your sessions
 

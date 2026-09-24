@@ -13,7 +13,14 @@ the entries before the first release are by date.
   own width. The first good fetch removes the drawn copy older builds kept, `val`.
 - The render tests set or clear `COLUMNS` for every render, and cover where the width comes from:
   `COLUMNS` alone, `CSHIP_WIDTH` before it, values that are not widths, and `statusLine.padding`.
-  154 renders of 51 cases.
+- A usage fetch that fails twice in a row raises a red `⚠` row that names the reason (a timeout, an
+  HTTP status, no token, offline) and how old the limit rows still drawn are, until a fetch
+  succeeds. The first failure stays quiet, and the next render is its retry. The count is kept
+  beside the rows, in `fail` and `why`, so every session shows the same row; with nobody signed in
+  there is none, as there are no limit rows to miss.
+- Render cases for a usage fetch that fails once, twice, in another session and before any has
+  worked, then recovers, and for the failed fetch among the other `⚠` rows: 164 renders of 58
+  cases.
 - The README opens with the status line exactly as a terminal shows it, with nothing added, before
   the annotated version that names every part. `e7da798`
 - The annotated figure opens the reading guide when clicked, and a centred link to the guide sits

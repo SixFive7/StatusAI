@@ -162,12 +162,13 @@ instance; the limit rows need one.
 A figure that could not be read never looks like a real zero. A source that failed is named in a
 **red** `⚠` row at the foot of the block, and the figure itself reads `—`. That covers a payload
 that cannot be read, a missing cost or context figure, a transcript that should exist and does not,
-a usage fetch that is suspended, and cship printing nothing. A brand-new session, before its first
-reply, is not a failure and says nothing.
+a usage fetch that is suspended or has failed twice in a row, and cship printing nothing. A
+brand-new session, before its first reply, is not a failure and says nothing.
 
-One failure is quiet for now: a usage fetch that fails (when you're offline, say) raises no row.
-The limit rows then keep showing the last good fetch exactly as it was drawn, with its countdowns
-frozen, or are left out if there has been none.
+A usage fetch that fails once (when you're offline, say) is quiet. The limit rows keep showing the
+last good fetch, with its countdowns where they stood then, or are left out if there has been none,
+and the next render tries again. If that fails too, a red row names the reason and says how old the
+rows are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds.
 
 Two more rows can appear there, and neither is a failure:
 

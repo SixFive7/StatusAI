@@ -15,8 +15,37 @@ anthropic-beta: oauth-2025-04-20
 User-Agent: claude-code/2.1.90
 ```
 
-Undocumented, like everything else this project reads. Three-second timeout, and every failure
-path is a bare `catch` that leaves the rows rendering their last cached value.
+Undocumented, like everything else this project reads. Three-second timeout. A fetch that fails
+leaves the rows drawing the last good one; see [when a fetch fails](#when-a-fetch-fails).
+
+### When a fetch fails
+
+A failed fetch leaves the cache as it was, stale, so the next render to take the lock tries again:
+that render is the retry. No render makes a second attempt of its own: that would double the three
+seconds one can already spend waiting, and Claude Code cancels a render still running when a newer
+update comes along. Meanwhile the rows keep drawing the last good fetch, with the countdowns it
+measured.
+
+The first failure is quiet. The second in a row raises a red `⚠` row, which names the source, the
+reason and how old the rows still drawn are, and stays until a fetch succeeds:
+
+```
+⚠ usage — timed out after 3 s; the limit rows are 2m old
+⚠ usage — HTTP 429 from api.anthropic.com; the limit rows are 5m old
+⚠ usage — offline, api.anthropic.com not reached; the limit rows are 3m old
+⚠ usage — no OAuth token in .credentials.json; no limit rows yet
+```
+
+The timeout is HttpClient's own three seconds. Offline is a name that did not resolve or a network
+that is down or out of reach. A response that is not JSON reads `unreadable response`, one without a
+meter `the response has no meters`, and any other failure is named by its exception. With nobody
+signed in there is no token to fetch with and no rows to miss, and the account line already says
+`not signed in`, so the row stays away.
+
+The count is kept beside the rows in the registry, `fail` for the failures in a row and `why` for
+the latest reason, so every session shows the same row, whether or not it was the one that fetched.
+A good fetch sets `fail` back to 0. Only a fetch that finishes is counted: one cut short by such a
+cancel counts as neither, so in a busy session a timeout can go uncounted until a quiet moment.
 
 ### None of it comes from stdin
 
@@ -223,10 +252,11 @@ a bug.
   [render tests](../development.md#the-render-tests) pin that parse and the drawing, but the
   forecast inputs come from the fixture, so the window checks and the slope cannot be
   regression-tested. See [development.md](../development.md#offline-beside-live-sessions).
-- A failed fetch is silent. The rows keep drawing the last good fetch's render, its countdowns
-  frozen at the time of that fetch, and no `⚠` row says so; with no fetch ever made there are no
-  rows. Claude Code's payload has since gained `rate_limits.five_hour` and `rate_limits.seven_day`,
-  a used percentage and a reset time each, which nothing here reads.
+- A failed fetch keeps the last good rows, their countdowns stopped where that fetch measured them;
+  from the second failure in a row a `⚠` row gives their age (see
+  [when a fetch fails](#when-a-fetch-fails)). Claude Code's payload has since gained
+  `rate_limits.five_hour` and `rate_limits.seven_day`, a used percentage and a reset time each,
+  which could stand in for them and which nothing here reads.
 - `is_active` and `group` are parsed past and discarded.
 - A new meter is not drawn until its code is reviewed. Only the session, `weekly_all` and one
   model-scoped `weekly_scoped` are; anything else is named in the amber `⚠` row instead (see

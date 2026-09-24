@@ -327,7 +327,9 @@ What can appear there: an unreadable payload; a missing `cost` block or either o
 missing `context_window.used_percentage`, since cship draws its context bar from that field and a
 missing one draws the same `○○○ 0%` as a context that really is empty (only the colour differs: the
 bar's configured style for a number, the default foreground otherwise); a suspended usage fetch;
-any of the four ways the token walk can fail; and cship producing no output at all.
+a usage fetch that has failed twice in a row, with how old the limit rows still drawn are (see
+[limits.md](limits.md#when-a-fetch-fails)); any of the four ways the token walk can fail; and cship
+producing no output at all.
 
 Being on credit gets a row of its own, always last and never joined to the others by `·`. It is not
 a source that failed but usage being billed that the plan should have covered, with the amount

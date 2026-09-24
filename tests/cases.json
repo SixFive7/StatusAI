@@ -187,6 +187,48 @@
       "widths": [141],
       "checks": "statusLine.padding 2 in settings.json: Claude Code indents the status line two columns on either side, so it gets four columns fewer, the same bytes as live at 137."
     },
+    "fetch-failed-once": {
+      "home": "fetch-failed-once",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A usage fetch that times out once: no warning, and the rows of the last good fetch, a minute old, with their countdowns as that fetch measured them."
+    },
+    "fetch-failed-twice": {
+      "home": "fetch-failed-twice",
+      "payload": "fresh",
+      "widths": [100, 141],
+      "checks": "The retry times out too: a red ⚠ row names the usage source, the timeout, and the age of the rows still drawn."
+    },
+    "fetch-recovered": {
+      "home": "fetch-recovered",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A good fetch after two failures clears the count and its row: the same bytes as live at 141."
+    },
+    "fetch-failing-elsewhere": {
+      "home": "fetch-failing-elsewhere",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "Another session holds the lock and has failed three times with HTTP 429: this render makes no attempt and shows the same row from the shared count."
+    },
+    "fetch-never-worked": {
+      "home": "fetch-never-worked",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "Signed in, but with no OAuth token to fetch with, twice: no limit rows, and a ⚠ row that says there are none yet."
+    },
+    "fetch-signed-out": {
+      "home": "fetch-signed-out",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "Nobody signed in, so no token, twice: no ⚠ row, since the account line already says not signed in and there are no limit rows to miss."
+    },
+    "fetch-every-warning": {
+      "home": "fetch-every-warning",
+      "payload": "fresh-no-transcript-path",
+      "widths": [100, 120, 141],
+      "checks": "The failed fetch among the other rows, in every-warning's order: the red failures first, the usage one before the tokens one, on one row where they fit and one each where they do not; then the amber meters notice, then the on-credit alarm, last."
+    },
     "rows-shot": {
       "home": "rows-shot",
       "payload": "fresh",
