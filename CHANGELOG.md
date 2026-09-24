@@ -28,6 +28,8 @@ are by date.
   beside live sessions — see [development.md](docs/development.md#the-render-tests). `068ef3b`
 - [Deploy.ps1](scripts/Deploy.ps1) tests, backs up, copies with retries, verifies and rolls back.
   `71ae18a`
+- The scripts and reports behind the limit-row commits are kept in
+  [docs/design/evidence/](docs/design/evidence/). `6defb02`
 - Every text file is LF; `.work/` is the scratch area. `9af4082`
 - The docs' mockups show example.com addresses, and their stale claims are corrected. `fe5a8f3`
   `71f866c`
