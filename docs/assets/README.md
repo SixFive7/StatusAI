@@ -21,6 +21,7 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 
 | figure | shows | drawn from | size |
 |---|---|---|---|
+| [plain.png](plain.png) | The whole status line exactly as the terminal shows it at the default 141 columns, with nothing added. | `showcase.w141` | 1146 × 198 |
 | [hero.png](hero.png) | The whole status line at the default 141 columns: the model line with the meta segment, the token grid, the limit rows with the account and the breakdown. | `showcase.w141` | 1146 × 288 |
 | [limits.png](limits.png) | The 5h and 7d rows of the `shot` fixture, every segment named: 7d at 89% runs out in 4h35m, before its reset, so the time is red; 5h resets before it would, so its time is forest green. | `shot.w141` | 586 × 197 |
 | [states.png](states.png) | One limit row per state of →: red, forest, never, early, and maxed with its ⇢ segment greyed. | `shot.w141`, `rows-early.w141`, `maxed-5h.w141` | 650 × 333 |

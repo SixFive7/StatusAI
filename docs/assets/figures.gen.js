@@ -142,6 +142,12 @@ const SCENES = [];
 // id, what it shows (the index's description and the default alt text), how it is drawn
 function scene(id, shows, build) { SCENES.push({ id, shows, build }); }
 
+// ─── plain: the hero's render with nothing added, exactly what the terminal shows
+scene('plain', 'The whole status line exactly as the terminal shows it at the default 141 columns, with nothing added.', () => {
+  const R = 'showcase.w141';
+  return terminal({ big: true, lines: [0, 1, 2, 3, 4].map(i => ({ cells: line(R, i) })) });
+});
+
 // ─── the hero: every row at once, at the default width
 scene('hero', 'The whole status line at the default 141 columns: the model line with the meta segment, the token grid, the limit rows with the account and the breakdown.', () => {
   const R = 'showcase.w141', L = [0, 1, 2, 3, 4].map(i => line(R, i));

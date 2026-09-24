@@ -5,6 +5,8 @@
 **A status line for Claude Code that shows what your whole agent tree is spending —**<br>
 **every sub-agent's tokens, where your usage limits are heading, and what the session costs.**
 
+<img src="docs/assets/plain.png" width="1146" alt="The StatusAI status line in a terminal, as it looks in use: the model line with its context bar, session time, lines changed and cost; two rows of token counts for the conversation, its sub-agents and the whole tree; and the 5-hour, weekly and Fable limit rows beside the account and this week's split across products.">
+
 <a href="https://github.com/SixFive7/StatusAI/releases/latest"><img src="docs/assets/download.png" width="300" alt="Download StatusAI for Windows"></a>
 
 <sub>For Claude Code on Windows 10 and 11 · [install guide](docs/guide/install.md) · [what every glyph means](docs/guide/reading-the-status-line.md) · [changelog](CHANGELOG.md)</sub>
