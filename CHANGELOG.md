@@ -5,34 +5,34 @@ the entries before the first release are by date.
 
 ## Unreleased
 
-- The README opens with the status line exactly as a terminal shows it, nothing added, before the
-  annotated version that names every part. `e7da798`
+- The README opens with the status line exactly as a terminal shows it, with nothing added, before
+  the annotated version that names every part. `e7da798`
 
-## 0.1.0 — 2026-09-24
+## 0.1.0 - 2026-09-24
 
 The first release: a zip with `cship-usage.exe` and the configuration it is used with.
 [install.md](docs/guide/install.md) puts it in place and fetches
 [cship](https://github.com/stephenleo/cship) 1.8.0 beside it. It draws:
 
-- **Tokens for the whole agent tree** — the main conversation and every sub-agent at any depth,
-  workflows included — in two rows of nine: fresh prompt, cache writes and tool calls above; output,
+- Tokens for the whole agent tree (the main conversation and every sub-agent at any depth,
+  workflows included) in two rows of nine: fresh prompt, cache writes and tool calls above; output,
   cache reads and all tokens below; each for the main thread, the sub-agents and the whole tree.
-- **Three usage limits** — the five hours, the week, and the week for one model — each with where
-  it stands, when it resets, when 100% arrives at the pace of the last hour, and where it will
-  stand at the reset. The time to 100% is red when it comes before the reset and forest green when
-  the reset comes first.
-- **The account, and where the week went**: `👤 you@example.com · Max 20 · CC 99% · Chat 0% ·
+- Three usage limits, the five hours, the week and the week for one model, each with where it
+  stands, when it resets, when 100% arrives at the pace of the last hour, and where it will stand
+  at the reset. The time to 100% is red when it comes before the reset and forest green when the
+  reset comes first.
+- The account, and where the week went: `👤 you@example.com · Max 20 · CC 99% · Chat 0% ·
   Cowork 1%`.
-- **Time and money**: how long the session has run, the lines it changed, its cost per hour and its
-  cost so far, in dollars and euros.
-- **Warnings that say why**: a figure that could not be read shows `—` and a red `⚠` row names its
+- How long the session has run, the lines it changed, its cost per hour and its cost so far, in
+  dollars and euros.
+- Warnings that say why. A figure that could not be read shows `—` and a red `⚠` row names its
   source, an amber row names a limit it does not draw yet, and a red alarm appears if usage is ever
   billed beyond the plan.
-- **One usage fetch at a time for every open session**, and none while the shared copy is under 50
+- One usage fetch at a time for every open session, and none while the shared copy is under 50
   seconds old.
 
-It needs Windows 10 or 11 on x64, Claude Code in a terminal — the VS Code extension's chat panel
-shows no status line — and, for cship, the Microsoft Visual C++ Redistributable, which most PCs
+It needs Windows 10 or 11 on x64, Claude Code in a terminal (the VS Code extension's chat panel
+shows no status line) and, for cship, the Microsoft Visual C++ Redistributable, which most PCs
 already have and the install block checks for.
 
 Known limits: numbers are in Dutch notation (`1.234,56`); the width is 141 columns unless
@@ -46,9 +46,9 @@ Windows 11's Smart App Control blocks it where it is on; there is no installer o
 
 - A row at 100% keeps its `⇢` segment but draws it grey, like a disabled control: the row is
   blocked until its reset, so where it is heading does not apply yet. `878a8e4`
-- Only the three known limits are drawn — the session, the week, and one model-scoped weekly
-  limit. Any other the usage API sends is named in an amber notice instead, pending a review of
-  the code. `ccf37df`
+- Only the three known limits are drawn: the session, the week, and one model-scoped weekly limit.
+  Any other the usage API sends is named in an amber notice instead, pending a review of the code.
+  `ccf37df`
 - The account line shows how this week's usage splits across products, `CC 99% · Chat 0% ·
   Cowork 1%`, in whole entries or not at all. `a84bd3a`
 - A red alarm, always the last row, when usage is being billed beyond the plan. `a84bd3a`
@@ -81,14 +81,14 @@ Windows 11's Smart App Control blocks it where it is on; there is no installer o
   designs there. The README's technical content moved into them. `17623f1` `7f9b88f` `23496ac`
   `a89974a`
 - Render tests: 143 renders of 44 cases compared byte for byte with the recorded output, offline,
-  beside live sessions — see [development.md](docs/development.md#the-render-tests). `068ef3b`
+  beside live sessions. See [development.md](docs/development.md#the-render-tests). `068ef3b`
 - [Deploy.ps1](scripts/Deploy.ps1) tests, backs up, copies with retries, verifies and rolls back.
   `71ae18a`
 - Every text file is LF; `.work/` is the scratch area. `9af4082`
 - The docs' mockups show example.com addresses, and their stale claims are corrected. `fe5a8f3`
   `71f866c`
-- The [decisions page](docs/design/limits-decisions.html) records the limit-row questions of 23–24
-  September: the rejected window-average forecast, and the decisions behind forest `→`, the
+- The [decisions page](docs/design/limits-decisions.html) records the limit-row questions of 23 and
+  24 September: the rejected window-average forecast, and the decisions behind forest `→`, the
   breakdown, the alarm, the amber notice and the grey `⇢`. `b63d40d` `5b9dd49`
 
 ## 2026-09-23
@@ -113,7 +113,7 @@ Windows 11's Smart App Control blocks it where it is on; there is no installer o
 
 ## 2026-08-14
 
-- The first commit: tokens and tool calls for the whole agent tree — the main conversation and
-  every sub-agent at any depth — checked against independent PowerShell implementations on an
-  86-agent session. `b4d7d99`
+- The first commit: tokens and tool calls for the whole agent tree (the main conversation and every
+  sub-agent at any depth), checked against independent PowerShell implementations on an 86-agent
+  session. `b4d7d99`
 - The verification scripts take `-Sid` and find the transcript themselves. `f1528d7`
