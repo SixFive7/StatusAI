@@ -101,7 +101,7 @@ rows, and why that is a decision, not a regression.
   the slope skips.
 
 Names are drawn with every control character replaced, so nothing the server sends can act on the
-terminal. The flag is cached beside the rendered rows, registry value `ig`, one meter per line, so
+terminal. The flag is cached beside the rows' figures, registry value `ig`, one meter per line, so
 a cache hit still shows it.
 
 ### The product breakdown
@@ -139,7 +139,7 @@ this period. The response has no field for "billing right now", which is inferre
 `credits_ever_enabled: true`, `spend_limit_reached`, `can_toggle` and `can_purchase_credits`, so a
 softer "credits are on" notice could be told apart from the alarm without guessing.
 
-The breakdown and the alarm are cached beside the rendered rows, in registry values `bd` and `cr`,
+The breakdown and the alarm are cached beside the rows' figures, in registry values `bd` and `cr`,
 because a cache hit does not fetch and must still draw them.
 
 ### `is_active` is reported and unused

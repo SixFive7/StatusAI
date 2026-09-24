@@ -20,8 +20,8 @@ is [packaging-plan.md](../design/packaging-plan.md).
   account line reads `👤 not signed in`.
 - A terminal that draws emoji two columns wide, as Windows Terminal does. The token grid is laid out
   on that assumption.
-- The width is 141 columns unless you set `CSHIP_WIDTH` (see below), because StatusAI does not read
-  the terminal's width yet.
+- The status line fits the terminal's width, which Claude Code passes to it from version 2.1.153
+  on. With an older Claude Code it assumes 141 columns, unless you give it a width (step 4).
 - Numbers are in Dutch notation, `1.234,56` and `$9,32`, and there is no setting for that yet.
 - For cship, the Microsoft Visual C++ Redistributable. cship is built against it and cannot start
   without it. Windows does not include it, but most PCs have it from some other program, and the
@@ -119,9 +119,10 @@ The repository is private for now, so the download works only for people who hav
    "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
    ```
 
-   If your terminal is not 141 columns wide, add its width as well, in the `env` block if the file
-   has one already. In PowerShell, `$Host.UI.RawUI.WindowSize.Width` prints the width of the window
-   it runs in.
+   There is no width to set: StatusAI takes the terminal's from Claude Code. If you want a fixed
+   width all the same, add it too, in the `env` block if the file has one already; it wins over the
+   terminal's. In PowerShell, `$Host.UI.RawUI.WindowSize.Width` prints the width of the window it
+   runs in.
 
    ```json
    "env": { "CSHIP_WIDTH": "120" }
@@ -196,7 +197,7 @@ Nerd Font the few icons in cship's model line show as boxes; nothing StatusAI dr
 | the session's raw JSON where the model line should be | cship is not beside `cship-usage.exe`. Run the block again. |
 | `⚠ cship — no output`, and no model line | cship ran and drew nothing. Either `%USERPROFILE%\.config\cship.toml` is missing (copy it from the zip), or cship cannot start, which it can't without the Microsoft Visual C++ Redistributable: install the x64 one from [Microsoft](https://aka.ms/vc14/vc_redist.x64.exe). |
 | boxes instead of the model line's two icons | The terminal's font is not a Nerd Font. |
-| rows that wrap or run past the edge | Set `CSHIP_WIDTH` to the terminal's width (step 4). |
+| rows cut short at the right edge | Claude Code before 2.1.153 does not pass the terminal's width, so StatusAI assumes 141 columns: update Claude Code, or set `CSHIP_WIDTH` (step 4). A `CSHIP_WIDTH` wider than the terminal does the same. Below 121 columns the token grid is cut short whatever the width says. |
 | every limit row reads `→ early` | Nothing is wrong: for the first ten minutes there is no trend yet. |
 | `👤 not signed in`, and no limit rows | Claude Code is signed in with an API key rather than a Claude account; the limit rows need the account. |
 

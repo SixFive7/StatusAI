@@ -49,7 +49,7 @@ dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/cship-usage.exe
 ```
 
-146 renders of 45 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
+154 renders of 51 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
@@ -61,6 +61,11 @@ nothing is written to `tests/`. The binary is copied beside a `cship.exe` first,
 runs the cship in its own directory: the one beside `-Exe`, else the one on PATH, else
 `-Cship <path>`.
 
+The width reaches a render the way its case says. By default `CSHIP_WIDTH` is the width; a case
+with an `env` sets exactly the `CSHIP_WIDTH` and `COLUMNS` it names instead, `{w}` standing for the
+width. `COLUMNS` and `LINES` are cleared first, so the size of the terminal running the tests never
+reaches a render.
+
 cship gets a config without starship: `HOME` points it at `tests/cship.toml`, which is the shipped
 `config/cship.toml` minus the starship line. That line draws the working directory, git, the clock,
 RAM and the GPU, and is never the same twice. The model line it keeps is the real host line the
@@ -69,7 +74,7 @@ a run with another version says so first, because it may draw that line differen
 
 | path | holds |
 |---|---|
-| `tests/cases.json` | every case: its home, its payload, its widths, and one line on what it checks |
+| `tests/cases.json` | every case: its home, its payload, its widths, the `env` that gives it the width where that is under test, and one line on what it checks |
 | `tests/fixtures/homes/<home>/` | a `CSHIP_OFFLINE` directory: `rows.json`, usually a `usage.json`, the account files, and a transcript tree where the case counts tokens |
 | `tests/fixtures/payloads/<payload>.json` | a status-line stdin payload, with a `transcript_path` relative to the home |
 | `tests/expected/<case>.w<width>.ansi` | the exact bytes that case draws at that width |
@@ -83,7 +88,9 @@ sub-agents, one of them a nested workflow agent, whose files carry both
 [duplication traps](reference/accounting.md#the-two-duplication-traps); the scripts under
 [verifying the accounting](#verifying-the-accounting) agree with its totals. The other cases cover
 the limit rows through a usage response and through `rows.json` alone, the meters notice, the
-breakdown against the width, the on-credit alarm, the order of the `⚠` rows, and the payloads:
+breakdown against the width, the on-credit alarm, the order of the `⚠` rows, where the width comes
+from (`COLUMNS`, `CSHIP_WIDTH` before it, a value that is not a width, `statusLine.padding`), and
+the payloads:
 fresh sessions that must stay quiet, and broken ones that must still warn, one of them so broken
 that cship prints nothing. What the tests cannot cover is the live fetch, the registry cache and
 the history. The forecast is an input to a fixture, so the window checks and the slope are not
@@ -148,27 +155,30 @@ cship to test with. Exit code 0 when packaged, 1 when it refused, 2 when the bui
 failed; a run that does not finish leaves no zip of that version behind. Windows PowerShell 5.1 and
 PowerShell 7 both run it.
 
-## Trap 1: the cache serves output from the *previous* binary
+## Trap 1: the cache holds the *previous* binary's figures
 
-It can make a working change look broken, and a broken one look fine.
+It can make a working change to the fetch look broken, and a broken one look fine.
 
-`GetUsage()` returns the cached render string whenever `now - ts < 50`. The cache holds a fully
-rendered, ANSI-coloured string, not the underlying numbers, so a value the *old* binary wrote 20
-seconds ago is returned verbatim by the *new* one. Claude Code re-runs the status line every 60
-seconds, so on any machine with a live session there is almost always a fresh entry.
+`GetUsage()` returns the cached rows whenever `now - ts < 50`. The cache holds their figures, not
+drawn text, so the drawing is always the running binary's own, at its own width. The figures are
+not: the pace and the window checks behind them were computed by whichever binary fetched last. A
+value the *old* binary wrote 20 seconds ago is drawn as it stands by the *new* one, and Claude Code
+re-runs the status line every 60 seconds, so on any machine with a live session there is almost
+always a fresh entry.
 
-What makes it nasty is that the numbers are current and only the *rendering* is stale. A test run
-of a new build can show freshly fetched percentages laid out by code that is no longer on disk,
-which reads as "the fetch works but my change did nothing".
+Until 2026-09-24 the cache held the drawn rows instead, in `val`, so a new build served its
+predecessor's layout as well, the nastier half of this trap: freshly fetched percentages laid out
+by code no longer on disk, which read as "the fetch works but my change did nothing". A build from
+before then, restored from a backup, finds no `val` and fetches afresh.
 
-Invalidate before every test:
+When the fetch is under test, invalidate first:
 
 ```powershell
 Set-ItemProperty -Path "HKCU:\Software\cshipUsage" -Name "ts" -Value "0"
 ```
 
 Then run it straight away. A live Claude Code window is racing you for the same mutex, and if it
-wins, you get its render instead.
+wins, you get its figures instead.
 
 That is a write to state every running session shares, and the test run that follows fetches and
 pushes a sample into the shared prediction history. When what is under test is the drawing rather
@@ -203,10 +213,11 @@ mid-session one, `mid-session.json`, beside the rest the [render tests](#the-ren
 `CSHIP_OFFLINE=<dir>` renders from that directory instead of the machine's shared state. The limit
 rows are drawn from `<dir>/usage.json` and `<dir>/rows.json` rather than the registry cache and the
 API, the euro rate comes from `rows.json`, and `<dir>` stands in for the user profile: the account
-line reads `<dir>/.claude.json` and `<dir>/.claude/.credentials.json`, and the token cache is
-written under `<dir>/.claude/statusline-tokens/`. `HKCU\Software\cshipUsage` is neither read nor
-written, the usage lock is never taken, and nothing is fetched, so a dev build can run beside live
-sessions without serving their cached render or touching their history.
+line reads `<dir>/.claude.json` and `<dir>/.claude/.credentials.json`, `statusLine.padding` comes
+from `<dir>/.claude/settings.json`, and the token cache is written under
+`<dir>/.claude/statusline-tokens/`. `HKCU\Software\cshipUsage` is neither read nor written, the
+usage lock is never taken, and nothing is fetched, so a dev build can run beside live sessions
+without drawing their cached rows or touching their history.
 
 Given a `usage.json` (a usage API response, verbatim or edited), the binary parses it with the same
 `ParseUsage()` as a live fetch, so the meters, the product breakdown, the on-credit alarm and the

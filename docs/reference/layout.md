@@ -7,19 +7,36 @@ first.
 
 ## Width budget
 
-Terminal width comes from `TermWidth()`: `CSHIP_WIDTH` if it is set, otherwise a hardcoded **141**.
-Claude Code spawns the status line detached, so the attached console reports a phantom 120x30 and
-asking the OS is useless. 141 is a measured value for one machine; anyone else has to set
-`CSHIP_WIDTH` by hand, in the `env` of Claude Code's `settings.json`.
+The terminal's width comes from `TermWidth()`, which takes the first of these that is a whole number
+over 40:
 
-Claude Code does pass the width another way: since 2.1.153 it sets `COLUMNS` and `LINES` to its
-terminal's size before it runs the command, and its
-[status line documentation](https://code.claude.com/docs/en/statusline) says to read those.
-`TermWidth()` does not read them yet.
+1. `CSHIP_WIDTH`, a fixed width set by hand in the `env` of Claude Code's `settings.json`;
+2. `COLUMNS`, which Claude Code sets to its terminal's width, beside `LINES` for the height, every
+   time it runs the status line. It has done so since 2.1.153, the 2.1.281 bundle takes both from
+   `process.stdout`, and its [status line documentation](https://code.claude.com/docs/en/statusline)
+   says to read them;
+3. **141**, measured on one machine, for a Claude Code older than that.
+
+Asking the OS is useless: Claude Code spawns the status line detached, and the console it gets
+reports a phantom 120x30. A width that is not a number, or 40 or less, is passed over for the next.
+
+Not all of that width is the status line's. Claude Code draws it in the footer under the prompt, a
+row as wide as the terminal with two columns of padding on either side; inside that it indents the
+status line by `statusLine.padding` on either side, 0 unless set. A line longer than what is left is
+cut short, not wrapped, and every line has the spaces at either end trimmed, so an indent survives
+only behind the colour reset each row starts with. The fullscreen renderer draws the same footer,
+the full width of the terminal under any side panel. All of this was read in the 2.1.281 bundle.
+
+So everything below is laid out in `Avail()`, the width less 4, less twice the padding. `Padding()`
+reads it from `~/.claude/settings.json`, where the install guide puts the `statusLine` entry; a
+padding set only in a project's settings is not seen. Outside fullscreen, Claude Code also puts its
+notifications on the right of the same row, and its documentation says they can cut the status line
+short on a narrow terminal. In fullscreen they get a row of their own.
 
 ```
 141  terminal
- -4  host padding
+ -4  the footer's padding, two columns on either side
+ -0  statusLine.padding, twice
 ----
 137  available
  -1  our indent
@@ -45,8 +62,8 @@ projection bars is known, so `RenderRows` solves for the bar length that exactly
 terminal, and recomputes it every render.
 
 ```
-fixedPart = 4 + 1 + 2 + 2*rowConst + wLbl[0] + wLbl[1] + 2*(wNow + wReset + wTo100 + wProj + wNowBar)
-capBar    = clamp((term - 2 - fixedPart) / 2, 10, 30)
+fixedPart = 1 + 2 + 2*rowConst + wLbl[0] + wLbl[1] + 2*(wNow + wReset + wTo100 + wProj + wNowBar)
+capBar    = clamp((avail - 2 - fixedPart) / 2, 10, 30)
 ```
 
 Every width is kept per column, `[0]` for the left and `[1]` for the right, and each of the five in
@@ -65,8 +82,13 @@ term rather than a constant so that an eleventh cell would cost bar budget inste
 shifting everything to its right on one row, which `Compose()`'s two-column arithmetic cannot
 survive.
 
-The `4 + 1 + 2` is host padding, our indent, and the column gap; the doubling is because
-`Compose()` puts two metric rows side by side (5h with the account line, 7d with the scoped row).
+The `1 + 2` is our indent and the column gap, since `avail` has the footer's padding out already;
+the doubling is because `Compose()` puts two metric rows side by side (5h with the account line, 7d
+with the scoped row).
+
+The rows are drawn at every render, at the width of the session drawing them. What the fetch caches
+and every session shares is their figures, never the drawn rows: with the width taken from each
+session's own terminal, rows drawn once for one width would be wrong in every session of another.
 
 The rule worth remembering follows from this: **a metric row is laid out twice per line, so any
 field added to it costs twice its width in bar budget.** Add a five-character column and the bars
@@ -127,7 +149,7 @@ week's usage, in the account's text colour, with a dim `·` between them.
 
 The breakdown takes no part in the layout decision. The two-column test is made on the account
 alone, so the breakdown can never push the rows into the stacked layout. It then gets whatever room
-that line has left (`term - 4` minus the left column and the gap, or `term - 5` stacked), in whole
+that line has left (`avail` minus the left column and the gap, or `avail - 1` stacked), in whole
 entries or not at all: every entry while they all fit, then without the 0% ones, then none. It never
 wraps and is never cut inside an entry. The account is charged as the layout test charges it, one
 column wide of the truth, so the line always passes the test the layout was decided by.
@@ -324,7 +346,7 @@ money. It sits under the red failure rows and above the credit alarm, which stay
 ⚠ meters — the usage API sent 6 meters this status line ignores: Claude Design (weekly_scoped, surface) +5 more · review cship-usage
 ```
 
-It has the `⚠` rows' budget, `term - 6` for `⚠` and the text, and fills it with whole names: as
+It has the `⚠` rows' budget, `avail - 2` for `⚠` and the text, and fills it with whole names: as
 many as fit, in the server's order, then `+N more` for the rest. If not even one name fits, it only
 counts them, `⚠ meters — the usage API sent 6 meters this status line ignores · review
 cship-usage` at 84 or 85 columns, and only below that would it be cut like any other reason. At the

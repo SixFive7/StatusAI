@@ -203,8 +203,7 @@ Installing, in brief
      have one.
   4. Add this to %USERPROFILE%\.claude\settings.json, inside its outer braces:
        "statusLine": { "type": "command", "command": "cship-usage", "refreshInterval": 60 }
-     and, if your terminal is not 141 columns wide, its width:
-       "env": { "CSHIP_WIDTH": "120" }
+     There is no width to set: Claude Code 2.1.153 and later pass the terminal's.
   5. Restart Claude Code.
 
 The install guide does steps 1 to 3 with one PowerShell block, checks the hash

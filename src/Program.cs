@@ -66,6 +66,9 @@ try {
     stdinErr = "payload unreadable — " + ex.GetType().Name;
 }
 
+// The columns the block may use, measured once: see Avail().
+int avail = Avail();
+
 var (usage, usageErr) = GetUsage();
 string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
 var (acctLine, signedIn) = BuildAccount();
@@ -82,7 +85,7 @@ var (acctLine, signedIn) = BuildAccount();
 // a missing file is expected at any age, with or without a duration. Once a context has
 // been measured the file should exist, and after 30 s a missing one is reported again.
 bool youngSession = haveDur && durMs <= 30000;
-var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession || noMessagesYet);
+var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession || noMessagesYet, avail);
 
 // A ⚠ reason for every source that failed, so a blank figure always comes with a reason.
 // A source that reported a real zero adds nothing here.
@@ -110,19 +113,20 @@ int idx = -1;
 for (int i = lines.Count - 1; i >= 0; i--) if (lines[i].Trim().Length > 0) { idx = i; break; }
 if (idx < 0) warns.Add("cship — no output; its prompt and model lines are missing");
 
-var warnLines = WarnRows(warns);
+var warnLines = WarnRows(warns, avail);
 // A meter the usage API sent that this status line does not draw is a notice to review the
 // code, not a failed source: a row of its own, in amber.
-if (MetersRow(usage.Ig) is { Length: > 0 } metersRow) warnLines.Add(metersRow);
+if (MetersRow(usage.Ig, avail) is { Length: > 0 } metersRow) warnLines.Add(metersRow);
 // Being on credit is not a failed source but an alarm, so it never shares a row with one:
 // its own row, last, under every other reason.
-if (usage.Cr.Length > 0) warnLines.Add(AlarmRow(usage.Cr));
+if (usage.Cr.Length > 0) warnLines.Add(AlarmRow(usage.Cr, avail));
 
 // Every row of the block starts with a single-width glyph (the │ rule on the token rows,
 // 5h/7d on the metric rows), so one indent serves them all and column 1 lines up on every
-// line. The breakdown belongs to an account, so with nobody signed in it is left out.
+// line. The breakdown belongs to an account, so with nobody signed in it is left out. The
+// limit rows are drawn here, at this session's width, from the figures the fetch cached.
 var block = new List<string>(tokenLines);
-block.AddRange(Compose(usage.Val, acctLine, signedIn ? usage.Bd : "", warnLines));
+block.AddRange(Compose(RenderRows(usage.Rows, 2, avail), acctLine, signedIn ? usage.Bd : "", warnLines, avail));
 if (idx >= 0) {
     lines[idx] = "\x1b[0m" + lines[idx];
     if (metaLine.Length > 0) lines[idx] += "   " + metaLine;
@@ -157,18 +161,16 @@ return;
 //
 // The product breakdown takes no part in that decision: it rides after the account only in
 // whatever room the layout leaves, so it can never push the rows into the stacked layout.
-static List<string> Compose(string usageRows, string acct, string bd, List<string> errs) {
+static List<string> Compose(string usageRows, string acct, string bd, List<string> errs, int avail) {
     const int gap = 2;
     var rows = usageRows.Length > 0 ? new List<string>(usageRows.Split('\n')) : new List<string>();
     var block = new List<string>();
-    int term = TermWidth();
     if (rows.Count >= 2) {
         int rowW = Vis(rows[0]);
         int rightW = Math.Max(rows.Count > 2 ? Vis(rows[2]) : 0, acct.Length > 0 ? Vis(acct) + 1 : 0);
-        if (term == 0 || 1 + rowW + gap + rightW <= term - 4) {
+        if (1 + rowW + gap + rightW <= avail) {
             string pad = new string(' ', gap);
-            string right0 = acct.Length > 0
-                ? WithBreakdown(acct, bd, term == 0 ? int.MaxValue : term - 4 - (1 + rowW + gap)) : "";
+            string right0 = acct.Length > 0 ? WithBreakdown(acct, bd, avail - (1 + rowW + gap)) : "";
             string right1 = rows.Count > 2 ? rows[2] : "";
             block.Add(rows[0] + (right0.Length > 0 ? pad + right0 : ""));
             block.Add(rows[1] + (right1.Length > 0 ? pad + right1 : ""));
@@ -178,7 +180,7 @@ static List<string> Compose(string usageRows, string acct, string bd, List<strin
         }
     }
     block.AddRange(rows);
-    if (acct.Length > 0) block.Add(WithBreakdown(acct, bd, term == 0 ? int.MaxValue : term - 4 - 1));
+    if (acct.Length > 0) block.Add(WithBreakdown(acct, bd, avail - 1));
     block.AddRange(errs);
     return block;
 }
@@ -215,22 +217,53 @@ static int Vis(string s) {
     return n;
 }
 
-// Claude Code spawns the status line detached, so the console it gets reports a phantom
-// 120x30 default instead of the real terminal, and asking the OS is useless. 141 is a
-// measured width; after a resize, override it with CSHIP_WIDTH (settings.json "env").
-static int TermWidth() =>
-    int.TryParse(Environment.GetEnvironmentVariable("CSHIP_WIDTH"), out int w) && w > 40 ? w : 141;
+// The terminal's width. CSHIP_WIDTH first, a fixed width set by hand (settings.json "env");
+// then COLUMNS, which Claude Code sets to its terminal's width when it runs the status line
+// (since 2.1.153; the 2.1.281 bundle takes it from process.stdout); then 141, a measured
+// width. Asking the OS is useless: Claude Code spawns the status line detached, and the
+// console it gets reports a phantom 120x30. A value that is not a whole number over 40 is
+// passed over for the next.
+static int TermWidth() {
+    foreach (string name in new[] { "CSHIP_WIDTH", "COLUMNS" })
+        if (int.TryParse(Environment.GetEnvironmentVariable(name), out int w) && w > 40) return w;
+    return 141;
+}
+
+// The columns the block may use. Claude Code draws the status line in its prompt footer, a row
+// as wide as the terminal with two columns of padding on either side, and inside that indents
+// it by statusLine.padding on either side. A line longer than what is left is cut short, not
+// wrapped. The fullscreen renderer draws the same footer, full width under any side panel.
+// (Read in the 2.1.281 bundle.) The floor only keeps a padding set absurdly wide from
+// driving the arithmetic below negative.
+static int Avail() => Math.Max(16, TermWidth() - 4 - 2 * Padding());
+
+// statusLine.padding from the user's settings.json, which is where the install guide puts the
+// statusLine entry. Claude Code merges project settings over it, which are not read here, so a
+// padding set only in a project goes unseen. A fraction is rounded up, to never overflow.
+static int Padding() {
+    try {
+        using var fs = File.OpenRead(Path.Combine(Home(), ".claude", "settings.json"));
+        using var d = JsonDocument.Parse(fs, new JsonDocumentOptions {
+            AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+        if (d.RootElement.ValueKind == JsonValueKind.Object
+            && d.RootElement.TryGetProperty("statusLine", out var sl) && sl.ValueKind == JsonValueKind.Object
+            && sl.TryGetProperty("padding", out var p) && p.ValueKind == JsonValueKind.Number
+            && p.TryGetDouble(out double v) && v > 0)
+            return (int)Math.Ceiling(Math.Min(v, 1000));
+    } catch { }
+    return 0;
+}
 
 // CSHIP_OFFLINE names a directory to render from instead of the live machine, for the dev
 // loop. Everything the status line normally shares with the running sessions comes from a
 // file in it instead: the limit rows from its usage.json and rows.json rather than the
 // registry cache and the API, the euro rate from rows.json, and it replaces %USERPROFILE%,
-// so the account line reads its .claude.json and the token cache goes in its .claude
-// folder.
+// so the account line reads its .claude.json, statusLine.padding comes from its
+// .claude/settings.json and the token cache goes in its .claude folder.
 // HKCU\Software\cshipUsage is neither read nor written, the usage lock is never taken and
-// nothing is fetched. So a dev build run this way can't serve a live session's cached
-// render or push a sample into the shared prediction history, both of which a plain test
-// run on a live machine does.
+// nothing is fetched. So a dev build run this way can't draw a live session's cached rows or
+// push a sample into the shared prediction history, both of which a plain test run on a live
+// machine does.
 static string? Offline() {
     string? d = Environment.GetEnvironmentVariable("CSHIP_OFFLINE");
     return string.IsNullOrEmpty(d) ? null : d;
@@ -252,7 +285,7 @@ static string RunCship(string input) {
 }
 
 // Single-flight: the named mutex serializes the whole check-fetch-write section across
-// processes. Losers render the last cached value instead of waiting on the network.
+// processes. Losers draw the last cached rows instead of waiting on the network.
 // The lock name is scoped per user + elevation level, so an ACL on a mutex created by a
 // different security context can never deny us access. If the lock still fails, fetching
 // is suspended and a loud error line is rendered. Never an unguarded parallel fetch: that
@@ -273,7 +306,7 @@ static (Cached c, string err) GetUsage() {
         if (!owned) return (AnyVal() ?? Cached.None, "");
         now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         if (FreshVal(now) is Cached fresh2) return (fresh2, "");
-        return (FetchAndRender(now) ?? AnyVal() ?? Cached.None, "");
+        return (FetchAndSave(now) ?? AnyVal() ?? Cached.None, "");
     } finally {
         if (owned) { try { mx!.ReleaseMutex(); } catch { } }
         mx?.Dispose();
@@ -299,17 +332,19 @@ static (Cached c, string err) GetUsage() {
 //                 "rate": 10.4, "gated": false, "sev": "normal" }, ... ] }
 //
 // Either way the forecast is an input, not computed from a history. This path is here to
-// test the parsing and the drawing.
+// test the parsing and the drawing. The rows also pass through the string the registry
+// keeps them in, so RowsOut and RowsIn are under test too.
 static (Cached c, string err) OfflineRows(string dir) {
     try {
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
         var root = d.RootElement;
+        var now = Time(root, "now") ?? DateTimeOffset.UtcNow;
+
+        Cached? c = null;
         string usagePath = Path.Combine(dir, "usage.json");
         if (File.Exists(usagePath)) {
-            var utc = root.TryGetProperty("now", out var nw) && nw.ValueKind == JsonValueKind.String
-                      && DateTimeOffset.TryParse(nw.GetString(), out var at) ? at : DateTimeOffset.UtcNow;
             using var ud = JsonDocument.Parse(File.ReadAllText(usagePath));
-            var u = ParseUsage(ud.RootElement, utc);
+            var u = ParseUsage(ud.RootElement, now);
             if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters");
             var (iS, iW, iF, ignored) = Known(u.Meters, Str(root, "sn"));
             var fc = root.TryGetProperty("forecast", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
@@ -323,21 +358,28 @@ static (Cached c, string err) OfflineRows(string dir) {
                 }
                 rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, m.Lim.Sev));
             }
-            return (new Cached(RenderRows(rows, 2), u.Bd, u.Cr, string.Join("\n", ignored)), "");
-        }
-        var list = new List<RowIn>();
-        foreach (var r in root.GetProperty("rows").EnumerateArray())
-            list.Add(new RowIn(r.GetProperty("label").GetString() ?? "", r.GetProperty("pct").GetInt32(),
-                               r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
-                               r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
-                               r.GetProperty("sev").GetString() ?? ""));
-        if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows");
-        return (new Cached(RenderRows(list, 2), "", "", ""), "");
+            c = new Cached(rows, u.Bd, u.Cr, string.Join("\n", ignored));
+        } else if (root.TryGetProperty("rows", out var rs)) {
+            var list = new List<RowIn>();
+            foreach (var r in rs.EnumerateArray())
+                list.Add(new RowIn(r.GetProperty("label").GetString() ?? "", r.GetProperty("pct").GetInt32(),
+                                   r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
+                                   r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
+                                   r.GetProperty("sev").GetString() ?? ""));
+            if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows");
+            c = new Cached(list, "", "", "");
+        } else return (Cached.None, "offline — no usage.json and no rows in rows.json");
+
+        return (c with { Rows = RowsIn(RowsOut(c.Rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote") }, "");
     } catch (Exception ex) {
         // a broken fixture is loud, like every other failed source
         return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message));
     }
 }
+
+static DateTimeOffset? Time(JsonElement o, string name) =>
+    o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+    && DateTimeOffset.TryParse(v.GetString(), out var t) ? t : null;
 
 static double OfflineFx(string dir) {
     try {
@@ -369,12 +411,12 @@ static string LockError(Exception ex) {
 // stated. The reasons share one row, separated by ·, while they fit (a single reason then
 // renders as the lock error always has), and get a row each once they don't: a wrapped
 // status line costs the same height as a split one and reads far worse.
-static List<string> WarnRows(List<string> reasons) {
+static List<string> WarnRows(List<string> reasons, int avail) {
     const string red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
     var outp = new List<string>();
     if (reasons.Count == 0) return outp;
     string one = string.Join(" · ", reasons);
-    int budget = TermWidth() - 6;   // 4 host padding, 1 indent, 1 safety
+    int budget = avail - 2;   // 1 indent, 1 safety
     if (2 + one.Length <= budget) { outp.Add(red + "⚠ " + one + rst); return outp; }
     foreach (var r in reasons) outp.Add(red + "⚠ " + Short(r, budget - 2) + rst);
     return outp;
@@ -383,9 +425,9 @@ static List<string> WarnRows(List<string> reasons) {
 // The on-credit alarm: red like every ⚠ row and to the same budget, but always on a row of
 // its own, never joined by ·. It is not a failed source; it is usage being billed that the
 // plan should have covered.
-static string AlarmRow(string reason) {
+static string AlarmRow(string reason, int avail) {
     const string red = "\x1b[1;38;2;247;118;142m", rst = "\x1b[0m";
-    int budget = TermWidth() - 6;   // 4 host padding, 1 indent, 1 safety
+    int budget = avail - 2;   // 1 indent, 1 safety
     return red + "⚠ " + Short(reason, budget - 2) + rst;
 }
 
@@ -393,11 +435,11 @@ static string AlarmRow(string reason) {
 // because it asks for the code to be reviewed rather than reporting a failure or money; a
 // row of its own to the ⚠ rows' budget. It names as many of the ignored meters as fit,
 // whole, then counts the rest as "+N more"; if not even one name fits, it only counts them.
-static string MetersRow(string ig) {
+static string MetersRow(string ig, int avail) {
     const string amber = "\x1b[38;2;224;175;104m", rst = "\x1b[0m";
     var names = ig.Split('\n', StringSplitOptions.RemoveEmptyEntries);
     if (names.Length == 0) return "";
-    int room = TermWidth() - 6 - 2;   // the ⚠ rows' budget, less "⚠ "
+    int room = avail - 2 - 2;   // the ⚠ rows' budget, less "⚠ "
     string head = "meters — the usage API sent " + (names.Length == 1 ? "a meter" : names.Length + " meters")
                 + " this status line ignores";
     const string tail = " · review cship-usage";
@@ -415,22 +457,20 @@ static string MetersRow(string ig) {
 // identified by its end and a message by its start. The ellipsis (U+2026) is East Asian
 // Ambiguous, so it takes one column like every other glyph here.
 static string Short(string s, int max = 64) {
-    if (max < 16) max = 16;   // TermWidth() floors at 41, so this only guards a future caller
+    if (max < 16) max = 16;   // a guard for a caller with a tiny budget: Avail() floors at 16
     s = s.Replace('\n', ' ').Replace('\r', ' ');
     return s.Length <= max ? s : s.Substring(0, max - 13) + "…" + s.Substring(s.Length - 12);
 }
 
-// val is the rendered rows; bd, cr and ig are the breakdown, the credit alarm and the ignored
-// meters the same fetch produced, cached beside them so that a cache hit draws everything a
-// fetch would. A value written by a build that had none of them reads as none until the
-// next fetch.
+// rows holds the figures of the rows the last good fetch produced (RowsOut), not drawn text,
+// so every session draws them at its own width; bd, cr and ig are the breakdown, the credit
+// alarm and the ignored meters the same fetch produced, cached beside them so that a cache
+// hit draws everything a fetch would. A key without rows, as a build that cached drawn text
+// in val left it, reads as no cache, so the next render fetches.
 static Cached? FreshVal(long now) {
     try {
         using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
-        if (rk?.GetValue("ts") is string ts && rk.GetValue("val") is string v
-            && long.TryParse(ts, out long t) && now - t < 50)
-            return new Cached(v, rk.GetValue("bd") as string ?? "", rk.GetValue("cr") as string ?? "",
-                              rk.GetValue("ig") as string ?? "");
+        if (rk?.GetValue("ts") is string ts && long.TryParse(ts, out long t) && now - t < 50) return FromKey(rk);
     } catch { }
     return null;
 }
@@ -438,14 +478,42 @@ static Cached? FreshVal(long now) {
 static Cached? AnyVal() {
     try {
         using var rk = Registry.CurrentUser.OpenSubKey(@"Software\cshipUsage");
-        if (rk?.GetValue("val") is string v)
-            return new Cached(v, rk.GetValue("bd") as string ?? "", rk.GetValue("cr") as string ?? "",
-                              rk.GetValue("ig") as string ?? "");
+        if (rk is not null) return FromKey(rk);
     } catch { }
     return null;
 }
 
-static Cached? FetchAndRender(long now) {
+static Cached? FromKey(RegistryKey rk) =>
+    rk.GetValue("rows") is string r && RowsIn(r) is List<RowIn> rows
+        ? new Cached(rows, rk.GetValue("bd") as string ?? "", rk.GetValue("cr") as string ?? "",
+                     rk.GetValue("ig") as string ?? "")
+        : null;
+
+// The rows as the registry's rows value holds them: one per line, seven fields to a line,
+// separated by tabs. Labels and severities are cleaned of control characters first, so
+// neither separator can turn up inside a field. The doubles are written to round-trip, so a
+// cache hit draws exactly what the fetch would have drawn at the same width.
+static string RowsOut(List<RowIn> rows) => string.Join("\n", rows.Select(r => string.Join("\t",
+    Clean(r.Label), r.Pct.ToString(CultureInfo.InvariantCulture),
+    r.Hrs.ToString("R", CultureInfo.InvariantCulture), r.HasReset ? "1" : "0",
+    r.Rate.ToString("R", CultureInfo.InvariantCulture), r.Gated ? "1" : "0", Clean(r.Sev))));
+
+// null for anything RowsOut did not write, which the callers take for no cache at all
+static List<RowIn>? RowsIn(string s) {
+    var rows = new List<RowIn>();
+    foreach (string line in s.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+        var f = line.Split('\t');
+        if (f.Length != 7
+            || !int.TryParse(f[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int pct)
+            || !double.TryParse(f[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double hrs)
+            || !double.TryParse(f[4], NumberStyles.Float, CultureInfo.InvariantCulture, out double rate))
+            return null;
+        rows.Add(new RowIn(f[0], pct, hrs, f[3] == "1", rate, f[5] == "1", f[6]));
+    }
+    return rows;
+}
+
+static Cached? FetchAndSave(long now) {
     if (!Fetch(out var u) || u is null) return null;
     string acct = AccountInfo().uuid;
     var hist = LoadHist();
@@ -481,7 +549,7 @@ static Cached? FetchAndRender(long now) {
         double rate = Slope(hist, which, which == 0 ? vfS : which == 1 ? vfW : vfF, out bool gated);
         rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, m.Lim.Sev));
     }
-    var c = new Cached(RenderRows(rows, 2), u.Bd, u.Cr, string.Join("\n", ignored));
+    var c = new Cached(rows, u.Bd, u.Cr, string.Join("\n", ignored));
     Save(acct.Length > 0 ? acct : oldAcct, scopedName.Length > 0 ? scopedName : oldName,
          rsS, rsW, rsF, vfS, vfW, vfF, hist, c, now);
     return c;
@@ -600,6 +668,9 @@ static string RegStr(string name) {
 
 static long RegLong(string name) => long.TryParse(RegStr(name), out long v) ? v : 0;
 
+// A good fetch: the rows and what came with them, and the history. val, the drawn rows
+// builds before this one cached, is removed, so that a build restored from a backup fetches
+// afresh rather than drawing rows from before the switch.
 static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, long vfS, long vfW, long vfF,
                  List<(long t, int s, int w, int f)> hist, Cached c, long now) {
     try {
@@ -609,10 +680,11 @@ static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, l
         rk.SetValue("rsS", rsS.ToString()); rk.SetValue("rsW", rsW.ToString()); rk.SetValue("rsF", rsF.ToString());
         rk.SetValue("vfS", vfS.ToString()); rk.SetValue("vfW", vfW.ToString()); rk.SetValue("vfF", vfF.ToString());
         rk.SetValue("hist", string.Join(";", hist.Select(h => $"{h.t}:{h.s}:{h.w}:{h.f}")));
-        rk.SetValue("val", c.Val);
+        rk.SetValue("rows", RowsOut(c.Rows));
         rk.SetValue("bd", c.Bd);
         rk.SetValue("cr", c.Cr);
         rk.SetValue("ig", c.Ig);
+        rk.DeleteValue("val", false);
         rk.SetValue("ts", now.ToString());   // freshness gate: must be the last write
     } catch { }
 }
@@ -691,8 +763,9 @@ static string SevColor(string sev) =>
 
 // leftCount = rows that stack in the left column. Column widths are the max needed across
 // the rows of one column this render, so the rows that stack stay aligned while never
-// padding wider than the current values require.
-static string RenderRows(List<RowIn> rows, int leftCount) {
+// padding wider than the current values require. avail is Avail(): the rows are drawn per
+// render, at the width of the session drawing them, never cached drawn.
+static string RenderRows(List<RowIn> rows, int leftCount, int avail) {
     var d = rows.Select(r => {
         int now = Math.Clamp(r.Pct, 0, 100);
         double rate = Math.Min(r.Rate, 40);
@@ -762,12 +835,10 @@ static string RenderRows(List<RowIn> rows, int leftCount) {
     // the same max over all rows it charged when the widths were shared. So capBar is what
     // it always was, and a column's own widths can only be narrower.
     const int rowConst = 15;   // per-row glyphs/spaces outside label, numbers and bars
-    int term = TermWidth();
-    if (term <= 0) term = 138;
-    // 4 = host padding, 1 = our indent, 2 = column gap
-    int fixedPart = 4 + 1 + 2 + rowConst * 2 + wLbl[0] + wLbl[1]
+    // 1 = our indent, 2 = column gap; the host's padding is already out of avail
+    int fixedPart = 1 + 2 + rowConst * 2 + wLbl[0] + wLbl[1]
                   + 2 * (Wider(wNow) + Wider(wReset) + Wider(wTo100) + Wider(wProj) + Wider(wNowBar));
-    int capBar = Math.Clamp((term - 2 - fixedPart) / 2, 10, 30);   // -2 = safety margin
+    int capBar = Math.Clamp((avail - 2 - fixedPart) / 2, 10, 30);   // -2 = safety margin
     // max over both bars' fills, so the projection column is never padded narrower than
     // something already drawn on the line; per column, like every other width
     int[] wBar = { 10, 10 };
@@ -1100,7 +1171,7 @@ static string Clean(string s) {
 // doesn't exist yet, on a session seconds old or on one that has had no prompt, is not a
 // fault, because Claude Code only writes the file at the first prompt. It never excuses
 // the other three.
-static (List<string> lines, string err) BuildTokens(string transcriptPath, bool transcriptMayBeAbsent) {
+static (List<string> lines, string err) BuildTokens(string transcriptPath, bool transcriptMayBeAbsent, int avail) {
     if (transcriptPath.Length == 0)
         return (new List<string>(), "tokens — no transcript_path in the payload");
     try {
@@ -1147,7 +1218,7 @@ static (List<string> lines, string err) BuildTokens(string transcriptPath, bool 
         TokSave(sid, st);
         // TokRender returns nothing when the grand total is zero. That is the real zero of
         // the five, so it comes back with no reason attached.
-        return (TokRender(st, truncated), "");
+        return (TokRender(st, truncated, avail), "");
     } catch (Exception ex) {
         // was a bare catch: the walk could fail on every file and the rows just vanished
         return (new List<string>(), "tokens — walk failed: " + ex.GetType().Name + " " + Short(ex.Message));
@@ -1305,7 +1376,7 @@ static void TokSave(string sid, TokState st) {
 //
 // Every cell is [kind][scope] value. Icons align on a column's left edge, digits on its
 // right. A trailing + on the grand total means the byte budget ran out.
-static List<string> TokRender(TokState st, bool truncated) {
+static List<string> TokRender(TokState st, bool truncated, int avail) {
     long grand = 0;
     for (int i = 0; i < 4; i++) grand += st.Main[i] + st.Sub[i];
     if (grand == 0) return new List<string>();
@@ -1326,7 +1397,6 @@ static List<string> TokRender(TokState st, bool truncated) {
     // emoji are two columns each, so icon width is declared rather than measured.
     // The +1 keeps at least one space between a cell's icons and its value.
     int[] iw = { 4, 4, 4, 4, 4, 4, 4, 4, 4 };
-    int avail = TermWidth() - 4;                     // host padding
     var (nm1, nm2, cw) = TokNums(st, grand, truncated, TokFmt, iw);
 
     // A double-width emoji can't be aligned with the single-width glyphs that open every
@@ -1413,11 +1483,12 @@ sealed class Usage {
     public string Bd = "", Cr = "";
 }
 
-// What the registry caches from one fetch: the rendered rows, plus the breakdown, the credit
-// alarm and the ignored meters (Ig, one description per line), which are laid out per render
-// because where they fit depends on the render.
-sealed record Cached(string Val, string Bd, string Cr, string Ig) {
-    public static readonly Cached None = new("", "", "", "");
+// What the registry caches from one fetch: the rows' figures, which every session draws at
+// its own width, plus the breakdown, the credit alarm and the ignored meters (Ig, one
+// description per line), which are laid out per render too, because where they fit depends
+// on the render.
+sealed record Cached(List<RowIn> Rows, string Bd, string Cr, string Ig) {
+    public static readonly Cached None = new(new List<RowIn>(), "", "", "");
 }
 
 // One row's drawing inputs.

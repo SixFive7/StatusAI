@@ -58,25 +58,28 @@ A 60 s refresh against a 50 s cache means an idle render almost always finds the
 usage endpoint is hit roughly once a minute while a session is open. The cache only earns its keep
 during bursts. Setting the cache to ~70 s, or `refreshInterval` to 45, would make it actually cache.
 
-**The cache holds the fully rendered, ANSI-coloured string, not the underlying numbers.** That
-keeps a cache hit free of all formatting work, but it means a cached entry belongs to whichever
-build wrote it. Beside it, `bd`, `cr` and `ig` hold the product breakdown, the on-credit alarm and
-the meters it did not draw from the same fetch, already reduced to what is shown: where the
-breakdown and the notice fit depends on the render, so they are laid out per render, and a cache
-hit must still draw all three. On a machine with a live session that is the trap described in
-[development.md](../development.md): a freshly built binary will happily serve a render produced by
-its predecessor.
+**The cache holds the rows' figures, not the drawn rows.** `rows` has a line per limit row: its
+label, percentage, hours to its reset, whether it has one, pace, whether the pace is still gated,
+and severity. Every session draws them at its own width, which comes from its own terminal, so rows
+drawn once would be the wrong width in any session of another. Beside them, `bd`, `cr` and `ig`
+hold the product breakdown, the on-credit alarm and the meters it did not draw from the same fetch,
+already reduced to what is shown, and those are laid out per render as well. So the drawing is
+always the running build's own; what a cached entry still carries from the build that fetched it is
+the figures, the pace above all. On a machine with a live session that is the trap described in
+[development.md](../development.md). Until 2026-09-24 the cache held the drawn rows, in `val`, and
+a new build served its predecessor's drawing too.
 
 ## State
 
 | location | contents |
 |---|---|
-| `HKCU\Software\cshipUsage` | limit-bar cache (`ts`, `val`, `bd`, `cr`, `ig`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
+| `HKCU\Software\cshipUsage` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
 | `~/.claude/statusline-tokens/<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
 | named mutex `Global\cshipUsage.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 
 Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json`,
-`statusline-cache.json`.
+`statusline-cache.json`. The registry's `val`, the drawn rows builds before 2026-09-24 cached, is
+removed by the first good fetch after the switch.
 
 With `CSHIP_OFFLINE` set, a switch for development (see
 [development.md](../development.md#offline-beside-live-sessions)), none of the three is touched: the
@@ -104,7 +107,7 @@ file. The accounting needs no changes.
 | move it to | what breaks | fix |
 |---|---|---|
 | Linux / macOS | registry, mutex naming, TFM | about an hour |
-| a different terminal width | `TermWidth()` defaults to 141; `CSHIP_WIDTH` overrides it, set by hand | read `COLUMNS`, which Claude Code sets to its terminal's width |
+| a different terminal width | nothing from Claude Code 2.1.153 on, which sets `COLUMNS` to the terminal's width; before that the width is 141 unless `CSHIP_WIDTH` says otherwise | none |
 | a terminal rendering emoji single-width | the grid: `iw[]` declares 4 columns per 2-emoji block | one array |
 | a machine without a Nerd Font | cship/starship glyphs, **not** the token rows | see below |
 | an API-key-only account | the limit rows and the account line | nothing; it degrades |

@@ -1,5 +1,5 @@
 {
-  "about": "One render per case and width: the payload on stdin, a copy of the home as CSHIP_OFFLINE and HOME, CSHIP_WIDTH set. The bytes are in expected/<case>.w<width>.ansi. Run Test-Renders.ps1; see docs/development.md.",
+  "about": "One render per case and width: the payload on stdin, a copy of the home as CSHIP_OFFLINE and HOME, and CSHIP_WIDTH set to the width, or, where a case has an env, exactly the CSHIP_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. Run Test-Renders.ps1; see docs/development.md.",
   "cship": "1.8.0",
   "cases": {
     "showcase": {
@@ -145,6 +145,47 @@
       "payload": "fresh-no-transcript-path",
       "widths": [100, 120, 141],
       "checks": "All three kinds of ⚠ row at once, in their order: the failed source (no transcript_path) in red, then the amber meters notice, then the on-credit alarm, last."
+    },
+    "columns": {
+      "home": "showcase",
+      "payload": "mid-session",
+      "widths": [100, 141, 160],
+      "env": { "COLUMNS": "{w}" },
+      "checks": "The width from COLUMNS alone, as Claude Code sets it for the status line: the same bytes as showcase at each width."
+    },
+    "columns-overridden": {
+      "home": "showcase",
+      "payload": "mid-session",
+      "widths": [120],
+      "env": { "CSHIP_WIDTH": "{w}", "COLUMNS": "200" },
+      "checks": "CSHIP_WIDTH comes before COLUMNS: drawn at 120 while COLUMNS says 200, the same bytes as showcase at 120."
+    },
+    "columns-invalid": {
+      "home": "showcase",
+      "payload": "mid-session",
+      "widths": [141],
+      "env": { "COLUMNS": "wide" },
+      "checks": "A COLUMNS that is not a number is passed over for the default, 141: the same bytes as showcase at 141."
+    },
+    "columns-too-narrow": {
+      "home": "showcase",
+      "payload": "mid-session",
+      "widths": [141],
+      "env": { "COLUMNS": "40" },
+      "checks": "A COLUMNS of 40 or less is passed over for the default, 141: the same bytes as showcase at 141."
+    },
+    "width-invalid": {
+      "home": "showcase",
+      "payload": "mid-session",
+      "widths": [120],
+      "env": { "CSHIP_WIDTH": "wide", "COLUMNS": "{w}" },
+      "checks": "A CSHIP_WIDTH that is not a number is passed over for COLUMNS: the same bytes as showcase at 120."
+    },
+    "padding": {
+      "home": "padding",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "statusLine.padding 2 in settings.json: Claude Code indents the status line two columns on either side, so it gets four columns fewer, the same bytes as live at 137."
     },
     "rows-shot": {
       "home": "rows-shot",

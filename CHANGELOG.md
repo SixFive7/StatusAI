@@ -5,6 +5,15 @@ the entries before the first release are by date.
 
 ## Unreleased
 
+- The status line fits the terminal's width. It reads `COLUMNS`, which Claude Code 2.1.153 and later
+  set for it, less the four columns of the prompt footer's padding and any `statusLine.padding`.
+  `CSHIP_WIDTH` still comes first when it is set, and without either the width is 141, as before.
+  The README and the install guide no longer ask for `CSHIP_WIDTH`.
+- The limit rows are cached as figures rather than as drawn rows, so every session draws them at its
+  own width. The first good fetch removes the drawn copy older builds kept, `val`.
+- The render tests set or clear `COLUMNS` for every render, and cover where the width comes from:
+  `COLUMNS` alone, `CSHIP_WIDTH` before it, values that are not widths, and `statusLine.padding`.
+  154 renders of 51 cases.
 - The README opens with the status line exactly as a terminal shows it, with nothing added, before
   the annotated version that names every part. `e7da798`
 - The annotated figure opens the reading guide when clicked, and a centred link to the guide sits

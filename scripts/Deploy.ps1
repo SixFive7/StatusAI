@@ -17,9 +17,9 @@
       6. Verify the target's SHA-256 against the build. If the copy failed or landed wrong, restore
          the backup the same way and verify that, so a working binary is always in place.
 
-    The registry cache is not touched: the next fetch, within 50 s, writes a render of the new
-    binary, and until then the old binary's render may still be served (docs/development.md,
-    trap 1).
+    The registry cache is not touched. It holds figures rather than drawn rows, so the new binary
+    draws them itself at once; until the next fetch, within 50 s, the figures are the ones the old
+    binary computed (docs/development.md, trap 1).
 
 .PARAMETER Source
     The new build. Default: the output of `dotnet publish -c Release -r win-x64` in src/.

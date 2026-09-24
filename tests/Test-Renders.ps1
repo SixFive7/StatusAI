@@ -11,7 +11,9 @@
       CSHIP_OFFLINE = that copy   the limit rows, the euro rate, the account and the token cache
                                   all come from it; the registry cache, the usage lock and the
                                   network are never touched
-      CSHIP_WIDTH   = the width
+      CSHIP_WIDTH   = the width   unless the case has an "env", which then sets exactly the
+                                  variables it names, CSHIP_WIDTH and COLUMNS only, with {w}
+                                  standing for the width; COLUMNS is cleared unless it is named
       HOME          = that copy   cship reads .config/cship.toml there: tests/cship.toml, which is
                                   the shipped config without the starship line
 
@@ -84,8 +86,24 @@ $Sgr      = [regex]"$([char]27)\[[0-9;]*m"
 class RunError : System.Exception { RunError([string] $m) : base($m) { } }
 function Fail([string] $msg) { throw [RunError]::new($msg) }
 
+# ------------------------------------------------------------------ the width, as a case sets it
+# CSHIP_WIDTH is the width unless the case has an "env". Then exactly the variables it names are
+# set, with {w} replaced by the width, and a null leaves one unset. Only the two the binary takes
+# its width from may be named.
+function Get-WidthEnv([string] $name, $c, [int] $width) {
+    $vars = @{}
+    if (-not ($c.PSObject.Properties.Name -contains 'env')) { $vars['CSHIP_WIDTH'] = [string] $width; return $vars }
+    foreach ($p in $c.env.PSObject.Properties) {
+        if ($p.Name -cne 'CSHIP_WIDTH' -and $p.Name -cne 'COLUMNS') {
+            Fail "case ${name}: env may name CSHIP_WIDTH and COLUMNS, not $($p.Name)"
+        }
+        if ($null -ne $p.Value) { $vars[$p.Name] = ([string] $p.Value).Replace('{w}', [string] $width) }
+    }
+    $vars
+}
+
 # ------------------------------------------------------------------ one render
-function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, [int] $width) {
+function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, [hashtable] $widthEnv) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exePath
     $psi.WorkingDirectory = $homeDir
@@ -94,11 +112,13 @@ function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, 
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    foreach ($k in 'CSHIP_OFFLINE', 'CSHIP_WIDTH', 'COLUMNS', 'HOME', 'CLAUDE_HOME', 'STARSHIP_CONFIG', 'STARSHIP_SHELL') {
+    # cleared first, so nothing from the shell running the tests reaches a render; Claude Code
+    # sets COLUMNS and LINES for its hooks as well as for the status line
+    foreach ($k in 'CSHIP_OFFLINE', 'CSHIP_WIDTH', 'COLUMNS', 'LINES', 'HOME', 'CLAUDE_HOME', 'STARSHIP_CONFIG', 'STARSHIP_SHELL') {
         [void] $psi.Environment.Remove($k)
     }
     $psi.Environment['CSHIP_OFFLINE'] = $homeDir
-    $psi.Environment['CSHIP_WIDTH'] = [string] $width
+    foreach ($k in $widthEnv.Keys) { $psi.Environment[$k] = $widthEnv[$k] }
     $psi.Environment['HOME'] = $homeDir
     $psi.Environment['CLAUDE_HOME'] = $homeDir
     $p = [System.Diagnostics.Process]::Start($psi)
@@ -201,7 +221,7 @@ function Invoke-Main {
             New-Item -ItemType Directory -Path (Join-Path $homeDir '.config') | Out-Null
             Copy-Item -LiteralPath (Join-Path $Tests 'cship.toml') -Destination (Join-Path $homeDir '.config\cship.toml')
 
-            $r = Invoke-Render $staged $homeDir $payload $width
+            $r = Invoke-Render $staged $homeDir $payload (Get-WidthEnv $name $c $width)
             if ($Show) { [Console]::Out.Write("`n== $key`n" + $Utf8.GetString($r.Out) + "`n") }
             if ($OutDir) { [System.IO.File]::WriteAllBytes((Join-Path $OutDir "$key.ansi"), $r.Out) }
             $expPath = Join-Path $Expected "$key.ansi"
