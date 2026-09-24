@@ -8,9 +8,9 @@
 
       1. Refuse unless cship.exe sits beside the target: without it the status line prints the
          raw session JSON.
-      2. Run the render tests against the new build (tests/Test-Renders.ps1), with the cship that
+      2. Stop if the target already has the same SHA-256.
+      3. Run the render tests against the new build (tests/Test-Renders.ps1), with the cship that
          will run it. A failing build is not deployed.
-      3. Stop if the target already has the same SHA-256.
       4. Back the target up as a sibling cship-usage.exe.bak.<unix-seconds>, and verify the copy.
       5. Copy the new build over the target, retrying: Claude Code runs the status line every
          60 seconds per session, and Windows holds the image for the ~100 ms it runs.

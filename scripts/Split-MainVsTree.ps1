@@ -1,12 +1,12 @@
-# Independent implementation of StatusAI's token accounting, for verifying the binary.
+# A second implementation of StatusAI's token accounting, to check the binary against.
 # Shares no code with it. Sums main vs sub-agent tokens for one session.
 #
 #   ./Split-MainVsTree.ps1 -Sid 66419393-007e-4955-838b-c95b669aeccd
 #
-# The one correct rule: walk main + every subagents/**/agent-*.jsonl, keep assistant
-# records carrying message.usage, and dedup on message.id with a single global set.
-# Per-file dedup inflates by up to 26x (children hold verbatim copies of ancestor
-# records); no dedup inflates ~2.2x (one API response is written once per content block).
+# The rule: walk main + every subagents/**/agent-*.jsonl, keep assistant records that
+# carry message.usage, and dedup on message.id with one set for the whole tree.
+# Per-file dedup overcounts by up to 26x (children hold verbatim copies of ancestor
+# records); no dedup overcounts ~2.2x (one API response is written once per content block).
 
 param(
     [Parameter(Mandatory)] [string] $Sid,

@@ -1,5 +1,5 @@
-# Dumps the exact contents of StatusAI's incremental cache for one session, so the
-# rendered (four-significant-figure) numbers can be checked against the raw totals.
+# Dumps the contents of StatusAI's incremental token cache for one session, so the
+# rendered numbers (four significant figures) can be checked against the raw totals.
 #
 #   ./Decode-TokCache.ps1 -Sid 66419393-007e-4955-838b-c95b669aeccd
 #
@@ -13,7 +13,7 @@ param(
 )
 
 $p = Join-Path $CacheDir "$Sid.bin"
-if (-not (Test-Path $p)) { throw "No cache at $p -- render the status line for that session first" }
+if (-not (Test-Path $p)) { throw "No cache at $p. Render the status line for that session first." }
 
 $fs = [System.IO.File]::OpenRead($p)
 $br = New-Object System.IO.BinaryReader($fs)
@@ -22,7 +22,7 @@ try {
     $tag = -join ([BitConverter]::GetBytes($magic) | % { [char]$_ })
     "cache : $p"
     "magic : 0x{0:X} ($tag)" -f $magic
-    if ($tag -ne 'CTK2') { "  (not CTK2 -- the binary will discard and rebuild this)" }
+    if ($tag -ne 'CTK2') { "  (not CTK2, so the binary will discard and rebuild this)" }
 
     $main = 1..5 | % { $br.ReadInt64() }
     $sub  = 1..5 | % { $br.ReadInt64() }

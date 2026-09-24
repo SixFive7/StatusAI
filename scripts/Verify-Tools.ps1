@@ -1,10 +1,10 @@
-# Independent implementation of StatusAI's tool-call counting, for verifying the binary.
+# A second implementation of StatusAI's tool-call counting, to check the binary against.
 # Shares no code with it. Counts main vs sub-agent tool calls for one session.
 #
 #   ./Verify-Tools.ps1 -Sid 66419393-007e-4955-838b-c95b669aeccd
 #
-# Dedup is on the tool_use block's own toolu_ id -- globally unique, and stable across
-# the verbatim copies that child transcripts hold of ancestor records. Note this is the
+# Dedup is on the tool_use block's own toolu_ id, which is globally unique and stays the
+# same in the verbatim copies child transcripts hold of ancestor records. That is the
 # opposite key to the token walk: message.id is right for usage and useless for blocks,
 # because one API response is written once per content block and repeats its message.id.
 

@@ -4,8 +4,8 @@
     Publishes nothing.
 
 .DESCRIPTION
-    1. Refuse unless -Version is x.y.z and CHANGELOG.md has a "## <version> -- <date>" heading
-       (an em dash), and unless the cship this script tells a friend to download is the one the
+    1. Refuse unless -Version is x.y.z and CHANGELOG.md has a "## <version> <em dash> <date>"
+       heading, and unless the cship this script tells a friend to download is the one the
        render tests pin (tests/cases.json) and the one the install guide fetches
        (docs/guide/install.md): its version, URL and SHA-256.
     2. dotnet publish src/cship-usage.csproj -c Release -r win-x64 -o <OutDir>/build
@@ -29,7 +29,7 @@
     the release. A working tree with uncommitted changes is reported, not refused: the exe records
     the commit it was built at, and a release should be built from the commit it is tagged at. A
     run that refuses or fails removes the version's zip, .sha256, notes and staging directory,
-    its own or an earlier run's, so none is left behind that it did not vouch for.
+    its own or an earlier run's, so nothing is left behind that this run did not check.
 
     Runs under Windows PowerShell 5.1 and PowerShell 7. Exit code 0 when packaged, 1 when it
     refused (the version, the CHANGELOG, the cship pin, the render tests or a link in the notes),
@@ -163,9 +163,9 @@ it from cship's own release:
   {URL}
   SHA-256 {SHA}
 
-and save it as cship.exe in the same folder as cship-usage.exe: cship-usage
-runs the cship.exe beside it before any other, and the download's own name is
-not one it looks for. cship needs the Microsoft Visual C++ Redistributable
+and save it as cship.exe in the same folder as cship-usage.exe. cship-usage
+runs the cship.exe next to it before any other, and it won't find the download
+under its original name. cship needs the Microsoft Visual C++ Redistributable
 (x64), which most PCs already have:
 
   https://aka.ms/vc14/vc_redist.x64.exe
