@@ -3,40 +3,7 @@
 What changed, newest first. Releases are headed by their version; the entries before the first
 release are by date.
 
-## Unreleased
-
-- The status line fits the terminal's width. It reads `COLUMNS`, which Claude Code 2.1.153 and later
-  set for it, less the four columns of the prompt footer's padding and any `statusLine.padding`.
-  `CSHIP_WIDTH` still comes first when it is set, and without either the width is 141, as before.
-  The README and the install guide no longer ask for `CSHIP_WIDTH`.
-- The limit rows are cached as figures rather than as drawn rows, so every session draws them at its
-  own width. The first good fetch removes the drawn copy older builds kept, `val`.
-- The render tests set or clear `COLUMNS` for every render, and cover where the width comes from:
-  `COLUMNS` alone, `CSHIP_WIDTH` before it, values that are not widths, and `statusLine.padding`.
-- A usage fetch that fails twice in a row raises a red `⚠` row that names the reason (a timeout, an
-  HTTP status, no token, offline) and how old the limit rows still drawn are, until a fetch
-  succeeds. The first failure stays quiet, and the next render is its retry. The count is kept
-  beside the rows, in `fail` and `why`, so every session shows the same row; with nobody signed in
-  there is none, as there are no limit rows to miss.
-- Render cases for a usage fetch that fails once, twice, in another session and before any has
-  worked, then recovers, and for the failed fetch among the other `⚠` rows: 164 renders of 58
-  cases.
-- [Deploy.ps1](scripts/Deploy.ps1) was tried on a scratch folder, through every exit code, before
-  its first deploy. A target locked through every retry is left as it is, still the previous
-  binary, with exit 2; it used to be restored all the same, and the restore failing on the same
-  lock said exit 3. A file it cannot read, or a backup it cannot write, is now a refusal rather than
-  PowerShell's error, and `-WhatIf` works under Windows PowerShell 5.1, where `Get-FileHash` took it
-  for its own and hashed nothing.
-- The README opens with the status line exactly as a terminal shows it, with nothing added, before
-  the annotated version that names every part.
-- The annotated figure opens the reading guide when clicked, and a centred link to the guide sits
-  right below it.
-- The top of the README is tidier: no row of small links under the download button, a heading for
-  the annotated figure, and a plain list of requirements.
-- The release notes put each paragraph on one line, because GitHub shows every line break in
-  them.
-
-## 0.1.0 - 2026-09-24
+## 1.0.0 - 2026-09-24
 
 The first release: a zip with `cship-usage.exe` and the configuration it is used with.
 [install.md](docs/guide/install.md) puts it in place and fetches
@@ -54,19 +21,30 @@ The first release: a zip with `cship-usage.exe` and the configuration it is used
 - How long the session has run, the lines it changed, its cost per hour and its cost so far, in
   dollars and euros.
 - Warnings that say why. A figure that could not be read shows `—` and a red `⚠` row names its
-  source, an amber row names a limit it does not draw yet, and a red alarm appears if usage is ever
-  billed beyond the plan.
+  source. When fetching the usage fails twice in a row, a red row says why (a timeout, an HTTP
+  status, no token, offline) and how old the limit rows still shown are. An amber row names a limit
+  it does not draw yet, and a red alarm appears if usage is ever billed beyond the plan.
 - One usage fetch at a time for every open session, and none while the shared copy is under 50
   seconds old.
 
-It needs Windows 10 or 11 on x64, Claude Code in a terminal (the VS Code extension's chat panel
-shows no status line) and, for cship, the Microsoft Visual C++ Redistributable, which most PCs
-already have and the install block checks for.
+It fits the terminal's width, which Claude Code 2.1.153 and later pass to it, and every open session
+draws at the width of its own terminal. `CSHIP_WIDTH` sets a fixed width instead, and with neither
+the width is 141.
 
-Known limits: numbers are in Dutch notation (`1.234,56`); the width is 141 columns unless
-`CSHIP_WIDTH` says otherwise, and the token grid needs at least 121; a usage fetch that fails is not
-reported, and the limit rows keep the last good one; the binary is x64 only and unsigned, so
-Windows 11's Smart App Control blocks it where it is on; there is no installer or auto-update yet.
+The [README](README.md) opens with the status line as a terminal shows it, with nothing added, then
+an annotated version that names every part and opens the
+[reading guide](docs/guide/reading-the-status-line.md) when clicked. The release notes keep each
+paragraph on one line, because GitHub shows every line break in them.
+
+It needs Windows 10 or 11 on x64, and Claude Code in a terminal, signed in with a Claude account for
+the limit rows; the VS Code extension's chat panel shows no status line. The terminal has to draw
+emoji two columns wide, as Windows Terminal does, and be at least 121 columns wide for the token
+grid. cship needs the Microsoft Visual C++ Redistributable, which most PCs already have and the
+install block checks for.
+
+Known limits: numbers are in Dutch notation (`1.234,56`); `cship-usage.exe` is x64 only; it and
+cship are unsigned, so Windows 11's Smart App Control blocks them where it is on; there is no
+installer or auto-update yet.
 
 ## 2026-09-24
 

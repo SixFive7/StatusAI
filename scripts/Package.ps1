@@ -48,7 +48,7 @@
     Default: the one on PATH.
 
 .EXAMPLE
-    ./scripts/Package.ps1 -Version 0.1.0
+    ./scripts/Package.ps1 -Version 1.0.0
 #>
 [CmdletBinding()]
 param(

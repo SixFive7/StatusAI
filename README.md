@@ -127,8 +127,10 @@ The [install guide](docs/guide/install.md) has each step in full, what to expect
 [what to do when something is missing](docs/guide/install.md#when-something-is-missing), and how to
 take it out again.
 
-It's early days: this is 0.1.0. Numbers are in Dutch notation (`1.234,56`), the token grid needs a
-terminal at least 121 columns wide, and there is no installer or auto-update yet.
+This is 1.0.0, the first release, and it has a few known limits. Numbers are in Dutch notation
+(`1.234,56`), the token grid needs a terminal at least 121 columns wide, and there is only an x64
+build. Neither `cship-usage.exe` nor cship is signed, so Windows 11's Smart App Control blocks them
+where it is on. There is no installer or auto-update yet.
 
 ## Learn more
 
