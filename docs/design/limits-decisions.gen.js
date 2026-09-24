@@ -974,7 +974,8 @@ const secMethod = `
       <code>Bar</code>, <code>Hm</code>, <code>BuildAccount</code>, <code>Compose</code> and <code>WithBreakdown</code>. The generator
       refuses to run unless the port reproduces all ${checks.length} captured renders — ${Object.keys(D.renders.cases).length} from bd399ae,
       ${Object.keys(AB.cases).length} from ${AB.commit} and ${Object.keys(AB2.cases).length} from ${AB2.commit} (their ⚠ rows are shown as
-      captured) — byte for byte. Every character is a 1ch cell; 👤 is two.</td></tr>
+      captured) — byte for byte. Every character is a 1ch cell; 👤 is two. The account addresses, in the captures and the
+      port alike, are example.com ones of the same length, so every width is as drawn.</td></tr>
     <tr><td>Colours</td><td>Every mark is a Program.cs literal (${F.palette_check.palette.join(', ')}; forest #28A428 since 3a801e1;
       the amber notice #E0AF68 since ccf37df; a maxed row’s <code>⇢</code> segment in dim #6E738D since 878a8e4),
       on the terminal ground #16161E the template uses. The dataviz validator passes the chart colours on colour-blind separation

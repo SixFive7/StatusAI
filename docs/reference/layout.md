@@ -115,7 +115,7 @@ The account sits right of `5h`, and after it the product breakdown — each prod
 week's usage, in the account's text colour, `·` dim between them:
 
 ```
-👤 another@example.com · Max 20 · CC 99% · Chat 0% · Cowork 1%
+👤 someone@example.com · Max 20 · CC 99% · Chat 0% · Cowork 1%
 ```
 
 **It takes no part in the layout decision.** The two-column test is made on the account alone, so
@@ -126,7 +126,7 @@ is never cut inside an entry. The account is charged as the layout test charges 
 wide of the truth, so the line always passes the test the layout was decided by.
 
 At the default 141 columns and the 2026-09-23 figures that leaves 71 columns for the account line:
-the whole breakdown fits beside an address of up to 27 characters (`another@example.com` is 19,
+the whole breakdown fits beside an address of up to 27 characters (`someone@example.com` is 19,
 with 9 columns to spare), the breakdown without its 0% entries up to 37, and past that none.
 
 
