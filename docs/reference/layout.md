@@ -208,8 +208,9 @@ and nothing raises an error.
 Every glyph drawn today (`│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF, `○` U+25CB,
 `✗` U+2717, `—` U+2014, `…` U+2026) is East-Asian Ambiguous or, for `↻`, `⇢` and `✗`, Neutral, and
 both render single-width in the terminals this targets. Check a candidate's class before using it.
-Anything Wide or Fullwidth is out, and emoji are only safe in the token grid, where `iw[]` declares
-two columns per glyph explicitly.
+Anything Wide or Fullwidth is out. Emoji are only safe where their width is accounted for: in the
+token grid, where `iw[]` declares two columns per glyph explicitly, and in the account's `👤`, which
+`Vis()` happens to count as two because it takes two UTF-16 code units.
 
 `—` is the one sentinel for *this source reported nothing at all*, as distinct from a source that
 reported zero: the `↻` column when the payload carried no `resets_at`, `⏱` / `💰` when the payload

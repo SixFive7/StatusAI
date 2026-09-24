@@ -108,9 +108,17 @@ node -e "const h=require('fs').readFileSync('weekly-wall.html','utf8');
 
 ## Glyph widths
 
-Everything the status line draws is single-width, and any new glyph must be too; see the alignment
-rule in [layout.md](../../reference/layout.md). The marks in the template, `⇥` U+21E5 and `┃`
-U+2503, sit in the same narrow East-Asian classes (Neutral and Ambiguous) as the glyphs already in
-use, `│` U+2502, `↻` U+21BB, `→` U+2192, `⇢` U+21E2, `●` U+25CF, `○` U+25CB and `✗` U+2717, so they
-render single-width wherever those do. That check is why they were safe to propose. Run it again
-for any new glyph, whatever becomes of the design that brings it in.
+Not everything the status line draws is single-width. The emoji are two columns wide in Windows
+Terminal, and they appear only where that width is accounted for: the token grid declares two
+columns for each of its icons instead of measuring them, the layout counts the account's `👤` as
+two columns, and the meta segment's `📝`, `💸` and `💰` sit at the end of the model line, where
+nothing lines up after them and the worst case was measured.
+
+Everywhere else a glyph has to be single-width. Every row opens with one (see the alignment rule in
+[layout.md](../../reference/layout.md#alignment-why-the-rule-exists)), and the limit rows are laid
+out by counting one column per character, so a new glyph for those rows must be single-width too.
+The marks in the template, `⇥` U+21E5 and `┃` U+2503, sit in the same narrow East-Asian classes
+(Neutral and Ambiguous) as the glyphs the limit rows already use, `│` U+2502, `↻` U+21BB, `→`
+U+2192, `⇢` U+21E2, `●` U+25CF, `○` U+25CB and `✗` U+2717, so they render single-width wherever
+those do. That check is why they were safe to propose. Run it again for any new glyph, whatever
+becomes of the design that brings it in.
