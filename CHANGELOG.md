@@ -9,6 +9,10 @@ the entries before the first release are by date.
   the annotated version that names every part. `e7da798`
 - The annotated figure opens the reading guide when clicked, and a centred link to the guide sits
   right below it. `1e4ea1e`
+- The top of the README is tidier: no row of small links under the download button, a heading for
+  the annotated figure, and a plain list of requirements. `716e7ef`
+- The release notes put each paragraph on one line, because GitHub shows every line break in
+  them. `0afaab1`
 
 ## 0.1.0 - 2026-09-24
 
