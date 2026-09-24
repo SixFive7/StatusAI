@@ -1,4 +1,4 @@
-<sub>[StatusAI](../README.md) › Documentation</sub>
+<sub>[StatusAI](../README.md) / Documentation</sub>
 
 # Documentation
 
@@ -30,16 +30,16 @@ Why it is the way it is, and what was tried and rejected.
 
 | page | covers |
 |---|---|
-| [design/limits-decisions.html](design/limits-decisions.html) | the record of the limit-row decisions of 23–24 September 2026, every option drawn cell for cell; open it in a browser, since GitHub shows HTML as source |
+| [design/limits-decisions.html](design/limits-decisions.html) | the record of the limit-row decisions of 23 and 24 September 2026, every option drawn cell for cell; open it in a browser, since GitHub shows HTML as source |
 | [design/rejected-designs.md](design/rejected-designs.md) | the limit-row designs that were rejected, and why |
-| [design/house-style/](design/house-style/) | the house style for visual documentation. **Read its README first — the example's subject matter is wrong on purpose.** |
+| [design/house-style/](design/house-style/) | the house style for visual documentation. **Read its README first: the example's subject matter is wrong on purpose.** |
 | [design/packaging-plan.md](design/packaging-plan.md) | packaging, Velopack auto-update, the install surface, the landmines |
 
 ## Development
 
 | page | covers |
 |---|---|
-| [development.md](development.md) | the repository, building, the render tests, deploying, releasing and testing on a live machine — and the traps that waste an hour |
+| [development.md](development.md) | the repository, building, the render tests, deploying, releasing, testing on a live machine and the traps that waste an hour there, and how the docs are kept |
 
 The figures in [assets/](assets/) are drawn from the render tests' output by a generator; its
 [README](assets/README.md) lists them and gives the command that regenerates them. What changed, and
