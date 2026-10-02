@@ -13,13 +13,14 @@ using Microsoft.Win32.SafeHandles;
 // on a key, starts a Claude Code tab or window when the key is pressed, and keeps the shared usage
 // fresh while Claude is working and no terminal's status line is doing so.
 //
-// It waits and never polls. Three things can wake it: a message from the app on its websocket, a
-// change to the registry key the limit rows are cached in, and a write anywhere under
-// ~/.claude/projects, where every session of every kind keeps its transcripts. It makes no fetch
-// of its own: when the usage is due it starts this exe again with --refresh, which goes through
-// GetUsage() like any render, so the 50 second cache, the lock and the count of failures are the
-// status line's. A key press is this exe a third time, with --deck-press, which starts Windows
-// Terminal and brings it to the front. See docs/reference/architecture.md.
+// It waits and never polls. Four things can wake it: a message from the app on its websocket, a
+// change to the registry key the limit rows are cached in, a write anywhere under
+// ~/.claude/projects, where every session of every kind keeps its transcripts, and the end of a
+// process that a key press started. It makes no fetch of its own: when the usage is due it starts
+// this exe again with --refresh, which goes through GetUsage() like any render, so the 50 second
+// cache, the lock and the count of failures are the status line's. A key press is this exe a
+// third time, with --deck-press, which starts Windows Terminal and brings it to the front. See
+// docs/reference/architecture.md.
 static class Deck {
     // What it takes from Program.cs, whose functions are local to its top-level code.
     public sealed class Host {
@@ -40,10 +41,16 @@ static class Deck {
     sealed class Hold { public string Ctx = ""; public long Since; }
 
     // a press that has acted: --deck-press is running, and what it ends with is still to be read
-    sealed class Opening { public string Ctx = ""; public string What = ""; public required Process Run; }
+    sealed class Opening : IDisposable {
+        public string Ctx = "", What = "";
+        public required Process Run;
+        public required IntPtr Handle;       // its process, as Windows knows it
+        public required WaitHandle Ended;    // the same, to wait on: signalled once it has ended
+        public void Dispose() { Ended.Dispose(); Run.Dispose(); }
+    }
 
     const int HoldMs = 500;          // a key held this long is a long press, and acts while still down
-    const int OpeningMs = 200;       // how often a --deck-press that is still running is looked at
+    const int MaxWaits = 64;         // how many things Windows lets one wait be for
     const int SlotSeconds = 62;      // while Claude works: one refresh a minute, just behind a terminal's own 60 s
     const int FreshSeconds = 50;     // GetUsage() fetches nothing while the shared copy is younger than this
     const int IdleSeconds = 300;     // no fetch for this long means nothing has been running: a pace says nothing
@@ -148,20 +155,22 @@ static class Deck {
                 if (active && shown.Count > 0) wait = Math.Min(wait, (RefreshDue(h, activeSince, refreshedAt, slot) - now) * 1000);
                 // the countdowns on the key read in minutes: one look on each minute while a key shows
                 if (shown.Count > 0) wait = Math.Min(wait, (60 - DateTime.Now.Second) * 1000L + 50);
-                // while a press is opening its terminal, a look at how that went, which is nothing to draw for
-                bool look = opening.Count > 0 && OpeningMs < wait;
-                if (look) wait = OpeningMs;
 
                 // The folder's handle stays signalled until it is armed again, so a burst of a thousand
                 // writes is one wake-up, and once a refresh is due it is left out of the wait altogether.
-                var waits = new WaitHandle[1 + (cache is not null && settleAt == 0 ? 1 : 0) + (work is not null && !active ? 1 : 0)];
+                // A press that is opening its terminal is waited for by its process, and its end is
+                // nothing to draw for. More of them than one wait has room for take their turn.
+                int others = 1 + (cache is not null && settleAt == 0 ? 1 : 0) + (work is not null && !active ? 1 : 0);
+                int presses = Math.Min(opening.Count, MaxWaits - others);
+                var waits = new WaitHandle[others + presses];
                 int iCache = -1, iWork = -1, n = 0;
                 waits[n++] = inbox.Signal;
                 if (cache is not null && settleAt == 0) { iCache = n; waits[n++] = cache.Changed; }
                 if (work is not null && !active) { iWork = n; waits[n++] = work.Changed; }
+                for (int i = 0; i < presses; i++) waits[n++] = opening[i].Ended;
                 int got = WaitHandle.WaitAny(waits, wait == long.MaxValue ? -1 : (int)Math.Clamp(wait, 0, int.MaxValue));
                 now = Now(); tick = Environment.TickCount64;
-                bool redraw = got == WaitHandle.WaitTimeout && !look;
+                bool redraw = got == WaitHandle.WaitTimeout;
 
                 if (got == 0) {
                     while (inbox.Take(out string? m)) {
@@ -185,11 +194,14 @@ static class Deck {
 
                 // A --deck-press that has ended (Open). 100 and up is Windows' own number, with 100 added,
                 // for why Windows Terminal could not be started; below that the terminal is there.
+                // Windows is asked directly whether it has ended and with what. .NET's own HasExited
+                // and ExitCode first look up the debug privilege, once in a process, and that brings
+                // up Windows' RPC in it: a port, a thread pool and 13 handles that then stay.
                 for (int i = opening.Count - 1; i >= 0; i--) {
                     Opening o = opening[i];
-                    if (!o.Run.HasExited) continue;
-                    int code = o.Run.ExitCode;
-                    o.Run.Dispose();
+                    if (!o.Ended.WaitOne(0)) continue;
+                    if (!GetExitCodeProcess(o.Handle, out int code)) code = 1;
+                    o.Dispose();
                     opening.RemoveAt(i);
                     if (code >= 100) {
                         ws.Send("{\"event\":\"showAlert\",\"context\":" + Quote(o.Ctx) + "}");
@@ -214,7 +226,7 @@ static class Deck {
             }
         } finally {
             cache?.Dispose(); work?.Dispose();
-            foreach (Opening o in opening) o.Run.Dispose();
+            foreach (Opening o in opening) o.Dispose();
         }
     }
 
@@ -298,19 +310,21 @@ static class Deck {
     //
     // The press is this exe once more, started with --deck-press, for two reasons. Starting a
     // Store app by its alias loads Windows' app model and the shell into the process that does
-    // it: 63 handles, 17 libraries and 3 MB that would then stay for good in a process whose point
+    // it: 63 handles, 12 libraries and 3 MB that would then stay for good in a process whose point
     // is to hold little. And bringing a window to the front can take seconds of looking and
     // asking again, which the loop has no business spending.
     static void Press(Ws ws, Host h, string ctx, bool hold, List<Opening> opening) {
         string what = hold ? "window" : "tab";
-        // Offline nothing is started: the command is reported instead, so a test never opens a
-        // terminal. Unless STATUSAI_DECK_TAB says what the tab is to run, which is how the key is
-        // tried for real without a Claude Code session coming of it.
-        if (h.Offline is not null && Tab().Length == 0) { ws.Send(Log("offline: would run " + Terminal() + " " + (hold ? WindowArgs : TabArgs))); return; }
+        // Offline the press is started as well, opens nothing (Open), and what it would have run is
+        // reported, so a test never opens a terminal. Unless STATUSAI_DECK_TAB says what the tab is
+        // to run, which is how the key is tried for real without a Claude Code session coming of it.
+        if (h.Offline is not null && Tab().Length == 0) ws.Send(Log("offline: would run " + Terminal() + " " + (hold ? WindowArgs : TabArgs)));
         try {
             var psi = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
             psi.ArgumentList.Add("--deck-press"); psi.ArgumentList.Add(what);
-            opening.Add(new Opening { Ctx = ctx, What = what, Run = Process.Start(psi)! });
+            Process p = Process.Start(psi)!;
+            IntPtr handle = p.SafeHandle.DangerousGetHandle();
+            opening.Add(new Opening { Ctx = ctx, What = what, Run = p, Handle = handle, Ended = new Borrowed(handle) });
         } catch (Exception ex) {
             ws.Send("{\"event\":\"showAlert\",\"context\":" + Quote(ctx) + "}");
             ws.Send(Log("could not start --deck-press: " + ex.GetType().Name + ": " + ex.Message));
@@ -324,9 +338,14 @@ static class Deck {
     const int FrontMs = 8000;        // how long a terminal gets to appear and to come to the front
 
     // wt.exe is an app execution alias, named by its full path so that the PATH this process was
-    // started with does not matter.
-    static string Terminal() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", "wt.exe");
+    // started with does not matter. Where that is comes from %LOCALAPPDATA%, and from the shell
+    // only when the variable is not set: the plugin names the path in its log, and a process that
+    // asks the shell has the shell's libraries loaded into it for good.
+    static string Terminal() {
+        string? local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+        if (string.IsNullOrEmpty(local)) local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return Path.Combine(local, "Microsoft", "WindowsApps", "wt.exe");
+    }
 
     // For trying the key: what the tab or window runs in place of the default profile's own
     // command, as wt.exe takes it. `cmd /c ping -n 5 127.0.0.1` is a tab that closes by itself.
@@ -341,7 +360,10 @@ static class Deck {
     // that asks for it gets a flashing taskbar button, and the plugin is such a program, as is
     // the terminal it starts. So the terminal's window is brought up from here, by the ways that
     // get past that (Front), and for a tab before the tab is asked for.
-    public static int Open(bool window) {
+    public static int Open(bool window, bool offline) {
+        // Offline nothing is opened and nothing on the desktop is touched, unless STATUSAI_DECK_TAB
+        // says what the tab is to run (Press).
+        if (offline && Tab().Length == 0) return 0;
         var before = Terminals();
         IntPtr mine = IntPtr.Zero;
         int tries = 0;
@@ -357,8 +379,6 @@ static class Deck {
                 Thread.Sleep(60);                             // what it takes the terminal to note which of its windows is in use
             }
         }
-        // a window that is about to be made may come up by itself, where Windows allows that much
-        if (mine == IntPtr.Zero) { Provide(); AllowSetForegroundWindow(-1); }
 
         try {
             using var p = Process.Start(new ProcessStartInfo(Terminal()) {
@@ -366,6 +386,10 @@ static class Deck {
                 Arguments = (window ? WindowArgs : TabArgs) + (Tab().Length > 0 ? " " + Tab() : "") });
         } catch (System.ComponentModel.Win32Exception ex) { return 100 + Math.Max(0, ex.NativeErrorCode); }
           catch { return 100; }
+
+        // A window that is about to be made may come up by itself, where Windows allows that much.
+        // Said once there is a terminal to say it for, which is long before it has a window to show.
+        if (mine == IntPtr.Zero) { Provide(); AllowSetForegroundWindow(-1); }
 
         // The window to bring up is a new one, if one appears, and otherwise the one the tab went
         // to. A new one can take seconds, when Windows Terminal was not running. One that was to
@@ -729,15 +753,17 @@ static class Deck {
         }
         public void Arm() => FindNextChangeNotification(handle);
         public void Dispose() { Changed.Dispose(); FindCloseChangeNotification(handle); }
-
-        sealed class Borrowed : WaitHandle { public Borrowed(IntPtr h) { SafeWaitHandle = new SafeWaitHandle(h, false); } }
     }
+
+    // a handle that something else owns and closes, as something to wait on
+    sealed class Borrowed : WaitHandle { public Borrowed(IntPtr h) { SafeWaitHandle = new SafeWaitHandle(h, false); } }
 
     // ---------------------------------------------------------------- Win32
 
     [DllImport("kernel32.dll")] static extern bool FreeConsole();
     [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll")] static extern bool SetHandleInformation(IntPtr handle, int mask, int flags);
+    [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr process, out int code);
     [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr process, int what, IntPtr buffer, int size, out int needed);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     static extern int RegOpenKeyExW(UIntPtr hKey, string subKey, int options, int sam, out IntPtr result);
@@ -749,7 +775,7 @@ static class Deck {
     [DllImport("kernel32.dll", ExactSpelling = true)] static extern bool FindNextChangeNotification(IntPtr h);
     [DllImport("kernel32.dll", ExactSpelling = true)] static extern bool FindCloseChangeNotification(IntPtr h);
 
-    // What --deck-press uses and the plugin never calls: none of these libraries is loaded until then.
+    // What --deck-press uses, and the plugin never calls.
     [DllImport("kernel32.dll", ExactSpelling = true)] static extern int GetCurrentThreadId();
     [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string className, string? title);

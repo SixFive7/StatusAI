@@ -14,20 +14,26 @@
 
     Everything runs offline. Each plugin gets a fresh copy of the `shot` home as STATUSAI_OFFLINE,
     so the key it draws is tests/expected/key.svg, the registry cache, the usage lock and the
-    network are never touched, a key press starts nothing and a refresh fetches nothing: the
-    plugin reports what a press would have run, and the --refresh it starts has nothing to fetch.
-    No terminal is ever opened by these tests.
+    network are never touched, a key press opens nothing and a refresh fetches nothing: the
+    plugin reports what a press would have run, the --deck-press it starts ends at once, and the
+    --refresh it starts has nothing to fetch. No terminal is ever opened by these tests, and
+    nothing on the desktop is touched.
 
-    -Live adds the three cases that cannot be had that way, because they are about the desktop: a
+    -Live adds the four cases that cannot be had that way, because they are about the desktop.
+    The first is the control: a terminal started with nothing done for it, which has to stay
+    behind the window in front, as it did for the plugin before it was taught otherwise. Then a
     press with no terminal open, with one open behind another window, and with one minimised,
     each once as a short press and once as a hold, and every time the terminal has to end up in
-    front. They open real Windows Terminal windows and take the foreground for a few seconds at
-    a time. The tabs they open run `cmd /c ping` in place of the default profile's command, carry
-    the title "statusai test", and close by themselves; the foreground goes back to the window
-    that had it. Nothing that was open before is closed, moved or resized, and the cases are
-    skipped where they would be in the way: on a locked session, while a full-screen program or
-    a presentation is in front, and while a Windows Terminal window of your own is open, since a
-    press would put its tab there.
+    front. For these the plugin is started through WMI, by a Windows service, so that it stands
+    where the real one does: a program that this script starts itself is let through to the
+    foreground whenever the script is, and the script is whenever it was started from the window
+    in front. The cases open real Windows Terminal windows and take the foreground for a few
+    seconds at a time. The tabs they open run `cmd /c ping` in place of the default profile's
+    command, carry a title that starts with "statusai test", and close by themselves; the
+    foreground goes back to the window that had it. Nothing that was open before is closed,
+    moved or resized, and the cases are skipped where they would be in the way: on a locked
+    session, while a full-screen program or a presentation is in front, and while a Windows
+    Terminal window of your own is open, since a press would put its tab there.
 
     Runs under Windows PowerShell 5.1 and PowerShell 7. Exit code 0 when every case passes, 1
     when any fails, 2 when the run could not start.
@@ -159,18 +165,19 @@ function Wait-Exit($run, [int] $ms, [string] $when) {
 }
 
 # ------------------------------------------------------------------ the app's side of the websocket
-function New-Session([hashtable] $more = @{}) {
+function New-Session([hashtable] $more = @{}, [bool] $apart = $false) {
     $l = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
     $l.Start()
     $s = [pscustomobject]@{ Listener = $l; Port = ([System.Net.IPEndPoint] $l.LocalEndpoint).Port; Client = $null; Socket = $null
-                            Stream = $null; Run = $null; HomeDir = (New-Home); Request = ''; More = $more }
+                            Stream = $null; Run = $null; HomeDir = (New-Home); Request = ''; More = $more; Apart = $apart }
     [void] $script:Open.Add($s)
     $s
 }
 
 # answer: ok, wrong (a Sec-WebSocket-Accept that does not match), refuse (400), silent (no answer)
 function Connect-Plugin($s, [string] $answer = 'ok') {
-    $s.Run = Start-Statusai ("-port {0} -pluginUUID {1} -registerEvent registerPlugin -info {{}}" -f $s.Port, $Uuid) $s.HomeDir $s.More
+    $arguments = "-port {0} -pluginUUID {1} -registerEvent registerPlugin -info {{}}" -f $s.Port, $Uuid
+    if ($s.Apart) { $s.Run = Start-StatusaiApart $arguments $s.HomeDir $s.More } else { $s.Run = Start-Statusai $arguments $s.HomeDir $s.More }
     $t = $s.Listener.AcceptTcpClientAsync()
     if (-not $t.Wait(5000)) { Fail 'the plugin did not connect within 5 s' }
     $s.Client = $t.Result; $s.Client.NoDelay = $true
@@ -317,8 +324,8 @@ function Read-Until-Quiet($s, [int] $firstMs, [int] $quietMs) {
 }
 
 # a session up to the point where the plugin has registered and said it started
-function Open-Plugin([hashtable] $more = @{}) {
-    $s = New-Session $more
+function Open-Plugin([hashtable] $more = @{}, [bool] $apart = $false) {
+    $s = New-Session $more $apart
     Connect-Plugin $s
     $f = Expect-Event $s 'registerPlugin' 5000
     Need ($f.json.uuid -eq $Uuid) "it registered as $($f.json.uuid), not with the uuid it was started with"
@@ -434,6 +441,8 @@ $Cases['a short press on release, a long press after 500 ms'] = {
     Expect-Nothing $s 150 'while the key is down'
     Send-Event $s 'keyUp' 'K1'
     [void] (Expect-Log $s "^offline: would run .*$wt -w 0 nt$" 1000)
+    # the press is a process of its own, which opens nothing offline and says so by ending with 0
+    [void] (Expect-Log $s '^offline: --deck-press tab ended with 0$' 3000)
     Expect-Nothing $s 700 'after a short press'
     # long: the window at 500 ms, with the key still down, and nothing when it comes up
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -441,6 +450,7 @@ $Cases['a short press on release, a long press after 500 ms'] = {
     [void] (Expect-Log $s "^offline: would run .*$wt -w new$" 1500)
     $ms = $sw.ElapsedMilliseconds
     Need ($ms -ge 450 -and $ms -le 900) "the long press acted after $ms ms, not about 500"
+    [void] (Expect-Log $s '^offline: --deck-press window ended with 0$' 3000)
     Send-Event $s 'keyUp' 'K1'
     Expect-Nothing $s 700 'after the release of a long press'
     # a hold just under the half second is still a short press
@@ -448,6 +458,66 @@ $Cases['a short press on release, a long press after 500 ms'] = {
     Start-Sleep -Milliseconds 350
     Send-Event $s 'keyUp' 'K1'
     [void] (Expect-Log $s "^offline: would run .*$wt -w 0 nt$" 1000)
+    [void] (Expect-Log $s '^offline: --deck-press tab ended with 0$' 3000)
+}
+
+$Cases['forty presses, and as many handles as before'] = {
+    $s = Open-Plugin
+    [void] (Show-Key $s 'N1')
+    $said = { param([object[]] $all, [string] $pattern) @($all | Where-Object { $_.json.event -eq 'logMessage' -and $_.json.payload.message -match $pattern }).Count }
+    # one after the other: each is started, waited for and read before the next
+    $press = { param([int] $times)
+        for ($i = 0; $i -lt $times; $i++) {
+            Send-Event $s 'keyDown' 'N1'
+            Send-Event $s 'keyUp' 'N1'
+            [void] (Expect-Log $s '^offline: would run ' 2000)
+            [void] (Expect-Log $s '^offline: --deck-press tab ended with 0$' 5000)
+        }
+    }
+    # The first program a process starts costs it two handles, which is Windows looking up what
+    # it knows about the program. What .NET's own way of asking whether a process has ended costs
+    # is 13 more, once, and they stay: that is what this plugin was found with after its first
+    # press, and what it must not take on again.
+    $s.Run.Proc.Refresh(); $fresh = $s.Run.Proc.HandleCount
+    & $press 2
+    $s.Run.Proc.Refresh(); $before = $s.Run.Proc.HandleCount
+    Need ($before - $fresh -le 6) "the plugin held $fresh handles before its first press and $before after it"
+    & $press 30
+    # and ten at once, so that the plugin waits for several of them together
+    for ($i = 0; $i -lt 10; $i++) { Send-Event $s 'keyDown' 'N1'; Send-Event $s 'keyUp' 'N1' }
+    $all = Read-Until-Quiet $s 5000 1000
+    $ran = & $said $all '^offline: would run '
+    $ended = & $said $all '^offline: --deck-press tab ended with 0$'
+    Need ($ran -eq 10 -and $ended -eq 10) "ten presses at once: $ran were started and $ended ended with 0"
+    $s.Run.Proc.Refresh(); $after = $s.Run.Proc.HandleCount
+    # each press is a process started, with a handle to it that is waited on and has to be closed again
+    Need ([Math]::Abs($after - $before) -le 3) "the plugin held $before handles before 40 presses and $after after them"
+}
+
+$Cases['no Windows Terminal: an alert on the key, why in the log, and as many handles as before'] = {
+    # A %LOCALAPPDATA% with no wt.exe in it, and something for a tab to run, which makes the
+    # press a real one: --deck-press tries to start the terminal. It is a hold each time, which
+    # asks for a new window, so no window that is open is looked for.
+    $local = Join-Path $script:RunRoot 'no-terminal'
+    New-Item -ItemType Directory -Path (Join-Path $local 'Microsoft\WindowsApps') -Force | Out-Null
+    $s = Open-Plugin @{ STATUSAI_DECK_TAB = 'cmd /c exit'; LOCALAPPDATA = $local }
+    [void] (Show-Key $s 'X1')
+    $hold = {
+        Send-Event $s 'keyDown' 'X1'
+        [void] (Expect-Event $s 'showAlert' 3000 'X1')
+        [void] (Expect-Log $s '^could not start .*\\no-terminal\\Microsoft\\WindowsApps\\wt\.exe: Windows error 2$' 3000)
+        Send-Event $s 'keyUp' 'X1'
+        Expect-Nothing $s 300 'after the release'
+    }
+    # the first costs what the first program a process starts costs, and no more: naming the
+    # path in the log by asking the shell for it would load the shell into the plugin, 38 handles
+    $s.Run.Proc.Refresh(); $fresh = $s.Run.Proc.HandleCount
+    & $hold
+    $s.Run.Proc.Refresh(); $before = $s.Run.Proc.HandleCount
+    Need ($before - $fresh -le 6) "the plugin held $fresh handles before its first press and $before after it"
+    foreach ($i in 1..3) { & $hold }
+    $s.Run.Proc.Refresh(); $after = $s.Run.Proc.HandleCount
+    Need ([Math]::Abs($after - $before) -le 3) "the plugin held $before handles before three presses that failed and $after after them"
 }
 
 $Cases['a refresh when Claude writes, one a slot, and none while no key shows'] = {
@@ -624,10 +694,16 @@ $Cases['--refresh and --deck-face do not wait for stdin'] = {
 }
 
 # ------------------------------------------------------------------ the cases on the live desktop
-# -Live only. A press here is a real one: the plugin is given STATUSAI_DECK_TAB, so it starts
-# --deck-press, which starts Windows Terminal, with a tab that runs ping and closes by itself.
-# The plugin under test was started by this script, which is a program in the background with no
-# claim on the foreground: the position the real plugin is in under the Stream Deck app.
+# -Live only. A press here is a real one: the plugin is given STATUSAI_DECK_TAB, so the
+# --deck-press it starts does start Windows Terminal, with a tab that runs ping and closes by
+# itself.
+#
+# What these cases are about is the foreground, which Windows keeps for the program the user is
+# working in and for whatever that program starts, down the line. A plugin started by this
+# script would be on such a line whenever the script was started from the window in front, and
+# its terminal would come to the front with nothing done for it. The app's plugin is on no such
+# line. So the plugin is started through WMI here, by the service Windows has for that, and the
+# first case is the control that says whether that is where the real plugin stands.
 if ($Live) {
     Add-Type -TypeDefinition @'
 using System;
@@ -708,7 +784,33 @@ public static class Desk {
 
     $TestTitle = 'statusai test'
     $BaseTitle = 'statusai test base'
+    $ControlTitle = 'statusai test control'
     $WtExe = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\wt.exe'
+    $script:Guarded = $null     # what the control found, once it has run
+
+    # A program started through WMI, and its process id. It gets this script's environment with
+    # $set on top, a value of $null taking a variable out: WMI hands on none by itself.
+    function Start-Apart([string] $commandLine, [string] $directory, [hashtable] $set, [bool] $hidden) {
+        $vars = @{}
+        foreach ($e in [System.Environment]::GetEnvironmentVariables().GetEnumerator()) { $vars[[string] $e.Key] = [string] $e.Value }
+        foreach ($k in $set.Keys) { if ($null -eq $set[$k]) { $vars.Remove($k) } else { $vars[$k] = [string] $set[$k] } }
+        $props = @{ EnvironmentVariables = [string[]] @($vars.Keys | Where-Object { $vars[$_] } | ForEach-Object { '{0}={1}' -f $_, $vars[$_] }) }
+        if ($hidden) { $props.ShowWindow = [uint16] 0 }
+        $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property $props
+        $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $directory; ProcessStartupInformation = $startup }
+        if ($r.ReturnValue -ne 0) { Fail "WMI did not start $commandLine (Win32_Process.Create returned $($r.ReturnValue))" }
+        [int] $r.ProcessId
+    }
+
+    # Start-Statusai, apart. Nothing is read from its standard output or error, which go nowhere.
+    function Start-StatusaiApart([string] $arguments, [string] $homeDir, [hashtable] $more) {
+        $set = @{ STATUSAI_WIDTH = $null; STATUSAI_DECK_TAB = $null; STATUSAI_DECK_SLOT = $null; COLUMNS = $null; LINES = $null
+                  STATUSAI_OFFLINE = $homeDir; HOME = $homeDir; CLAUDE_HOME = $homeDir }
+        foreach ($k in $more.Keys) { $set[$k] = [string] $more[$k] }
+        $id = Start-Apart ('"{0}" {1}' -f $script:ExePath, $arguments) $homeDir $set $true
+        $nothing = [pscustomobject]@{ Result = '' }
+        [pscustomobject]@{ Proc = [System.Diagnostics.Process]::GetProcessById($id); Out = $nothing; Err = $nothing }
+    }
     # what a test tab runs: ping, for that many seconds, under a title that stays as it is
     function Get-TabCommand([string] $title, [int] $seconds) {
         '--title "{0}" --suppressApplicationTitle cmd /c "ping -n {1} 127.0.0.1 >nul"' -f $title, ($seconds + 1)
@@ -790,7 +892,7 @@ public static class Desk {
         $base = [IntPtr]::Zero
         if ($withBase) { $base = Open-Base 22 $was }
         try {
-            $s = Open-Plugin @{ STATUSAI_DECK_TAB = (Get-TabCommand $TestTitle 3) }
+            $s = Open-Plugin @{ STATUSAI_DECK_TAB = (Get-TabCommand $TestTitle 3) } $true
             [void] (Show-Key $s $context)
             $s.Run.Proc.Refresh(); $handles = $s.Run.Proc.HandleCount
             foreach ($hold in $false, $true) {
@@ -802,14 +904,39 @@ public static class Desk {
             }
             # Starting a Store app loads Windows' app model into the process that does it, 63 handles
             # that never go: the press is a process of its own so that the plugin is not that process.
+            # Two handles are what Windows takes for the first program a process starts.
             $s.Run.Proc.Refresh(); $after = $s.Run.Proc.HandleCount
             Write-Host "      the plugin: $handles handles before the two presses, $after after them"
-            Need ([Math]::Abs($after - $handles) -le 3) "the plugin held $handles handles before the two presses and $after after them"
+            Need ($after - $handles -le 6) "the plugin held $handles handles before the two presses and $after after them"
+            if ($script:Guarded -eq $true) { Write-Host '      the control stayed behind: these presses came from where Windows guards the foreground' }
+            elseif ($script:Guarded -eq $false) { Write-Host '      the control came to the front by itself: these presses say nothing about a plugin' }
         } finally {
             # the test's own terminal closes by itself; wait for that, so the next case starts without it
             if ($base -ne [IntPtr]::Zero) { [void] (Wait-Until { -not [Desk]::IsWindow($base) } 30000) }
             if ($was -ne [IntPtr]::Zero -and [Desk]::IsWindow($was)) { [void] [Desk]::Front($was) }
         }
+    }
+
+    # Whether Windows keeps a program that stands where the plugin does from the foreground, on
+    # this desktop, now: the three cases after it rest on that. A terminal is started as the
+    # plugin first started one, with nothing done for it, and has to stay behind the window in
+    # front. Where it comes to the front by itself, the case is skipped and says why.
+    $Cases['live: the control: a terminal started with nothing done for it stays behind'] = {
+        Assert-Free
+        $was = [Desk]::GetForegroundWindow()
+        if ($was -eq [IntPtr]::Zero) { throw [Skip]::new('no window is in front for a terminal to stay behind') }
+        $before = @([Desk]::Terminals())
+        [void] (Start-Apart ('"{0}" -w new {1}' -f $WtExe, (Get-TabCommand $ControlTitle 3)) $script:RunRoot @{} $false)
+        $script:Control = [IntPtr]::Zero
+        $ok = Wait-Until { foreach ($w in [Desk]::Terminals()) { if ($before -notcontains $w -and [Desk]::Title($w) -eq $ControlTitle) { $script:Control = $w; return $true } }; $false } 10000
+        if (-not $ok) { Fail 'the control terminal did not open' }
+        Start-Sleep -Milliseconds 1200            # as long as a press gives a terminal to get to the front
+        $front = [Desk]::GetForegroundWindow()
+        $script:Guarded = $front -ne $script:Control
+        Write-Host "      in front a second after the control terminal opened: $([Desk]::Describe($front))"
+        [void] (Wait-Until { -not [Desk]::IsWindow($script:Control) } 12000)
+        if ([Desk]::IsWindow($was) -and [Desk]::GetForegroundWindow() -ne $was) { [void] [Desk]::Front($was) }
+        if (-not $script:Guarded) { throw [Skip]::new('Windows let the control terminal come to the front by itself: on this desktop, now, the cases after it say nothing about a plugin') }
     }
 
     $Cases['live: no terminal open: a press opens one in front, and so does a hold'] = { Invoke-BothPresses 'F1' $false $false }

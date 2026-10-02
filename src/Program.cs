@@ -35,7 +35,7 @@ const string RegKey = @"Software\StatusAI";
 // drawn now or, with a number after it, that many seconds after the last fetch.
 if (Deck.IsPluginStart(args)) { Environment.ExitCode = Deck.Run(args, DeckHost()); return; }
 if (args.Length == 1 && args[0] == "--refresh") { GetUsage(); return; }
-if (args.Length == 2 && args[0] == "--deck-press" && args[1] is "tab" or "window") { Environment.ExitCode = Deck.Open(args[1] == "window"); return; }
+if (args.Length == 2 && args[0] == "--deck-press" && args[1] is "tab" or "window") { Environment.ExitCode = Deck.Open(args[1] == "window", Offline() is not null); return; }
 if (args.Length is 1 or 2 && args[0] == "--deck-face") {
     double age = args.Length == 2 && double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double a) ? a : -1;
     using var faceOut = Console.OpenStandardOutput();
