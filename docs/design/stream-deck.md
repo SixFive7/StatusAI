@@ -6,7 +6,9 @@ The record of the design of 1 October 2026: what was asked for, what the Stream 
 cannot do, the four ways of building the key with what each was measured to cost, and how the key
 decides when to fetch. And of the day after, when it had been on the device for a night: how a
 press gets its terminal to the front, what a press left in the plugin, and what a locked session
-did to the key. What the key does now is in [stream-deck.md](../guide/stream-deck.md) and
+did to the key. And of the night after that: what a press still left in the plugin, and where the
+tests of the foreground had stood. What the key does now is in
+[stream-deck.md](../guide/stream-deck.md) and
 [architecture.md](../reference/architecture.md#the-stream-deck-key). Like the other pages in this
 folder it is a record: add to it, and leave what was decided as it stands.
 
@@ -192,7 +194,7 @@ not input as Windows counts it. The terminal a press starts inherits that standi
 | provide input, then ask | Windows lets through the program that provided the last input. An input event that moves nothing and presses nothing counts, and is seen by no program | **used**, first |
 | attach to the thread in front | sharing its input queue makes the caller part of the program in front for the moment | **used**, second |
 | a press of Alt, then ask | Windows lifts the guard for everyone when Alt goes down. The program in front sees the key, and a lone Alt opens its menu, so it is sent twice, the second to close what the first opened | **used**, last and twice at most |
-| allow it beforehand | `AllowSetForegroundWindow` for everyone, before the terminal is started, so that it can come up by itself. It lasts until the next input from the user, which may come first | used for a new window, and not relied on |
+| allow it beforehand | `AllowSetForegroundWindow` for everyone, as soon as the terminal is started and before it has a window, so that it can come up by itself. It lasts until the next input from the user, which may come first | used for a new window, and not relied on |
 | minimise and restore | restoring a window activates it, at the price of a window that visibly drops and comes back | rejected |
 
 **Which window.** For a new window there is no question: the one that was not there before the
@@ -213,8 +215,8 @@ A day after its first press the plugin's process held 266 handles where it had h
 through 70 refreshes, as it had stood at 203 through the first 50, and a list of the 266 by kind
 had no handle to a process in it. It had registry keys under `AppModel\StateRepository`, COM's
 catalogue and its port, the shell's caches, a window station and a desktop, and 44 libraries
-where a plugin that has just started has 27, `apisethost.appexecutionalias.dll` and
-`daxexec.dll` among the 17: what Windows loads into a process that starts a Store app by its
+where a plugin that has just started has 32, `apisethost.appexecutionalias.dll` and
+`daxexec.dll` among the 12: what Windows loads into a process that starts a Store app by its
 alias, which is what `wt.exe` is.
 
 A program that does nothing else showed the same. Before its first start of an alias
@@ -263,3 +265,59 @@ the system as awake, the keys that show are drawn again whether or not their pic
 case the deck came back without it.
 [Test-Deck.ps1](../development.md#the-stream-deck-tests) plays a deck going and coming back in
 both orders.
+
+## What a press still left in the plugin
+
+3 October 2026. The first of the live cases, which presses the key twice with the plugin started
+by the test, failed on the count it was given for this: 175 handles before the two presses and 190
+after them. Fifteen handles, then, where none were to come.
+
+Without a window it went the same way. The plugin was started offline with a home of its own,
+whose `wt.exe` was a copy of `whoami.exe`, so a press started a program that ended at once and
+`--deck-press` waited its eight seconds for a terminal that never came. It held 172 handles
+before the first press, 187 after it, and 187 after the second and the third. A refresh as the
+first program started cost it 2: a registry key and an event provider, which `CreateProcess`
+takes once in a process to look up what it knows about the program, and which the first press
+takes as well. The other 13 came from how the plugin asked whether the press had ended.
+
+A debugger on the plugin, stopping wherever a thread pool, a port or an event provider was made,
+showed where. `Process.HasExited` calls into .NET's `ProcessManager`, whose class constructor,
+which runs once in a process, looks up the name of the debug privilege so that it can turn it on.
+That look-up is a call to the security authority, `LsaOpenPolicy`, and the first such call in a
+process starts Windows' RPC in it: its event providers, a connection to the authority's port, a
+handle to the calling thread, two events, and RPC's own thread pool with its completion port, its
+two timers and their wait packets. None of it goes. The plugin had no use for the privilege, which
+a user who is not an administrator does not have in any case.
+
+A press that could not start Windows Terminal added 38 handles and four libraries more, to a
+plugin started offline: the plugin named the path in its log, and found it by asking the shell
+for `%LOCALAPPDATA%`, which loads the shell into the process that asks.
+
+**Decided:** the plugin waits on the process of a press as it waits on the websocket, the
+registry key and the projects folder, and asks Windows itself for the exit code, which also
+ends the look every fifth of a second that a press cost it. The path of `wt.exe` comes from
+`%LOCALAPPDATA%`, and from the shell only when that is not set. And offline, a press starts its
+`--deck-press` as well, which opens nothing, so that the tests go down the path a real press
+takes. In the test for it, forty presses: the count is at most 6 up after the first two and
+where it was after the forty. With `HasExited` put back, it fails at 172 handles before the
+first press and 187 after it.
+
+**The libraries of a plugin that has just started.** The count of 27 that the 44 above was first
+set against was taken from a plugin started offline. One started as the app starts it, not
+offline, has 210 handles and 32 libraries before it has done anything, where an offline one has
+172 and 27, under the same test. The five are the shell's: `shell32`, `windows.storage`,
+`shcore`, `shlwapi` and `profapi`, loaded by the one call that finds the home folder,
+`Environment.GetFolderPath(SpecialFolder.UserProfile)`, for `~/.claude/projects`. The figures
+above are given against 32 now. Whether to find the folder another way is open.
+
+**Where the live cases had stood.** Before the cases ran, a terminal was started from the same
+place the test runs from, the way the first plugin started it, with nothing done for it. It came to
+the front by itself, with VS Code in front. Windows had not let the foreground go because the user
+had been away: on this PC `SPI_GETFOREGROUNDLOCKTIMEOUT` reads 2.147.483.647 ms, so the guard does
+not run out. That leaves the other way through: a program started by the program in front may take
+the foreground as that program may, and so, it turned out, may the programs it starts in turn, and
+the test had been started from VS Code by a line of such programs. So the two presses had come to
+the front without being asked for, and proved nothing about a plugin, which the app started hours
+before and in the background. The live cases now start their plugin through WMI, whose service
+starts it in the session with nothing of the test's standing, and the first case is that control: a
+terminal started the same way, with nothing done for it, which has to stay behind.

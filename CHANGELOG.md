@@ -37,18 +37,22 @@ under *Unreleased*, and the entries before the first release are by date.
   draws by as well.
 - A press is a process of its own, `statusai --deck-press`, as a fetch is `statusai --refresh`.
   Starting Windows Terminal by its alias loads Windows' app model into the process that does it:
-  63 handles and 17 libraries that never go, which is what the plugin was found holding a day
-  after its first press, and what it no longer takes on.
+  63 handles and 12 libraries that never go, which is what the plugin was found holding a day
+  after its first press. The plugin waits on that process with its other waits and asks Windows
+  how it ended, since .NET's own way of asking costs the process that asks 13 handles for good. A
+  press leaves the plugin with the handles it had.
 - The plugin hands on none of the handles the Stream Deck app starts it with, so a terminal
   opened by a press does not hold the app's log files open; and it draws its key again when the
   deck comes back after a lock or a sleep.
 - Thirteen render cases for the key's face: 180 renders of 74 cases.
   [Test-Deck.ps1](tests/Test-Deck.ps1) runs the exe as a plugin against a stand-in for the Stream
-  Deck app, offline, in 15 cases: its websocket client through the protocol (long frames,
+  Deck app, offline, in 17 cases: its websocket client through the protocol (long frames,
   fragments, ping and pong, a close from either side, a dropped connection), a deck that goes and
-  comes back, and a hundred refreshes that leave the handle count where it was. `-Live` adds
-  three that press the key for real, with no terminal open, one open and one minimised, and
-  hold the terminal to being in front each time.
+  comes back, a hundred refreshes and forty presses that leave the handle count where it was, and
+  a press with no Windows Terminal to start. `-Live` adds four: a control, a terminal started
+  with nothing done for it, which has to stay behind; and three that press the key for real, with
+  no terminal open, one open and one minimised, and hold the terminal to being in front each
+  time. Their plugin is started through WMI, where it stands as the app's plugin does.
 - [Deploy.ps1](scripts/Deploy.ps1) keeps an installed plugin's copy of `statusai.exe` in step with
   the status line's, moving the running copy aside to replace it, and `-Deck` installs the plugin.
 - The figure generator draws the key's two figures from the recorded faces, and the plugin's own

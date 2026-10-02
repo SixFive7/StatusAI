@@ -107,14 +107,15 @@ Stream Deck  --starts-->  statusai.exe, the plugin's copy  <--websocket-->  Stre
                                 +--> statusai.exe --deck-press    a key press: wt.exe, and its window to the front
 ```
 
-It waits and never polls. Three things wake it, and a timer for what is due:
+It waits and never polls. Four things wake it, and a timer for what is due:
 
 | it waits on | which is signalled by | and then |
 |---|---|---|
 | the websocket to the app | a message: the key appears or disappears, is pressed or released, a deck came back, the system woke up | draws the key, or acts on the press |
 | a change notification on `HKCU\Software\StatusAI` | a fetch by anyone: a terminal's status line, or `--refresh` | draws the key 100 ms later, once every value of the fetch has landed |
 | a change notification on `~/.claude/projects` and everything under it | a write by any Claude Code session of any kind, which is where they keep their transcripts | notes that Claude is working, and refreshes when a refresh is due |
-| a timer | the next minute, the half second of a held key, the next refresh, a fifth of a second while a press is opening its terminal | redraws the countdowns, makes a press a long one, refreshes, reads how the press ended |
+| the process of a key press | its end, a second or so after the press | reads its exit code: an alert on the key when Windows Terminal could not be started |
+| a timer | the next minute, the half second of a held key, the next refresh | redraws the countdowns, makes a press a long one, refreshes |
 
 The folder's notification stays signalled until it is armed again, so a burst of writes is one
 wake-up: 65.900 appends in 30 seconds cost the process two wake-ups and no processor time that
@@ -157,17 +158,22 @@ is brought up from that process, in the ways Windows lets through, tried in turn
 For a tab, the window it will go to is brought up before the tab is asked for: the terminal
 window on top of the others on this desktop, a minimised one only when there is no other. The
 window in front is the one Windows Terminal counts as used last, so the tab opens where the user
-is already looking. For a new window, the process waits for one that was not there before, up to
-eight seconds, and brings that up. It ends with 0 when the terminal was in front without being
+is already looking. For a new window, input is provided and `AllowSetForegroundWindow` called as
+soon as the terminal is started, so that its window may come up by itself; the process waits for
+one that was not there before, up to eight seconds, and brings that up. It ends with 0 when the
+terminal was in front without being
 asked for, 10 plus the number of times it had to be asked for, 1 when it did not get there, and
 100 plus Windows' error when `wt.exe` could not be started, which the plugin shows as an alert
 on the key and one line in the log.
 
 It is a process of its own for what it would otherwise leave behind. `wt.exe` is a Store app's
 alias, and starting one loads Windows' app model and the shell into the process that does it:
-63 handles, 17 libraries and 3 MB that stay for good, which is what the plugin was found
-holding a day after its first press.
-The plugin looks at the process every fifth of a second until it has ended, a second or so.
+63 handles, 12 libraries and 3 MB that stay for good, which is what the plugin was found
+holding a day after its first press. The plugin waits on the press's process with its other
+waits and asks Windows for its exit code: .NET's `Process.HasExited` would first look up the
+debug privilege, once in a process, and the call to the security authority that takes starts
+Windows' RPC in it, 13 handles that stay. Where `wt.exe` is comes from `%LOCALAPPDATA%`, and
+from the shell only when that is not set.
 
 **Nothing the app hands down is handed on.** The app starts a plugin with a dozen of its own
 handles open to it, its log files and its crash reporter's lock among them, and a program
@@ -208,8 +214,9 @@ cable, or the system wakes up, it draws the keys that show again whether or not 
 changed, since the deck may have lost it.
 
 With `STATUSAI_OFFLINE` set, the mode touches nothing live, like a render: the rows come from the
-fixture, the registry is not watched, the `--refresh` it starts has nothing to fetch, and a key
-press starts nothing. Both are reported to the app's log, which is what the tests read. Two more
+fixture, the registry is not watched, the `--refresh` it starts has nothing to fetch, and the
+`--deck-press` a key press starts opens nothing and ends with 0. Both are reported to the app's
+log, which is what the tests read. Two more
 variables are for trying it: `STATUSAI_DECK_TAB`, what the tab or window of a press runs in
 place of the default profile's command, with which a press is carried out even offline; and
 `STATUSAI_DECK_SLOT`, the seconds between refreshes, which only an offline plugin takes.

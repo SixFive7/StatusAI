@@ -128,7 +128,7 @@ and plays one case after another.
 ./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe
 ```
 
-15 cases, about three quarters of a minute, exit code 0 when every one passes. It needs no Stream
+17 cases, under a minute, exit code 0 when every one passes. It needs no Stream
 Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The websocket client in
 `Deck.cs` is written by hand, so the cases take it through the protocol a part at a time:
 
@@ -139,7 +139,9 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | frames with 16 and 64 bit lengths, in and out | messages of 2.000 and 70.000 bytes received, and of 300 and 70.000 bytes sent, each masked and with the length field its size calls for |
 | a message in fragments, with a ping between them | three fragments put together, and the ping between two of them answered straight away |
 | a ping is answered, a pong is ignored | a pong that carries what the ping did, at 0, 3 and 125 bytes |
-| a short press on release, a long press after 500 ms | nothing while the key is down and the tab when it comes up; the window 500 ms into a hold, and nothing at its release |
+| a short press on release, a long press after 500 ms | nothing while the key is down and the tab when it comes up; the window 500 ms into a hold, and nothing at its release; each press a `--deck-press` that ends with 0 |
+| forty presses, and as many handles as before | two presses, then thirty one after the other and ten at once, each a `--deck-press` that is started, waited for and read; the plugin's handle count at most 6 up after the first two, which is what Windows takes for the first program a process starts, and where it was after the forty |
+| no Windows Terminal: an alert on the key, why in the log | with `%LOCALAPPDATA%` a folder that has no `wt.exe`, each of four holds shows the alert and logs `could not start ...\wt.exe: Windows error 2`, and the handle count stays where the first left it |
 | a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
 | the deck goes and comes back | nothing drawn or fetched for a key that does not show; the key drawn again, and the refresh that was waiting made once, whether the app names the key before the deck or the deck before the key; the picture sent again when a deck or the system comes back with nothing said about the key |
 | a hundred refreshes, and as many handles as before | with a slot of no length, a hundred writes are a hundred `--refresh` processes, and the plugin's handle count after them is what it was before |
@@ -152,9 +154,10 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 
 Every plugin runs with `STATUSAI_OFFLINE` on a fresh copy of the `shot` home. Offline, the mode
 touches nothing live, and says in the app's log what it did in place of it:
-`offline: would run ...\wt.exe -w 0 nt` for a press, which starts nothing, and
-`offline: ran --refresh` for a refresh, which starts the same `statusai --refresh` as ever, with
-nothing to fetch. So **no test opens a terminal or fetches anything**, and the same switch runs
+`offline: would run ...\wt.exe -w 0 nt` for a press, whose `statusai --deck-press` opens nothing
+and ends with 0, and `offline: ran --refresh` for a refresh, which starts the same
+`statusai --refresh` as ever, with nothing to fetch. So **no test opens a terminal or fetches
+anything**, and the same switch runs
 the plugin by hand without either. Two things more are offline only. A `sendToPlugin` from the
 app is answered with its own payload, which is how a case makes the plugin send a frame of any
 length. And `STATUSAI_DECK_SLOT` is taken for the seconds between refreshes, 62 without it,
@@ -167,7 +170,7 @@ events the stand-in sends. That takes a Stream Deck; see
 ### The presses, on the live desktop
 
 Whether a press ends with the terminal in front is a question about the desktop, and the cases
-above cannot ask it. `-Live` adds three that do:
+above cannot ask it. `-Live` adds four cases that do:
 
 ```powershell
 ./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe -Live -Case 'live*'
@@ -180,13 +183,23 @@ above cannot ask it. `-Live` adds three that do:
 | the terminal minimised | the window is brought back with its tab; the hold brings up a new one |
 
 They are real presses. The plugin is given `STATUSAI_DECK_TAB`, the command a tab runs in place
-of the default profile's own, and with that set a press is carried out even offline: it starts
-`statusai --deck-press`, which starts Windows Terminal. The tab runs `ping` under the title
+of the default profile's own, and with that set a press is carried out even offline: its
+`statusai --deck-press` starts Windows Terminal. The tab runs `ping` under the title
 "statusai test" and closes by itself after three seconds, so no Claude Code session comes of
 it, and the window that was in front is put back there. A case reports how the terminal got to
-the front: without being asked for, or after so many times. The plugin under test is started by
-the script, a program in the background with no claim on the foreground, which is the position
-the plugin is in under the app.
+the front, without being asked for or after so many times, and how many handles the plugin
+held before and after its two presses.
+
+Where the plugin under test stands matters as much as what it does. Windows lets a program put
+a window in front when it was started by the program in front, and so on down a line of
+programs each started by the one before; a plugin started by the script is on such a line
+whenever the script was started from the window in front, from a terminal or an editor. Its
+terminal then comes to the front with nothing done for it, and a case would prove nothing. So
+the plugin is started through WMI, by the service Windows has for that, with the script's
+environment handed over, which is where the app's plugin stands. And the first of the four
+cases is the control: a terminal started the same way, with nothing done for it, has to stay
+behind the window in front. Where it comes to the front by itself, the control is skipped and
+says so, and the three cases after it say that their presses prove nothing about a plugin.
 
 The cases move windows about on your desktop, so they are only run on request, and they skip
 themselves where they would be in the way: on a locked session, while a full-screen program, a
