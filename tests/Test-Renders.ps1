@@ -21,6 +21,11 @@
     and the working directory set to it, so the payloads' relative transcript paths resolve
     inside it. Nothing is written to tests/ unless -Update is given.
 
+    A case with a "face" is the Stream Deck key instead: no payload and no width, but
+    `statusai --deck-face <seconds>` in a copy of its home, which prints the key as SVG the way
+    it is drawn that many seconds after the fetch its rows come from. The bytes are compared
+    with tests/expected/<case>.svg.
+
     The binary under test is staged beside a cship.exe in <scratch>/bin, because statusai runs
     the cship in its own directory. The expected renders were recorded with the cship version
     cases.json names; another version is reported, and may draw the model line differently.
@@ -104,9 +109,10 @@ function Get-WidthEnv([string] $name, $c, [int] $width) {
 }
 
 # ------------------------------------------------------------------ one render
-function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, [hashtable] $widthEnv) {
+function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, [hashtable] $widthEnv, [string] $arguments = '') {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exePath
+    $psi.Arguments = $arguments
     $psi.WorkingDirectory = $homeDir
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
@@ -124,7 +130,7 @@ function Invoke-Render([string] $exePath, [string] $homeDir, [byte[]] $payload, 
     $psi.Environment['CLAUDE_HOME'] = $homeDir
     $p = [System.Diagnostics.Process]::Start($psi)
     try {
-        $p.StandardInput.BaseStream.Write($payload, 0, $payload.Length)
+        if ($payload) { $p.StandardInput.BaseStream.Write($payload, 0, $payload.Length) }
         $p.StandardInput.Close()
         $err = $p.StandardError.ReadToEndAsync()
         $ms = New-Object System.IO.MemoryStream
@@ -210,22 +216,31 @@ function Invoke-Main {
     foreach ($prop in $selected) {
         $name = $prop.Name; $c = $prop.Value
         $src = Join-Path $Homes $c.home
-        $payloadPath = Join-Path $Payloads ($c.payload + '.json')
         if (-not (Test-Path -LiteralPath $src -PathType Container)) { Fail "case ${name}: no home $src" }
-        if (-not (Test-Path -LiteralPath $payloadPath -PathType Leaf)) { Fail "case ${name}: no payload $payloadPath" }
-        $payload = [System.IO.File]::ReadAllBytes($payloadPath)
-        foreach ($width in $c.widths) {
-            $key = "$name.w$width"
-            $produced["$key.ansi"] = $true
+        # A case is either a status line, rendered once per width, or the Stream Deck key, once.
+        $isFace = $c.PSObject.Properties.Name -contains 'face'
+        if ($isFace) {
+            $payload = $null
+            $renders = @(@{ key = $name; file = "$name.svg"; arguments = ('--deck-face {0}' -f [int] $c.face); width = 0 })
+        } else {
+            $payloadPath = Join-Path $Payloads ($c.payload + '.json')
+            if (-not (Test-Path -LiteralPath $payloadPath -PathType Leaf)) { Fail "case ${name}: no payload $payloadPath" }
+            $payload = [System.IO.File]::ReadAllBytes($payloadPath)
+            $renders = @($c.widths | ForEach-Object { @{ key = "$name.w$_"; file = "$name.w$_.ansi"; arguments = ''; width = $_ } })
+        }
+        foreach ($render in $renders) {
+            $key = $render.key
+            $produced[$render.file] = $true
             $homeDir = Join-Path $runRoot $key
             Copy-Item -LiteralPath $src -Destination $homeDir -Recurse
             New-Item -ItemType Directory -Path (Join-Path $homeDir '.config') | Out-Null
             Copy-Item -LiteralPath (Join-Path $Tests 'cship.toml') -Destination (Join-Path $homeDir '.config\cship.toml')
 
-            $r = Invoke-Render $staged $homeDir $payload (Get-WidthEnv $name $c $width)
+            $widthEnv = if ($isFace) { @{} } else { Get-WidthEnv $name $c $render.width }
+            $r = Invoke-Render $staged $homeDir $payload $widthEnv $render.arguments
             if ($Show) { [Console]::Out.Write("`n== $key`n" + $Utf8.GetString($r.Out) + "`n") }
-            if ($OutDir) { [System.IO.File]::WriteAllBytes((Join-Path $OutDir "$key.ansi"), $r.Out) }
-            $expPath = Join-Path $Expected "$key.ansi"
+            if ($OutDir) { [System.IO.File]::WriteAllBytes((Join-Path $OutDir $render.file), $r.Out) }
+            $expPath = Join-Path $Expected $render.file
             if ($Update) {
                 if (-not ((Test-Path -LiteralPath $expPath) -and (Same ([System.IO.File]::ReadAllBytes($expPath)) $r.Out))) {
                     [System.IO.File]::WriteAllBytes($expPath, $r.Out); $written++
@@ -240,7 +255,7 @@ function Invoke-Main {
                 else {
                     $fail++
                     New-Item -ItemType Directory -Force -Path $failDir | Out-Null
-                    [System.IO.File]::WriteAllBytes((Join-Path $failDir "$key.ansi"), $r.Out)
+                    [System.IO.File]::WriteAllBytes((Join-Path $failDir $render.file), $r.Out)
                     Write-Host "FAIL  $key  (exit $($r.Code)): $($c.checks)" -ForegroundColor Red
                     Show-Diff $want $r.Out
                     if ($r.Err) { Write-Host "    stderr: $($r.Err.Trim())" }
@@ -254,7 +269,7 @@ function Invoke-Main {
     # expected renders that no case produces any more
     $stale = @()
     if ((Test-Path -LiteralPath $Expected) -and $Case.Count -eq 1 -and $Case[0] -eq '*') {
-        $stale = @(Get-ChildItem -LiteralPath $Expected -Filter '*.ansi' | Where-Object { -not $produced.ContainsKey($_.Name) })
+        $stale = @(Get-ChildItem -LiteralPath $Expected | Where-Object { $_.Extension -in '.ansi', '.svg' -and -not $produced.ContainsKey($_.Name) })
         foreach ($f in $stale) {
             if ($Update) { Remove-Item -LiteralPath $f.FullName; Write-Host "removed stale $($f.Name)" }
             else { Write-Host "STALE $($f.Name)  (no case renders it; -Update removes it)" -ForegroundColor Yellow }

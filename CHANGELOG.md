@@ -1,7 +1,48 @@
 # Changelog
 
-What changed, newest first. Releases are headed by their version; the entries before the first
-release are by date.
+What changed, newest first. Releases are headed by their version; what is not in a release yet is
+under *Unreleased*, and the entries before the first release are by date.
+
+## Unreleased
+
+**The Stream Deck key**
+
+- `statusai.exe` is also the plugin behind a key on an Elgato Stream Deck. The key draws the 5h
+  and 7d rows with the status line's own cells and colours, their countdowns to the reset and their
+  times to 100%. A short press opens a new Claude Code tab in the Windows Terminal window used
+  last, and a hold of half a second a new window. See
+  [the Stream Deck key](docs/guide/stream-deck.md).
+- The key keeps the shared usage up to date while Claude works where no status line runs, in the
+  VS Code extension for instance: once every 62 seconds while a session is writing its transcript,
+  once more a minute after the last write, and not at all while Claude is idle, while the key is
+  not visible, or while a terminal's status line is fetching already. It fetches through
+  `statusai --refresh`, which is a render's own fetch with nothing drawn, so the 50 second cache
+  and the lock are shared and the two never add up.
+- When fetching fails twice in a row the key greys its meters and says why and how old they are,
+  as the status line's `⚠` row does; once a limit's window has ended it reads 0% until the next
+  fetch; and after five minutes without a fetch its times to 100% read `idle`.
+- It costs the status line nothing that could be measured. The exe is 75.776 bytes larger and a
+  render takes as long as it did. The process that stays up for the key holds 13,3 MB, 3,9 MB of
+  it private, and used 0,22 s of processor time in half an hour of Claude working; a refresh is a
+  second process for half a second.
+- `statusai --deck-face` prints the key as SVG.
+
+**The repository**
+
+- `src/Deck.cs` holds the plugin, websocket client included, and `streamdeck/` the plugin's
+  folder as the app wants it. `RenderRows` takes a row's forecast from `Pace()`, which the key
+  draws by as well.
+- Thirteen render cases for the key's face: 180 renders of 74 cases.
+  [Test-Deck.ps1](tests/Test-Deck.ps1) runs the exe as a plugin against a stand-in for the Stream
+  Deck app, offline, and takes its websocket client through the protocol in 12 cases: long frames,
+  fragments, ping and pong, a close from either side, a dropped connection.
+- [Deploy.ps1](scripts/Deploy.ps1) keeps an installed plugin's copy of `statusai.exe` in step with
+  the status line's, moving the running copy aside to replace it, and `-Deck` installs the plugin.
+- The figure generator draws the key's two figures from the recorded faces, and the plugin's own
+  pictures with them.
+- [The design record](docs/design/stream-deck.md) has what the Stream Deck app can and cannot do,
+  the four ways of building the key with their measurements, and how the refresh rule was chosen.
+- The key is not in the release zip yet: `Package.ps1` does not build the plugin's installer.
 
 ## 1.0.0 - 2026-09-24
 

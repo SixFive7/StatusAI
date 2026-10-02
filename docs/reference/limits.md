@@ -18,6 +18,35 @@ User-Agent: claude-code/2.1.90
 Undocumented, like everything else this project reads. Three-second timeout. A fetch that fails
 leaves the rows drawing the last good one; see [when a fetch fails](#when-a-fetch-fails).
 
+### Who fetches, and when
+
+Every fetch goes through `GetUsage()`, whoever asks for it:
+
+- A render, once the shared copy is 50 seconds old. That is once a minute for as long as a terminal
+  session is open, whether Claude is working in it or not, because Claude Code runs the status line
+  every 60 seconds.
+- `statusai --refresh`, which calls `GetUsage()` and exits without drawing anything. The
+  [Stream Deck key](architecture.md#the-stream-deck-key) starts it while Claude is working and its
+  key is visible: 62 seconds after the last fetch or attempt by anyone, which leaves a status line
+  that has fetched two seconds ahead of it for good, and not at all while the shared copy is under
+  50 seconds old.
+
+A session with no terminal, in the VS Code extension for instance, runs no status line and so
+fetched nothing before there was a key: on 2026-10-01 the shared copy went 40 minutes without a
+fetch while seven such sessions were open and the 5h row went from 10% to 16%. With the key, the
+calls per hour come to this:
+
+| | fetches | how far apart, measured |
+|---|---|---|
+| a terminal session open | 60 an hour, 72 at most, by the status line | 59,8 to 60,1 s |
+| Claude working with no terminal open, the key visible | at most 58 an hour, by `--refresh`, and one more a minute after the last write | 61,6 to 62,7 s |
+| nothing happening, or no key visible | none | |
+
+The lock, the 50 seconds and the count of failures are shared, so the two never add up: with both
+running, whichever comes first fetches and the other finds the copy fresh. That is the status
+line once it has fetched, since its 60 seconds come round before the key's 62. A key that was
+ahead of an idle terminal stays ahead for half an hour at most, by two seconds less each minute.
+
 ### When a fetch fails
 
 A failed fetch leaves the cache as it was, stale, so the next render to take the lock tries again:

@@ -27,6 +27,23 @@
     draws them itself at once; until the next fetch, within 50 s, the figures are the ones the old
     binary computed (docs/development.md, trap 1).
 
+    Where the Stream Deck plugin is installed, its folder holds a copy of statusai.exe of its
+    own, which the app runs for as long as it is open. Once the status line's binary is in
+    place, or was already, that copy is brought in step with the same build, so the key and the
+    status line are never two versions:
+
+      7. Compare the plugin's manifest, pictures and statusai.exe with the repository's and the
+         build. If nothing differs, say so and stop.
+      8. Copy the manifest and the pictures. Move the plugin's statusai.exe aside as
+         statusai.exe.old.<unix-seconds>, which Windows allows while it runs, copy the build in
+         under its name, and verify its SHA-256. A copy that lands wrong is removed and the old
+         one moved back.
+      9. Ask the app to restart the plugin (streamdeck://plugins/restart/<uuid>), wait for a
+         process running the new copy, and remove the old file once nothing runs it.
+
+    Without a plugin folder nothing of this happens, unless -Deck asks for a first install: the
+    folder is then created and filled, and the app has to be restarted to see it.
+
 .PARAMETER Source
     The new build. Default: the output of `dotnet publish -c Release -r win-x64` in src/.
 
@@ -37,6 +54,15 @@
 .PARAMETER SkipTests
     Deploy without running the render tests first.
 
+.PARAMETER Deck
+    Install the Stream Deck plugin where it is not installed yet. A plugin that is installed is
+    brought in step without it.
+
+.PARAMETER DeckDir
+    The folder the app keeps its plugins in. Default: %APPDATA%\Elgato\StreamDeck\Plugins. With
+    another folder nothing is asked of the app, so the plugin copy can be tried on a scratch
+    folder as the target can.
+
 .EXAMPLE
     ./scripts/Deploy.ps1 -WhatIf
 
@@ -45,12 +71,17 @@
 
 .EXAMPLE
     ./scripts/Deploy.ps1 -Target $env:USERPROFILE\.local\bin\statusai.exe
+
+.EXAMPLE
+    ./scripts/Deploy.ps1 -Deck
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string] $Source,
     [string] $Target,
-    [switch] $SkipTests
+    [switch] $SkipTests,
+    [switch] $Deck,
+    [string] $DeckDir
 )
 
 Set-StrictMode -Version 2
@@ -92,6 +123,102 @@ function Remove-WithRetry([string] $p) {
     return 0
 }
 
+# ------------------------------------------------------------------ the Stream Deck plugin's copy
+# The plugin is this same statusai.exe, which the app runs from the plugin's own folder for as
+# long as the app is open. That copy is therefore locked the whole time, where the status
+# line's is free all but 100 ms of each minute, and it would stay the old build if nothing
+# brought it along. Returns 0 when the plugin is not installed, is in step or was brought in
+# step, and 4 when it is not in step and could not be.
+function Sync-Deck {
+    $uuid = 'com.sixfive7.statusai'
+    $own = Join-Path $env:APPDATA 'Elgato\StreamDeck\Plugins'
+    $plugins = if ($DeckDir) { $DeckDir } else { $own }
+    $dest = Join-Path $plugins "$uuid.sdPlugin"
+    $exe = Join-Path $dest 'statusai.exe'
+    $first = -not (Test-Path -LiteralPath $dest -PathType Container)
+    if ($first -and -not $Deck) { return 0 }
+    if (-not (Test-Path -LiteralPath $plugins -PathType Container)) {
+        Write-Host "stream deck    : no plugins folder at $plugins, so the plugin was not installed" -ForegroundColor Red; return 4
+    }
+    $assets = Join-Path $here "..\streamdeck\$uuid.sdPlugin"
+    if (-not (Test-Path -LiteralPath (Join-Path $assets 'manifest.json') -PathType Leaf)) {
+        Write-Host "stream deck    : no plugin folder to copy at $assets" -ForegroundColor Red; return 4
+    }
+    $assets = (Resolve-Path -LiteralPath $assets).Path
+
+    # the copy an earlier run moved aside, if nothing runs it any more
+    if (-not $first) {
+        Get-ChildItem -LiteralPath $dest -Filter 'statusai.exe.old.*' | ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop } catch { } }
+    }
+    # what differs: the manifest and the pictures from the repository's, the exe from the build
+    $files = @(Get-ChildItem -LiteralPath $assets -Recurse -File | ForEach-Object { $_.FullName.Substring($assets.Length + 1) })
+    $stale = @($files | Where-Object { (Hash (Join-Path $dest $_)) -ne (Hash (Join-Path $assets $_)) })
+    $exeStale = (Hash $exe) -ne $newHash
+    if (-not $exeStale -and $stale.Count -eq 0) { Write-Host "stream deck    : $dest is in step with the build"; return 0 }
+    $what = if ($first) { 'install the Stream Deck plugin' } else { 'bring the Stream Deck plugin in step with the build' }
+    if (-not $PSCmdlet.ShouldProcess($dest, $what)) { return 0 }
+
+    try {
+        foreach ($f in $stale) {
+            $to = Join-Path $dest $f
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+            Copy-Item -LiteralPath (Join-Path $assets $f) -Destination $to -Force
+        }
+    } catch { Write-Host "stream deck    : could not copy the manifest and the pictures to ${dest}: $($_.Exception.Message)" -ForegroundColor Red; return 4 }
+
+    $aside = ''
+    if ($exeStale) {
+        # Windows will not overwrite or delete a program that is running, but it lets it be moved aside
+        if (Test-Path -LiteralPath $exe -PathType Leaf) {
+            $aside = "$exe.old.$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+            try { Move-Item -LiteralPath $exe -Destination $aside }
+            catch { Write-Host "stream deck    : could not move $exe aside: $($_.Exception.Message)" -ForegroundColor Red; return 4 }
+        }
+        $n = Copy-WithRetry $Source $exe
+        if ($n -eq 0 -or (Hash $exe) -ne $newHash) {
+            Write-Host "stream deck    : the build did not land at $exe; putting the previous copy back" -ForegroundColor Red
+            [void] (Remove-WithRetry $exe)
+            if ($aside) { try { Move-Item -LiteralPath $aside -Destination $exe } catch { Write-Host "  the previous copy is at $aside" -ForegroundColor Red } }
+            return 4
+        }
+    }
+    Write-Host ("stream deck    : {0} {1}, sha256 matches the build" -f $dest, $(if ($first) { 'installed' } else { 'brought in step' }))
+
+    # ------------------------------------------------------------------ the running plugin
+    $isOwn = [string]::Equals((Resolve-Path -LiteralPath $plugins).Path.TrimEnd('\'), $own.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+    $running = @(Get-Process -Name StreamDeck -ErrorAction SilentlyContinue).Count -gt 0
+    if (-not $isOwn) {
+        Write-Host '  not the folder of the app itself, so nothing was asked of the app'
+    } elseif ($first) {
+        Write-Host '  Stream Deck finds a new plugin when it starts: quit it and start it again, then put StatusAI > Claude Code on a key'
+    } elseif (-not $running) {
+        Write-Host '  Stream Deck is not running; it starts the new copy when it does'
+    } elseif ($exeStale) {
+        $since = Get-Date
+        try { Start-Process "streamdeck://plugins/restart/$uuid" } catch { Write-Host "  could not ask the app to restart the plugin: $($_.Exception.Message)" -ForegroundColor Yellow }
+        $seen = $false
+        foreach ($i in 1..40) {
+            Start-Sleep -Milliseconds 500
+            $new = @(Get-CimInstance Win32_Process -Filter "Name = 'statusai.exe'" -ErrorAction SilentlyContinue |
+                     Where-Object { $_.ExecutablePath -eq $exe -and $_.CreationDate -gt $since })
+            if ($new.Count -gt 0) { $seen = $true; break }
+        }
+        if (-not $seen) {
+            Write-Host '  the app was asked to restart the plugin, and no process running the new copy came within 20 s: the key still runs the previous build until Stream Deck is restarted' -ForegroundColor Red
+            return 4
+        }
+        Write-Host '  the app restarted the plugin, which now runs the new copy'
+    }
+    if ($isOwn -and $running -and -not $first -and $stale.Count -gt 0) {
+        Write-Host '  the manifest or a picture changed, and Stream Deck reads those when it starts'
+    }
+    if ($aside -and (Test-Path -LiteralPath $aside)) {
+        try { Remove-Item -LiteralPath $aside -Force -ErrorAction Stop }
+        catch { Write-Host "  $(Split-Path -Leaf $aside) is still running and is removed by the next deploy" }
+    }
+    return 0
+}
+
 # ------------------------------------------------------------------ preflight
 if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) {
     Write-Host "No build at $Source. Run dotnet publish first (docs/development.md)." -ForegroundColor Red; exit 1
@@ -127,7 +254,7 @@ if ($first) {
     if ($oldHash -eq '') { Write-Host "Cannot read $Target, which another process may hold open. Nothing deployed." -ForegroundColor Red; exit 1 }
     Write-Host "installed      : $Target"
     Write-Host "  sha256       : $oldHash"
-    if ($newHash -eq $oldHash) { Write-Host 'already deployed; nothing to do'; exit 0 }
+    if ($newHash -eq $oldHash) { Write-Host 'already deployed; nothing to do'; exit (Sync-Deck) }
 }
 
 if (-not $SkipTests) {
@@ -136,7 +263,8 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { Write-Host "The build fails the render tests (exit $LASTEXITCODE); nothing deployed." -ForegroundColor Red; exit 1 }
 }
 
-if (-not $PSCmdlet.ShouldProcess($Target, $(if ($first) { "put $Source in place" } else { "replace with $Source" }))) { exit 0 }
+# with -WhatIf: what would happen to the status line's binary, then to the plugin's copy
+if (-not $PSCmdlet.ShouldProcess($Target, $(if ($first) { "put $Source in place" } else { "replace with $Source" }))) { exit (Sync-Deck) }
 
 # ------------------------------------------------------------------ a first deploy: copy, verify
 if ($first) {
@@ -145,7 +273,7 @@ if ($first) {
     if ($n -gt 0 -and $got -eq $newHash) {
         Write-Host ("deployed       : attempt {0}, sha256 matches the build; the first at {1}" -f $n, $Target)
         Write-Host ("deployed at    : {0} (unix {1})" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'), [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
-        exit 0
+        exit (Sync-Deck)
     }
     if (-not (Test-Path -LiteralPath $Target)) {
         Write-Host "DEPLOY FAILED (copy attempts used: $n); nothing was put in place at $Target" -ForegroundColor Red
@@ -172,7 +300,7 @@ $got = Hash $Target
 if ($n -gt 0 -and $got -eq $newHash) {
     Write-Host ("deployed       : attempt {0}, sha256 matches the build" -f $n)
     Write-Host ("deployed at    : {0} (unix {1})" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'), [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
-    exit 0
+    exit (Sync-Deck)
 }
 
 # No copy landed, so the previous binary never left: a restore would only wait on the same lock,

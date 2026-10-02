@@ -178,6 +178,12 @@ your shell prompt, so if you have one already, keep it or merge the two.
 Without starship the prompt line is simply not drawn and everything else is unchanged. Without a
 Nerd Font the few icons in cship's model line show as boxes; nothing StatusAI draws needs one.
 
+## The Stream Deck key (optional)
+
+With an Elgato Stream Deck, `statusai.exe` can also draw your 5h and 7d limits on a key and open a
+Claude Code terminal when you press it. It is not in the release zip yet and is installed from a
+build: [the Stream Deck key](stream-deck.md#install) has the steps.
+
 ## What to expect at first
 
 <img src="../assets/first-run.png" width="930" alt="A session seconds old, before its first reply: the model line at 0% context, 0 minutes and $0,00, then the 5h, 7d and Fable limit rows beside the account, every one reading '→ early'. No token rows and no warning row.">
@@ -221,6 +227,9 @@ transcript:
 ```powershell
 Remove-Item -Recurse "$env:USERPROFILE\.claude\projects\*\cship"
 ```
+
+If you installed the Stream Deck key, [take that out](stream-deck.md#uninstall) as well: its
+plugin folder holds a `statusai.exe` of its own.
 
 ## Credits
 

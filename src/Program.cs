@@ -26,6 +26,22 @@ const string Forest = "\x1b[38;2;40;164;40m";
 // count of failed fetches, the prediction history and the euro rate.
 const string RegKey = @"Software\StatusAI";
 
+// Three ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
+// with -port, -pluginUUID, -registerEvent and -info: this process is then the plugin, which stays
+// up for as long as the app does and draws the key (Deck.cs). --refresh brings the shared usage
+// up to date the way a render does, when it is 50 seconds old, and draws nothing: it is how the
+// key fetches. --deck-face prints the key as SVG, as it would be drawn now or, with a number
+// after it, that many seconds after the last fetch.
+if (Deck.IsPluginStart(args)) { Environment.ExitCode = Deck.Run(args, DeckHost()); return; }
+if (args.Length == 1 && args[0] == "--refresh") { GetUsage(); return; }
+if (args.Length is 1 or 2 && args[0] == "--deck-face") {
+    double age = args.Length == 2 && double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double a) ? a : -1;
+    using var faceOut = Console.OpenStandardOutput();
+    using var faceWriter = new StreamWriter(faceOut, new UTF8Encoding(false));
+    faceWriter.Write(Deck.Face(DeckHost(), age));
+    return;
+}
+
 string stdin;
 using (var s = Console.OpenStandardInput())
 using (var r = new StreamReader(s, Encoding.UTF8)) stdin = r.ReadToEnd();
@@ -159,6 +175,18 @@ lines.RemoveAll(l => l.Trim().Length == 0);
 using (var os = Console.OpenStandardOutput())
 using (var w = new StreamWriter(os, new UTF8Encoding(false))) w.Write(string.Join("\n", lines));
 return;
+
+// What the Stream Deck key takes from the code below, so that it draws by the status line's own
+// rules and never fetches by a path of its own. Look is the rows as they stand, without a fetch:
+// the last good ones and, once two fetches in a row have failed, the reason, exactly as a render
+// that did not fetch draws them. Offline they come from the fixture, and the registry is neither
+// read nor written.
+static Deck.Host DeckHost() => new() {
+    Look = () => Offline() is string dir ? OfflineRows(dir) : Saved(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+    FetchedAt = () => Offline() is null ? RegLong("ts") : 0,
+    TriedAt = () => Offline() is null ? RegLong("tryTs") : 0,
+    Pace = Pace, Hm = Hm, BarFill = BarFill, ZoneColor = ZoneColor, PctColor = PctColor, SevColor = SevColor,
+    Forest = Forest, Offline = Offline(), ProjectsDir = Path.Combine(Home(), ".claude", "projects") };
 
 // Two columns when the terminal has room: the account sits right of 5h and the scoped
 // row right of 7d. The two left-column rows render to one visible width, so a fixed gap
@@ -881,35 +909,43 @@ static string PctColor(int p) =>
 static string SevColor(string sev) =>
     sev == "critical" ? "\x1b[1;38;2;247;118;142m" : sev == "warning" ? "\x1b[38;2;224;175;104m" : "";
 
+// Where a row is heading, which the limit rows and the Stream Deck key both draw: where it
+// stands (now), where it will stand at its reset (proj), the time to 100% as text (to100), and
+// that text's colour (tone).
+static (int now, int proj, string to100, int tone) Pace(RowIn r) {
+    int now = Math.Clamp(r.Pct, 0, 100);
+    double rate = Math.Min(r.Rate, 40);
+    bool burning = !r.Gated && rate > 0.5;
+    // Project to the row's own reset, uncapped. An 8h cap made ⇢ mean "at reset" on the
+    // 5h row and "in 8 hours" on the 7d row, one line apart, so a red "hits 100% in
+    // 2d19h" could sit next to a calm ⇢ 20%.
+    double horizon = r.Hrs;
+    // Without a reset time there is no horizon, so there is no forecast to make: the
+    // bar shows the current value and says nothing about where it is heading.
+    int proj = burning && r.HasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
+    // The → colour: 0 dim, 1 red, 2 forest.
+    string to100; int tone = 0;
+    if (r.Gated) to100 = "early";   // not enough same-window data for a reliable trend yet
+    else if (burning && now < 100) {
+        double h = (100 - now) / rate;
+        // Tested against the row's own reset. Red: 100% arrives before the window resets.
+        // Forest: the reset comes first, so at this pace the window never runs out; the
+        // time is still shown and the colour says it is harmless. When we don't know
+        // when the window resets, neither is claimed and the time stays dim.
+        if (r.HasReset) tone = h < r.Hrs ? 1 : 2;
+        to100 = Hm(h);
+    } else to100 = now >= 100 ? "maxed" : "never";
+    return (now, proj, to100, tone);
+}
+
 // leftCount = rows that stack in the left column. Column widths are the max needed across
 // the rows of one column this render, so the rows that stack stay aligned while never
 // padding wider than the current values require. avail is Avail(): the rows are drawn per
 // render, at the width of the session drawing them, never cached drawn.
 static string RenderRows(List<RowIn> rows, int leftCount, int avail) {
     var d = rows.Select(r => {
-        int now = Math.Clamp(r.Pct, 0, 100);
-        double rate = Math.Min(r.Rate, 40);
-        bool burning = !r.Gated && rate > 0.5;
-        // Project to the row's own reset, uncapped. An 8h cap made ⇢ mean "at reset" on the
-        // 5h row and "in 8 hours" on the 7d row, one line apart, so a red "hits 100% in
-        // 2d19h" could sit next to a calm ⇢ 20%.
-        double horizon = r.Hrs;
-        // Without a reset time there is no horizon, so there is no forecast to make: the
-        // bar shows the current value and says nothing about where it is heading.
-        int proj = burning && r.HasReset ? Math.Min((int)Math.Round(now + rate * horizon), 300) : now;
-        // The → colour: 0 dim, 1 red, 2 forest.
-        string to100; int tone = 0;
-        if (r.Gated) to100 = "early";   // not enough same-window data for a reliable trend yet
-        else if (burning && now < 100) {
-            double h = (100 - now) / rate;
-            // Tested against the row's own reset. Red: 100% arrives before the window resets.
-            // Forest: the reset comes first, so at this pace the window never runs out; the
-            // time is still shown and the colour says it is harmless. When we don't know
-            // when the window resets, neither is claimed and the time stays dim.
-            if (r.HasReset) tone = h < r.Hrs ? 1 : 2;
-            to100 = Hm(h);
-        } else to100 = now >= 100 ? "maxed" : "never";
-        return (label: r.Label, now, proj, reset: r.HasReset ? Hm(r.Hrs) : NoData, to100, tone, sev: r.Sev);
+        var p = Pace(r);
+        return (label: r.Label, p.now, p.proj, reset: r.HasReset ? Hm(r.Hrs) : NoData, p.to100, p.tone, sev: r.Sev);
     }).ToList();
     // Every width is per column ([0] left, [1] right) and never shared. The left column's
     // rows stack, 5h above 7d, so they have to agree to line up; the right column holds the

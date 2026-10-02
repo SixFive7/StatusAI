@@ -3,8 +3,8 @@
 # Architecture
 
 The parts of the status line and how they fit together: the render chain, what draws each row, how
-often each source refreshes, the state kept between renders, and what would have to change to move
-it elsewhere.
+often each source refreshes, the state kept between renders, the Stream Deck key the same exe
+draws, and what would have to change to move it elsewhere.
 
 ## The render chain
 
@@ -79,6 +79,7 @@ see [limits.md](limits.md#when-a-fetch-fails).
 | `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
 | `%LOCALAPPDATA%\StatusAI\tokens\<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
 | named mutex `Global\StatusAI.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
+| `%APPDATA%\Elgato\StreamDeck\Plugins\com.sixfive7.statusai.sdPlugin\` | the Stream Deck plugin, where it is installed: its manifest, its pictures and its own copy of `statusai.exe`. It keeps no state of its own |
 
 Legacy, no longer written but possibly still on disk: `~/.claude/statusline-usage.json` and
 `statusline-cache.json`, and `HKCU\Software\cshipUsage` and `~/.claude/statusline-tokens`, which
@@ -90,6 +91,94 @@ With `STATUSAI_OFFLINE` set, a switch for development (see
 rows and the euro rate come from a file in that directory, and the token cache and the account files
 move into it.
 
+## The Stream Deck key
+
+The same exe is also the plugin behind a key on an Elgato Stream Deck; what the key shows and
+does is in [stream-deck.md](../guide/stream-deck.md). The app starts the plugin's own copy of
+`statusai.exe`, from the plugin's folder, with `-port`, `-pluginUUID`, `-registerEvent` and
+`-info`. `Program.cs` sees those before it reads stdin and hands over to `Deck.cs`, and the
+process then stays up for as long as the app does.
+
+```
+Stream Deck  --starts-->  statusai.exe, the plugin's copy  <--websocket-->  Stream Deck
+                                |
+                                |  waits on    the websocket, HKCU\Software\StatusAI, ~/.claude/projects
+                                +--> statusai.exe --refresh     GetUsage(): the 50 s cache, the lock, Fetch()
+                                +--> wt.exe                     a key press
+```
+
+It waits and never polls. Three things wake it, and a timer for what is due:
+
+| it waits on | which is signalled by | and then |
+|---|---|---|
+| the websocket to the app | a message: the key appears or disappears, is pressed or released, the system woke up | draws the key, or acts on the press |
+| a change notification on `HKCU\Software\StatusAI` | a fetch by anyone: a terminal's status line, or `--refresh` | draws the key 100 ms later, once every value of the fetch has landed |
+| a change notification on `~/.claude/projects` and everything under it | a write by any Claude Code session of any kind, which is where they keep their transcripts | notes that Claude is working, and refreshes when a refresh is due |
+| a timer | the next minute, the half second of a held key, the next refresh | redraws the countdowns, makes a press a long one, refreshes |
+
+The folder's notification stays signalled until it is armed again, so a burst of writes is one
+wake-up: 65.900 appends in 30 seconds cost the process two wake-ups and no processor time that
+could be measured.
+
+**It never fetches by a path of its own.** When the usage is due it starts this exe again with
+`--refresh`, which calls `GetUsage()` and exits: the same 50 second cache, the same lock, the same
+`Fetch()`, the same count of failures as a render, so a terminal and the key can never both fetch.
+The result reaches the key the way a terminal's fetch does, through the registry. It is a second
+process rather than a call so that a fetch, which can take its three seconds, never holds up a key
+press, and so that the HTTP client stays out of the process that stays up: 13,3 MB in use and
+3,9 MB private as it is, against 18,3 MB and 5,2 MB with the fetch inside it.
+
+A refresh is due 62 seconds after the last fetch or attempt by anyone, and at once after a quiet
+spell. The 62 keeps it behind a terminal's own 60: once a status line has fetched, its next fetch
+comes two seconds before the key's would, so the key never comes round to one for as long as that
+terminal is open. A key that is ahead of a terminal sitting idle, whose renders then find the
+copy fresh, loses those two seconds every minute, and the terminal's render comes first in
+under half an hour. Whichever of the two fetches, it is one fetch a minute, and `--refresh` is
+not even started while the shared copy is under 50 seconds old.
+
+Arming the folder's notification again reports the writes made since it was last signalled, so
+the last write of a burst is followed by one more refresh a minute later, which is the one that
+sees what the last reply cost; after that nothing is fetched until Claude writes again. And
+nothing is refreshed while no key is visible: the write stays noted until one is.
+
+**It draws by the status line's own rules.** `Program.cs` hands `Deck.cs` its functions in a
+`Deck.Host`: `Look`, the rows as they stand without a fetch, which is `Saved()`; `Pace`, the time
+to 100% and its colour, which `RenderRows` uses too; `BarFill`, `ZoneColor`, `PctColor`,
+`SevColor` and `Hm`. So a cell on the key is lit and coloured by the same code as a cell on the
+status line. The key is an SVG, 144 by 144, that the app scales to the device; its layout is a
+block of numbers at the top of the drawing code. `statusai --deck-face` prints it, which is how
+the [render tests](../development.md#the-render-tests) hold it to its recorded bytes.
+
+**The websocket client is written out** in `Deck.cs`, about a hundred lines of RFC 6455: one
+connection, text messages, no extensions. The framework's own would have cost 282 kB in the exe
+and a thread pool in the process; with this one the whole mode adds 76 kB, and the process runs
+on three threads. [Test-Deck.ps1](../development.md#the-stream-deck-tests) takes it through the
+protocol against a stand-in for the app.
+
+**When the socket closes, the process ends.** With exit code 0 when the app closed the connection,
+which is answered with a close in return, and 1 after anything else: a connection that drops, a
+frame the protocol forbids (answered with a close of its own, status 1002, or 1009 for a message
+over 16 MiB), a handshake that is refused or goes unanswered for ten seconds. There is nothing to
+draw on without the app, and an app that is still there starts its plugin again.
+
+It writes no log of its own. The app keeps one per plugin,
+`%APPDATA%\Elgato\StreamDeck\logs\com.sixfive7.statusai0.log`, and the process sends it one line
+when it starts and one for anything fatal or for a program it could not start.
+
+Two details of running as a plugin. The exe is a console program, so the app gives it a console
+host of its own, `conhost.exe`, 7,5 MB that nothing writes to: the process lets go of it with
+`FreeConsole()` as it starts. And its standard handles are the app's pipes, which a terminal
+started from a key press would inherit and hold for as long as it runs: they are made
+non-inheritable first.
+
+With `STATUSAI_OFFLINE` set, the mode touches nothing live, like a render: the rows come from the
+fixture, the registry is not watched, a refresh is not started and a key press starts nothing.
+Both are reported to the app's log instead, which is what the tests read.
+
+The mode costs the status line nothing that could be measured. The exe is 75.776 bytes larger,
+5.158.912 against 5.083.136; 60 offline renders of each build, taken in turn, had a median of
+94,8 ms against 95,3 ms, and the same 11,4 MB at their peak.
+
 ## Portability
 
 The token accounting is fully portable, but the code around it uses a few Windows-only APIs:
@@ -99,6 +188,7 @@ The token accounting is fully portable, but the code around it uses a few Window
 | `Registry.CurrentUser` (9 sites) | limit-bar cache, and the FX rate cache |
 | `WindowsIdentity` / `WindowsPrincipal` | mutex naming |
 | `Global\` mutex | single-flight on the usage fetch |
+| `RegNotifyChangeKeyValue`, `FindFirstChangeNotificationW`, `FreeConsole`, `SetHandleInformation` | the Stream Deck key, which is Windows-only as a whole: it opens Windows Terminal |
 | `net10.0-windows` TFM | consequence of the above |
 
 Everything in the walker is cross-platform: `Path`, `FileStream`, `BinaryReader`, `JsonDocument`,
@@ -131,7 +221,7 @@ Dropping starship removes ~90% of the font requirement.
 dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o <out>
 ```
 
-Output is about 4,8 MiB and really self-contained: no `hostfxr`, no `coreclr` and no VC++
+Output is about 4,9 MiB and really self-contained: no `hostfxr`, no `coreclr` and no VC++
 redistributable, because NativeAOT statically links the C++ runtime and uses only the in-box UCRT.
 There is **no ARM64 build**, though cship and starship both publish one.
 

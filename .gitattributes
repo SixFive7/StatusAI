@@ -2,8 +2,11 @@
 # CRLF churn from core.autocrlf=true, and every tool here reads LF.
 * text=auto eol=lf
 
-# The render tests compare these byte for byte, so they are never converted.
+# The render tests compare these byte for byte, so they are never converted. The key faces are
+# SVG on one line, and the plugin folder's key.svg is a copy of one of them.
 *.ansi -text
+tests/expected/*.svg -text
+streamdeck/**/imgs/key.svg -text
 
 *.png binary
 *.jpg binary

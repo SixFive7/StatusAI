@@ -18,6 +18,11 @@
 // one reason to regenerate. The generator refuses to run on a colour outside the palette, a glyph
 // whose width it does not know, a callout whose text it cannot find, a crop through a two-column
 // cell, or a label that leaves its device or meets another.
+//
+// The Stream Deck key is drawn the same way: its figures place tests/expected/<case>.svg, the SVG
+// the binary draws for a fixture, as it is. A full run also writes the pictures the plugin folder
+// carries (streamdeck/com.sixfive7.statusai.sdPlugin/imgs) from the same files: the plugin's icon
+// and the picture of a key that has not been drawn yet.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -27,6 +32,7 @@ const { pathToFileURL } = require('url');
 const ROOT = path.resolve(__dirname, '..', '..');
 const EXPECTED = path.join(ROOT, 'tests', 'expected');
 const WORK = path.join(ROOT, '.work', 'figures');
+const PLUGIN_IMGS = path.join(ROOT, 'streamdeck', 'com.sixfive7.statusai.sdPlugin', 'imgs');
 
 // ---- ANSI to cells
 // Program.cs's palette, by the SGR triple it writes. cship adds one colour of its own: the model name
@@ -108,6 +114,16 @@ function line(ref, i) {                        // line i of tests/expected/<ref>
 const LEFT = /^ (\S.*?\d%)(?=  \S)/;
 function leftCol(cells, from = 1) { const s = span(cells, LEFT); return crop(cells, from, s.col + s.len); }
 function rightCol(cells) { const s = span(cells, LEFT); return crop(cells, s.col + s.len + 2); }
+// The Stream Deck key of a case, tests/expected/<ref>.svg, at px by px. The SVG is placed as the
+// binary wrote it; only the size it is shown at is set here. A key on a Stream Deck XL is 96 px.
+const FACES = new Set();
+function faceSvg(ref) {
+  const f = path.join(EXPECTED, ref + '.svg');
+  if (!fs.existsSync(f)) throw new Error('no expected key face ' + ref + ' in tests/expected');
+  FACES.add('tests/expected/' + ref + '.svg');
+  return fs.readFileSync(f, 'utf8');
+}
+const face = (ref, px) => `<span class="key" style="width:${px}px;height:${px}px">${faceSvg(ref).replace('<svg ', `<svg style="width:${px}px;height:${px}px" `)}</span>`;
 
 // ---- scenes
 // A scene is a device: lines of cells, each optionally with a gutter label and callouts. A callout
@@ -283,6 +299,24 @@ scene('sessions', 'An illustration of three open sessions over five minutes: eac
   return { html: `<div class="dev viz">${legend}${svg}</div>`, from: 'the rule in `GetUsage()`, played out over invented render times' };
 });
 
+// deck-key: the Stream Deck key of the shot fixture, with what each part says
+scene('deck-key', 'The Stream Deck key for the `shot` fixture, three times the size of a key on a Stream Deck XL, with what each part says.', () => ({
+  html: `<div class="dev deck">${face('key', 288)}<ul class="parts">
+    <li><span class="k"><b class="df">5h</b> <b class="rd">7d</b></span><span>the session and the week; a label takes the colour of its limit's severity</span></li>
+    <li><span class="k"><b class="cy">22%</b> <b class="or">89%</b></span><span>used now: amber from 70%, red from 90%</span></li>
+    <li><span class="k"><b class="cy">●●●</b><b class="dm">○○</b></span><span>the status line's ten cells, one per tenth begun</span></li>
+    <li><span class="k"><b class="gr">↻</b> <b class="lg">3h23m</b></span><span>resets in</span></li>
+    <li><span class="k"><b class="fo">→7h29m</b></span><span>100% in: forest, the reset comes first</span></li>
+    <li><span class="k"><b class="rd">→4h35m</b></span><span>100% in: red, before the reset</span></li>
+  </ul></div>` }));
+
+// deck-states: the key in the four states it can be in
+scene('deck-states', 'The Stream Deck key in four states, each one and a half times the size of a key: while Claude works; a quarter of an hour after the last fetch; once the 5h window has ended; and when fetching fails.', () => {
+  const keys = [['key', 'while Claude works'], ['key-idle', 'fifteen minutes after the last fetch'],
+                ['key-window-over', 'once the 5h window has ended'], ['key-failing', 'when fetching fails']];
+  return { html: `<div class="dev keys">${keys.map(([ref, text]) => `<figure>${face(ref, 144)}<figcaption>${esc(text)}</figcaption></figure>`).join('')}</div>` };
+});
+
 // download: the button
 scene('download', 'A button: Download for Windows.', () => ({ html: `<div class="btn"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
   <path d="M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="#16161E" stroke-width="2.2"
@@ -332,6 +366,15 @@ body{font-family:"Segoe UI",system-ui,sans-serif}
 .legend .dot.on{background:#7DCFFF; border-color:#7DCFFF}
 .legend .band{display:inline-block; width:22px; height:9px; border-radius:3px; background:rgba(125,207,255,.16); margin-right:7px; vertical-align:-1px}
 .legend .sum{margin-left:auto; color:#6E738D}
+.key{display:block; flex:none; border-radius:14%; overflow:hidden; line-height:0; box-shadow:0 0 0 1px #262738}
+.key svg{display:block}
+.deck{display:flex; gap:24px; align-items:center; padding:20px 22px}
+.parts{list-style:none; margin:0; padding:0; width:330px; font:13px/20px "Segoe UI",system-ui,sans-serif; color:#A9B1D6}
+.parts li{display:flex; gap:12px; align-items:baseline; padding:5px 0}
+.parts .k{flex:none; width:92px; white-space:nowrap; font:700 13.333px/20px Term,"Segoe UI Symbol",monospace}
+.keys{display:flex; gap:18px; padding:20px 22px 16px}
+.keys figure{margin:0; width:144px}
+.keys figcaption{margin-top:9px; font:12px/16px "Segoe UI",system-ui,sans-serif; color:#A9B1D6; text-align:center; height:32px}
 .btn{display:flex; width:272px; box-sizing:border-box; justify-content:center; align-items:center; gap:10px; background:#7DCFFF; color:#16161E; border-radius:10px; padding:11px 22px 12px 18px;
   font:600 17px/22px "Segoe UI",system-ui,sans-serif; letter-spacing:.01em; box-shadow:0 1px 2px rgba(10,12,20,.18),0 4px 10px rgba(10,12,20,.16)}
 `;
@@ -455,11 +498,12 @@ async function main() {
   if (only.length && todo.length !== only.length) throw new Error('unknown figure: ' + only.filter(o => !SCENES.some(s => s.id === o)).join(', '));
   const { tab, close, exe } = await launch();
   const report = [];
+  let pluginDiffers = 0;
   try {
     console.log(`edge: ${exe}\nfonts: ${(await checkFonts(tab)).join(', ')}`);
     for (const s of todo) {
-      USED.clear();
-      const built = s.build(), src = [...USED];
+      USED.clear(); FACES.clear();
+      const built = s.build(), src = [...USED, ...FACES];
       let rect;
       if (built.capture) {
         const c = built.capture;
@@ -479,6 +523,7 @@ async function main() {
       fs.writeFileSync(path.join(outDir, s.id + '.png'), png);
       report.push({ id: s.id, shows: s.shows, src, from: built.from, w: rect.width, h: rect.height, bytes: png.length, cols: built.widest });
     }
+    if (!only.length) pluginDiffers = await pluginImages(tab, check);
   } finally { await close(); }
   for (const r of report)
     console.log(`${r.id.padEnd(15)} ${String(r.w).padStart(5)} x ${String(r.h).padEnd(4)} CSS px  ${(r.bytes / 1024).toFixed(0).padStart(4)} KB`
@@ -492,9 +537,41 @@ async function main() {
       if (!ok) console.log('DIFFERS', r.id);
     }
     console.log(`${same}/${report.length} identical to docs/assets`);
-    if (same !== report.length) process.exitCode = 1;
+    if (same !== report.length || pluginDiffers) process.exitCode = 1;
   } else if (!only.length) index(report);
   if (!checkPages()) process.exitCode = 1;
+}
+// The pictures the Stream Deck plugin folder carries, from the same faces as the figures: the
+// plugin's icon is the key of the shot fixture, at the two sizes the app asks for, and the picture
+// a key shows before the plugin has drawn it is the blank key, as the binary writes it. With check
+// they go to .work/figures/check instead and are compared; the count of those that differ is returned.
+async function pluginImages(tab, check) {
+  const out = check ? path.join(WORK, 'check', 'plugin-imgs') : PLUGIN_IMGS;
+  fs.mkdirSync(out, { recursive: true });
+  const made = [];
+  for (const [name, css] of [['plugin.png', 128], ['plugin@2x.png', 256]]) {   // 256 and 512 px: the PNGs are taken at twice the density
+    const f = path.join(WORK, 'plugin-icon.html');
+    fs.writeFileSync(f, page(`<div id="shot" style="display:inline-block;line-height:0">${faceSvg('key').replace('<svg ', `<svg style="display:block;width:${css}px;height:${css}px" `)}</div>`, name));
+    await tab.open(pathToFileURL(f).href, 600, 400);
+    const r = await tab.eval(`(() => { const b = document.getElementById('shot').getBoundingClientRect(); return { x: b.left, y: b.top, width: b.width, height: b.height }; })()`);
+    if (r.width !== css || r.height !== css) throw new Error(`${name}: drawn at ${r.width} x ${r.height}, not ${css} x ${css}`);
+    const png = await tab.shoot(r);
+    fs.writeFileSync(path.join(out, name), png); made.push([name, `${css * 2} x ${css * 2} px`, png.length]);
+  }
+  const blank = Buffer.from(faceSvg('key-blank'), 'utf8');
+  fs.writeFileSync(path.join(out, 'key.svg'), blank); made.push(['key.svg', 'tests/expected/key-blank.svg as it is', blank.length]);
+  let differs = 0;
+  for (const [name, what, bytes] of made) {
+    let note = '';
+    if (check) {
+      const b = path.join(PLUGIN_IMGS, name);
+      const ok = fs.existsSync(b) && fs.readFileSync(path.join(out, name)).equals(fs.readFileSync(b));
+      if (!ok) differs++;
+      note = ok ? '  identical' : '  DIFFERS';
+    }
+    console.log(`plugin ${name.padEnd(14)} ${what}  ${(bytes / 1024).toFixed(1)} KB${note}`);
+  }
+  return differs;
 }
 // Every <img> of a figure in the Markdown pages: the figure exists, it has alt text, and its width
 // attribute is its CSS width (half the PNG's), so GitHub draws it at its own size, or narrower where
@@ -551,6 +628,14 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 | figure | shows | drawn from | size |
 |---|---|---|---|
 ${rows.join('\n')}
+
+A key face is named after its case as well: \`tests/expected/<case>.svg\` is the SVG the binary draws
+for the Stream Deck key, and the figures place it as it is. A full run also writes the pictures the
+plugin folder carries, in
+[streamdeck/com.sixfive7.statusai.sdPlugin/imgs](../../streamdeck/com.sixfive7.statusai.sdPlugin/imgs),
+from the same files: \`plugin.png\` and \`plugin@2x.png\`, the key of the \`shot\` fixture at 256 and
+512 px, and \`key.svg\`, the blank key a key shows before it has been drawn, a copy of
+\`tests/expected/key-blank.svg\`. \`--check\` compares those too.
 
 The generator rewrites this page on every full run, so make changes in the generator and not here.
 `);

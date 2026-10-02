@@ -1,5 +1,5 @@
 {
-  "about": "One render per case and width: the payload on stdin, a copy of the home as STATUSAI_OFFLINE and HOME, and STATUSAI_WIDTH set to the width, or, where a case has an env, exactly the STATUSAI_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. Run Test-Renders.ps1; see docs/development.md.",
+  "about": "One render per case and width: the payload on stdin, a copy of the home as STATUSAI_OFFLINE and HOME, and STATUSAI_WIDTH set to the width, or, where a case has an env, exactly the STATUSAI_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. A case with a face is the Stream Deck key: statusai --deck-face <face> in a copy of the home, the key as it is drawn that many seconds after the fetch, with its bytes in expected/<case>.svg. Run Test-Renders.ps1; see docs/development.md.",
   "cship": "1.8.0",
   "cases": {
     "showcase": {
@@ -372,6 +372,71 @@
       "payload": "unreadable",
       "widths": [141],
       "checks": "A payload that is not JSON: the block alone under '— ⏱ — 💰 —', and its three reasons, too long to share a row, one row each."
+    },
+    "key": {
+      "home": "shot",
+      "face": 0,
+      "checks": "The Stream Deck key for the screenshot's rows: 5h at 22% with three cyan cells and its → 7h29m in forest, 7d at 89% in amber with nine cells, the eighth and ninth amber, and its → 4h35m in red."
+    },
+    "key-idle": {
+      "home": "shot",
+      "face": 900,
+      "checks": "The same key fifteen minutes after the fetch: both countdowns fifteen minutes on, and → idle in grey, since a pace measured before a quarter of an hour of nothing says nothing."
+    },
+    "key-window-over": {
+      "home": "shot",
+      "face": 13000,
+      "checks": "3h37m after the fetch, past the 5h row's own reset: that row at 0% with empty cells, grey, ↻ —, because its window has ended; 7d counts on."
+    },
+    "key-maxed": {
+      "home": "maxed-5h",
+      "face": 0,
+      "checks": "A 5h at 100%: ten cells, the tenth red, the percentage red, → maxed in grey."
+    },
+    "key-early": {
+      "home": "rows-early",
+      "face": 0,
+      "checks": "Before a trend exists: → early on both rows."
+    },
+    "key-edges": {
+      "home": "edges",
+      "face": 0,
+      "checks": "A 5h without a reset time, ↻ —, with its → in grey because there is nothing to compare it with; a 7d at 100%."
+    },
+    "key-legacy": {
+      "home": "legacy-shape",
+      "face": 0,
+      "checks": "The legacy shape, without reset times: ↻ — on both rows."
+    },
+    "key-no-session": {
+      "home": "no-session",
+      "face": 0,
+      "checks": "No session meter: the 5h row reads —, with ten empty cells and nothing under them; 7d is drawn."
+    },
+    "key-failing": {
+      "home": "fetch-failed-twice",
+      "face": 0,
+      "checks": "Two fetches in a row failed: the rows of the last good one in grey, ⚠ timeout in red under the first and their age under the second, as the status line's ⚠ row has them."
+    },
+    "key-failing-429": {
+      "home": "fetch-failing-elsewhere",
+      "face": 0,
+      "checks": "Failing with HTTP 429: ⚠ HTTP 429."
+    },
+    "key-no-rows": {
+      "home": "fetch-never-worked",
+      "face": 0,
+      "checks": "No token to fetch with and no rows yet: — on both rows, ⚠ no token, no rows yet."
+    },
+    "key-signed-out": {
+      "home": "fetch-signed-out",
+      "face": 0,
+      "checks": "Nobody signed in: the same key as with no token, which is what being signed out comes to."
+    },
+    "key-blank": {
+      "home": "only-unknown",
+      "face": 0,
+      "checks": "No rows to draw and nothing failing, as before the first fetch: — on both rows and nothing under them. The plugin folder carries this picture for a key that has not been drawn yet (streamdeck/.../imgs/key.svg)."
     }
   }
 }

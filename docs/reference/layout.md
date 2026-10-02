@@ -304,6 +304,11 @@ columns.
 Dim is the one colour under 4,5:1 on every ground, which is one more reason a `→` worth reading no
 longer uses it.
 
+The [Stream Deck key](../guide/stream-deck.md) draws with these colours on a black ground. Its
+cells, percentages and labels get theirs from `ZoneColor`, `PctColor` and `SevColor`, so they
+cannot drift from the rows, and forest comes from the same constant. Dim, text, green, light green
+and red are written out again in `Deck.cs`, as hex: a change to one of those five has two places.
+
 ## Meta segment
 
 Order: `⏱ duration`, `📝 +added -removed`, `💸 rate`, `💰 cost`, with dollars and euros separated by

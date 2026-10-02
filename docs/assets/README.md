@@ -35,7 +35,17 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 | [tokens.png](tokens.png) | The token grid: three groups of three columns, each group one kind of count, each column one scope. | `showcase.w120` | 1018 x 180 |
 | [warnings.png](warnings.png) | The three kinds of ⚠ row, in the order they come: a source that failed, in red; a limit this status line does not draw yet, in amber; usage billed beyond the plan, in red and always last. | `every-warning.w120` | 994 x 255 |
 | [sessions.png](sessions.png) | An illustration of three open sessions over five minutes: each render either fetches the usage (only when the shared copy is 50 seconds old or more) or draws the shared copy. | the rule in `GetUsage()`, played out over invented render times | 794 x 283 |
+| [deck-key.png](deck-key.png) | The Stream Deck key for the `shot` fixture, three times the size of a key on a Stream Deck XL, with what each part says. | [key.svg](../../tests/expected/key.svg) | 724 x 368 |
+| [deck-states.png](deck-states.png) | The Stream Deck key in four states, each one and a half times the size of a key: while Claude works; a quarter of an hour after the last fetch; once the 5h window has ended; and when fetching fails. | [key.svg](../../tests/expected/key.svg), [key-idle.svg](../../tests/expected/key-idle.svg), [key-window-over.svg](../../tests/expected/key-window-over.svg), [key-failing.svg](../../tests/expected/key-failing.svg) | 712 x 261 |
 | [download.png](download.png) | A button: Download for Windows. | the palette: cyan on the terminal ground | 300 x 71 |
 | [decisions-week.png](decisions-week.png) | The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03. | [limits-decisions.html](../design/limits-decisions.html) | 998 x 467 |
+
+A key face is named after its case as well: `tests/expected/<case>.svg` is the SVG the binary draws
+for the Stream Deck key, and the figures place it as it is. A full run also writes the pictures the
+plugin folder carries, in
+[streamdeck/com.sixfive7.statusai.sdPlugin/imgs](../../streamdeck/com.sixfive7.statusai.sdPlugin/imgs),
+from the same files: `plugin.png` and `plugin@2x.png`, the key of the `shot` fixture at 256 and
+512 px, and `key.svg`, the blank key a key shows before it has been drawn, a copy of
+`tests/expected/key-blank.svg`. `--check` compares those too.
 
 The generator rewrites this page on every full run, so make changes in the generator and not here.

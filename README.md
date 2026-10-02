@@ -91,6 +91,18 @@ one when the shared copy is 50 seconds old, and only one session fetches at a ti
 the shared copy rather than wait. When fetching has failed twice in a row, they try again at most
 once every 50 seconds between them, and draw the shared copy and the warning in the meantime.
 
+### Your limits on a Stream Deck key
+
+<img src="docs/assets/deck-key.png" width="724" alt="The Stream Deck key, three times its size: 5h at 22% with three of ten cells lit, resets in 3h23m, 100% in 7h29m in forest green; 7d at 89% in amber with nine cells lit, resets in 2d09h, 100% in 4h35m in red. Beside it, what each part says.">
+
+With an Elgato Stream Deck, one key can carry the 5h and 7d rows: the same cells, colours and
+countdowns, drawn by the same `statusai.exe`, which the Stream Deck app starts as its plugin. Press
+the key for a new Claude Code tab in Windows Terminal, and hold it for a new window. It keeps the
+figures up to date while Claude works where there is no status line, in the VS Code extension for
+instance, and fetches nothing while Claude is idle. It is not in a release yet:
+[the Stream Deck key](docs/guide/stream-deck.md) says what it shows, what it costs and how to
+install it from a build.
+
 ## Get it
 
 **[Download the latest release](https://github.com/SixFive7/StatusAI/releases/latest)**, a zip with
@@ -138,6 +150,8 @@ where it is on. There is no installer or auto-update yet.
 - [Reading the status line](docs/guide/reading-the-status-line.md): every row, glyph and colour.
 - [Install](docs/guide/install.md): the download step by step, the optional prompt line, and
   building from source.
+- [The Stream Deck key](docs/guide/stream-deck.md): your limits on a key, and a Claude Code
+  terminal a press away.
 - [All the documentation](docs/README.md): how the tokens are counted, how the forecast is made, and
   why it all looks the way it does.
 - [Changelog](CHANGELOG.md).

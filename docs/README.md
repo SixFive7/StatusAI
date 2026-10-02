@@ -12,6 +12,7 @@ works, why it looks the way it does, and how to change it. New here? Start with
 |---|---|
 | [guide/reading-the-status-line.md](guide/reading-the-status-line.md) | what every row, glyph and colour on the status line means |
 | [guide/install.md](guide/install.md) | downloading or building it, putting it in place, what to do when something is missing, and taking it out again |
+| [guide/stream-deck.md](guide/stream-deck.md) | the key on an Elgato Stream Deck: what it shows, what a press does, when it fetches, what it costs, and installing it |
 
 ## Reference
 
@@ -19,10 +20,10 @@ How it works now.
 
 | page | covers |
 |---|---|
-| [reference/architecture.md](reference/architecture.md) | components, the render chain, data sources, update cadence, state, portability |
+| [reference/architecture.md](reference/architecture.md) | components, the render chain, data sources, update cadence, state, the Stream Deck key, portability |
 | [reference/accounting.md](reference/accounting.md) | how tokens and tool calls are counted, the traps, verification |
 | [reference/layout.md](reference/layout.md) | the grid, number formatting, alignment, width budgets, the palette, the ⚠ rows |
-| [reference/limits.md](reference/limits.md) | the OAuth usage endpoint and what a failed fetch shows, the three meters drawn and the flag for any other, the product breakdown, the on-credit alarm, the projection |
+| [reference/limits.md](reference/limits.md) | the OAuth usage endpoint, who fetches from it and when, and what a failed fetch shows, the three meters drawn and the flag for any other, the product breakdown, the on-credit alarm, the projection |
 
 ## Design
 
@@ -34,12 +35,13 @@ Why it is the way it is, and what was tried and rejected.
 | [design/rejected-designs.md](design/rejected-designs.md) | the limit-row designs that were rejected, and why |
 | [design/house-style/](design/house-style/) | the house style for visual documentation. **Read its README first: the example's subject matter is wrong on purpose.** |
 | [design/packaging-plan.md](design/packaging-plan.md) | packaging, Velopack auto-update, the install surface, the landmines |
+| [design/stream-deck.md](design/stream-deck.md) | the record of the Stream Deck key's design of 1 October 2026: what the app can and cannot do, the four ways of building it with their measurements, and how it decides when to fetch |
 
 ## Development
 
 | page | covers |
 |---|---|
-| [development.md](development.md) | the repository, building, the render tests, deploying, releasing, testing on a live machine and the traps that waste an hour there, and how the docs are kept |
+| [development.md](development.md) | the repository, building, the render tests and the Stream Deck tests, deploying, releasing, testing on a live machine and the traps that waste an hour there, and how the docs are kept |
 
 The figures in [assets/](assets/) are drawn from the render tests' output by a generator; its
 [README](assets/README.md) lists them and gives the command that regenerates them. What changed, and

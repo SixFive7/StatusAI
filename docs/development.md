@@ -3,19 +3,22 @@
 # Development
 
 How to build, deploy, release and test a change to the status line on a machine where it is in use,
-and how the docs are kept. Three of the four traps below have cost real time, the first one most of
+and how the docs are kept. Three of the five traps below have cost real time, the first one most of
 all.
 
 ## The repository
 
 ```
-src/        Program.cs and the csproj: the whole implementation
-tests/      the render tests: fixtures, expected renders, Test-Renders.ps1
-scripts/    Deploy.ps1, Package.ps1, and independent PowerShell implementations that verify the accounting
-config/     the cship and starship configuration the status line is used with
-docs/       guide/ for using it, reference/ for how it works, design/ for why, assets/ for the
-            figures, and this page
-.work/      scratch, gitignored: builds, test renders, anything throwaway
+src/         Program.cs and the csproj: the whole status line. Deck.cs: the same exe as the
+             plugin behind the Stream Deck key
+streamdeck/  the plugin's folder as the app wants it, less the exe: its manifest and its pictures
+tests/       the render tests: fixtures, expected renders, Test-Renders.ps1; and Test-Deck.ps1,
+             which runs the exe as a plugin against a stand-in for the app
+scripts/     Deploy.ps1, Package.ps1, and independent PowerShell implementations that verify the accounting
+config/      the cship and starship configuration the status line is used with
+docs/        guide/ for using it, reference/ for how it works, design/ for why, assets/ for the
+             figures, and this page
+.work/       scratch, gitignored: builds, test renders, anything throwaway
 ```
 
 ## Build
@@ -26,7 +29,7 @@ x64. NativeAOT links with the C++ toolchain, so it also needs Visual Studio 2022
 
 ```bash
 cd src && dotnet publish -c Release -r win-x64
-# -> src/bin/Release/net10.0-windows/win-x64/publish/statusai.exe   ~4,8 MiB
+# -> src/bin/Release/net10.0-windows/win-x64/publish/statusai.exe   ~4,9 MiB
 ```
 
 ## The render tests
@@ -49,10 +52,17 @@ dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe
 ```
 
-167 renders of 61 cases, about 15 seconds, exit code 0 when every one matches. A failure names the
+180 renders of 74 cases, about 20 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
+
+Thirteen of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
+`statusai --deck-face <face>` runs in a copy of its home and prints the key as SVG, as it is drawn
+that many seconds after the fetch its rows come from, and the bytes are compared with
+`tests/expected/<case>.svg`. They cover the key of the screenshot's rows, the same key a quarter of
+an hour and three and a half hours on, a row at 100%, rows without a trend, without a reset time
+and without a session meter, a fetch that is failing, and no rows at all.
 
 Nothing live is touched. Every render runs in a fresh copy of its home under `.work/test-renders/`,
 with `STATUSAI_OFFLINE` pointing at it (see
@@ -78,6 +88,7 @@ a run with another version says so first, because it may draw that line differen
 | `tests/fixtures/homes/<home>/` | a `STATUSAI_OFFLINE` directory: `rows.json`, usually a `usage.json`, the account files, and a transcript tree where the case counts tokens |
 | `tests/fixtures/payloads/<payload>.json` | a status-line stdin payload, with a `transcript_path` relative to the home |
 | `tests/expected/<case>.w<width>.ansi` | the exact bytes that case draws at that width |
+| `tests/expected/<case>.svg` | the exact bytes of the Stream Deck key, for a case with a `face` |
 | `tests/cship.toml` | cship's config for the renders |
 
 The fixtures carry no credentials (`.credentials.json` holds the plan fields and nothing else), and
@@ -106,6 +117,46 @@ the same commit: `node docs/assets/figures.gen.js` (see [its README](assets/READ
 
 To look at a render, `-Case showcase -Show` prints it with its colours, and `-OutDir <dir>` writes
 every render it makes as `<case>.w<width>.ansi`, at any width a case lists.
+
+## The Stream Deck tests
+
+`tests/Test-Deck.ps1` runs the binary as a Stream Deck plugin against a stand-in for the app: a
+websocket server on a loopback port the system picks, which starts the exe the way the app does
+and plays one case after another.
+
+```powershell
+./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe
+```
+
+12 cases, about half a minute, exit code 0 when every one passes. It needs no Stream Deck and no app,
+and Windows PowerShell 5.1 and PowerShell 7 both run it. The websocket client in `Deck.cs` is
+written by hand, so the cases take it through the protocol a part at a time:
+
+| case | holds the plugin to |
+|---|---|
+| registers, says so, and draws the key | the headers of its handshake, its registration, the one line it logs as it starts, and a picture that is `tests/expected/key.svg` byte for byte |
+| frames with 16 and 64 bit lengths, in and out | messages of 2.000 and 70.000 bytes received, and of 300 and 70.000 bytes sent, each masked and with the length field its size calls for |
+| a message in fragments, with a ping between them | three fragments put together, and the ping between two of them answered straight away |
+| a ping is answered, a pong is ignored | a pong that carries what the ping did, at 0, 3 and 125 bytes |
+| a short press on release, a long press after 500 ms | nothing while the key is down and the tab when it comes up; the window 500 ms into a hold, and nothing at its release |
+| a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
+| the app closes | a close in answer, and exit code 0 |
+| a frame the protocol forbids | a masked frame, a reserved bit, a ping in fragments, a continuation of nothing, a message inside another and an opcode that does not exist: each a close with status 1002 and exit code 1; a frame announced at 17 MiB: 1009 |
+| the connection drops | exit code 1 after a reset, and after a connection that ends inside a frame |
+| no app, or one that answers wrongly | exit code 1 with nothing listening, with a `Sec-WebSocket-Accept` that does not match, and with a 400 |
+| an app that never answers the handshake | gone after its ten seconds, with exit code 1 |
+| `--refresh` and `--deck-face` do not wait for stdin | both end by themselves with stdin left open, as it is for a plugin |
+
+Every plugin runs with `STATUSAI_OFFLINE` on a fresh copy of the `shot` home. Offline, the mode
+touches nothing live, and where it would start a program it says so in the app's log instead:
+`offline: would run ...\wt.exe -w 0 nt` for a press, `offline: would run --refresh` for a
+refresh. So **no test opens a terminal or fetches anything**, and the same switch runs the plugin
+by hand without either. One thing more is offline only: a `sendToPlugin` from the app is answered
+with its own payload, which is how a case makes the plugin send a frame of any length.
+
+What these tests cannot cover is the app: that it starts the exe, shows the picture and sends the
+events the stand-in sends. That takes a Stream Deck; see
+[the key on a live machine](#the-key-on-a-live-machine).
 
 ## Deploying
 
@@ -148,6 +199,34 @@ with its backup, a build the render tests refuse on either, no cship beside the 
 no folder, no `statusai.exe` on PATH, and a first deploy into a folder that refuses the copy, which
 ends with exit 2 and nothing in place. All of them did what this section says.
 
+### The Stream Deck plugin's copy
+
+Where the [Stream Deck key](guide/stream-deck.md) is installed, the plugin's folder under
+`%APPDATA%\Elgato\StreamDeck\Plugins` holds a copy of `statusai.exe` of its own, which the app
+runs for as long as it is open. `Deploy.ps1` brings that copy in step once the status line's
+binary is in place, or was in place already, so the key and the status line are one build:
+
+1. It compares the plugin's manifest, its pictures and its `statusai.exe` with the repository's
+   `streamdeck/` folder and the build. If nothing differs it says so and stops.
+2. It copies the manifest and the pictures, moves the plugin's `statusai.exe` aside as
+   `statusai.exe.old.<unix-seconds>`, copies the build in under its name and verifies its SHA-256.
+   A copy that lands wrong is removed and the previous one moved back.
+3. It asks the app to restart the plugin, with `streamdeck://plugins/restart/com.sixfive7.statusai`,
+   waits up to 20 seconds for a process running the new copy, and removes the old file once
+   nothing runs it; a file that is still running is left for the next deploy.
+
+`./scripts/Deploy.ps1 -Deck` installs the plugin where it is not installed yet: the folder is
+created and filled, and Stream Deck has to be quit and started again to find it. Without `-Deck`
+and without a plugin folder, nothing of this happens. `-DeckDir` names another plugins folder,
+and with one the app is asked nothing, so this too can be tried on a scratch folder. Exit code 4
+means the status line's binary is in place and the plugin's copy is not in step with it.
+
+It was tried that way on 2026-10-01, under both PowerShells: no plugin folder and no `-Deck`,
+`-WhatIf`, a first install, a rerun that finds everything in step, a copy held by a running
+process, which is moved aside and replaced and whose old file the next run removes, and a plugins
+folder that does not exist, which ends with exit 4. Step 3 has not been tried yet: nothing has
+been deployed over a plugin the app was running.
+
 ## Releasing
 
 ```powershell
@@ -171,6 +250,13 @@ the render tests against the build with that same cship, byte for byte the downl
 cship is linked, not bundled: it statically links some 43 crates whose notices a redistributor
 would owe, so the install guide fetches it from cship's own release instead (see
 [packaging-plan.md](design/packaging-plan.md#licensing)).
+
+The zip does not carry the [Stream Deck key](guide/stream-deck.md) yet, which is installed from a
+build with `Deploy.ps1 -Deck`. Before a release ships it, `Package.ps1` has to learn to build the
+plugin's installer: a `com.sixfive7.statusai.streamDeckPlugin`, which is a zip with the
+`streamdeck/com.sixfive7.statusai.sdPlugin` folder at its root and the release's `statusai.exe`
+in it, and the manifest's `Version` set to the release's. The app installs such a file when it is
+opened.
 
 The script publishes nothing. Its last line is the `gh release create` command that would, to be
 run from the repository root once the release commit is pushed. The exe records the commit it was
@@ -347,6 +433,52 @@ encoding round trips through the shell are not reliable:
 $out -match ([char]0x2503)      # ┃
 ```
 
+### The key
+
+`statusai --deck-face` prints the Stream Deck key as SVG, which a browser shows. Offline it draws
+the fixture's rows, and a number after it is the seconds since their fetch, which is how the
+countdowns, `→idle` and a window that has ended are looked at without waiting for them. The render
+tests write every key they draw with `-OutDir`:
+
+```powershell
+./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe -Case 'key*' -OutDir .work/keys
+# -> .work/keys/key.svg, key-idle.svg, key-failing.svg, ...
+```
+
+Without `STATUSAI_OFFLINE` it draws the live cache, which it only reads. The layout is the block
+of numbers above `Face()` in `Deck.cs`: where the label, the percentage, the cells and the small
+line sit on a canvas of 144 by 144, and how large they are. After a change, record the faces with
+`Test-Renders.ps1 -Update -Case 'key*'`, read the diff, and regenerate the figures, which also
+rewrites the plugin folder's pictures from them.
+
+The app draws the SVG with QtSvg, which follows SVG Tiny 1.2 and so knows less than a browser
+does. `Face()` keeps to plain shapes and text with attributes for that reason, and a browser
+showing a new face right does not settle it: `QSvgRenderer` from PySide6, in the version of the
+`Qt6Svg.dll` in the app's folder, draws it with the engine the app has.
+
+### The key on a live machine
+
+The app is the one part no test stands in for. To look at a build on a Stream Deck without
+replacing the status line's binary, give the plugin a copy of the build of its own:
+
+```powershell
+dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o .work/publish
+./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe
+./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe
+# with Stream Deck quit:
+$plugin = "$env:APPDATA\Elgato\StreamDeck\Plugins\com.sixfive7.statusai.sdPlugin"
+Copy-Item -Recurse streamdeck/com.sixfive7.statusai.sdPlugin $plugin
+Copy-Item .work/publish/statusai.exe $plugin
+```
+
+Start the app again and put *StatusAI* > *Claude Code* on a key. The status line goes on running
+the binary it had, and a plugin that fails cannot reach it: they are two files and two processes.
+What they share is the registry cache, which the plugin only ever writes through `--refresh`,
+that is through the `GetUsage()` of its own build. So a build that changes how the cache is kept
+is the one thing not to try this way beside live sessions.
+
+To take it out again, quit the app, delete that folder and remove the key.
+
 ## Trap 4: an account switch looks like a regression
 
 `AccountInfo()` is read fresh from `~/.claude.json` on every render, and a changed `accountUuid`
@@ -354,6 +486,27 @@ clears `hist` outright. Immediately after a switch every row reads `→ early` a
 belong to a different account, so they will not match anything observed a minute earlier. That is
 `WindowCheck` and the account guard working, not a fault. Check the account line before
 investigating a sudden change in the numbers.
+
+## Trap 5: the plugin's copy is never free
+
+The status line's binary is locked for the 100 ms of each minute it runs. The Stream Deck plugin
+runs for as long as the app does, so its copy,
+`%APPDATA%\Elgato\StreamDeck\Plugins\com.sixfive7.statusai.sdPlugin\statusai.exe`, is locked the
+whole time: a copy over it fails on every retry, and so does a delete. Windows does let a running
+program be moved aside, and a new file take its name, which is what
+[Deploy.ps1](#the-stream-deck-plugins-copy) does; the process keeps running the old file until the
+app restarts the plugin.
+
+That is also why the plugin has a copy of its own and is never pointed at the status line's
+binary. A process that held `statusai.exe` for good would make every deploy fail, and the
+updater in [packaging-plan.md](design/packaging-plan.md#the-status-line-is-its-own-update-host)
+counts on that file being free 99,8% of the time.
+
+Two copies can be two builds. As long as both keep the cache the same way that costs nothing, and
+`Deploy.ps1` keeps them one build anyway. The line the plugin logs as it starts,
+`statusai 1.0.0 of 2026-10-01 19:55 started as the Stream Deck plugin` in
+`%APPDATA%\Elgato\StreamDeck\logs\com.sixfive7.statusai0.log`, carries the version and the time its
+file was written, which a copy keeps, so it can be told from the status line's.
 
 ## Verifying the accounting
 
@@ -388,6 +541,9 @@ $root = (Resolve-Path tests/fixtures/homes/showcase/projects).Path
   `node docs/assets/figures.gen.js`, which also rewrites `docs/assets/README.md`. Don't edit an
   image by hand. After a change of output has been recorded with `-Update`, regenerate them and look
   at what changed.
+- The same run writes the pictures in `streamdeck/com.sixfive7.statusai.sdPlugin/imgs`, except
+  `action.svg`: the plugin's icon is the key of the `shot` fixture, and `key.svg` is the blank key
+  as the binary draws it. They are generated too, so a change to the key's face reaches them.
 - The two HTML pages under `docs/design/` are generated as well: edit the `.gen.js` or its data and
   regenerate. The decisions page's generator refuses to run unless its port of the drawing code
   reproduces every captured render.
