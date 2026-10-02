@@ -244,10 +244,12 @@ sent its data and drew nothing. So the question was whether this one had.
 
 It had not. What can be said from what was left behind:
 
-- The key did not show while the deck was away. The plugin's count of I/O operations over its 27
-  hours, 4.818, is what its refreshes alone come to at the 35 a refresh that were measured; a
-  redraw a minute through those twenty hours would have added 1.200. So the app sent
-  `willDisappear` for the key when it let go of the deck.
+- The key did not show while the deck was away. A key that shows is drawn again every minute,
+  and a picture drawn and sent costs the plugin 0,58 ms of processor time when 1.500 follow each
+  other and more when each comes after a minute of standing still. Twenty hours of them would
+  be 0,7 s at the least. The plugin used 0,69 s in all from the evening before the lock to the
+  evening after it, and the hours in which it was refreshing account for most of that. So the
+  app sent `willDisappear` for the key when it let go of the deck.
 - It showed again afterwards. The first fetch after the lock came at 21:15:04, when Claude was
   next put to work, and one every 62 seconds from then on, which only happens while a key shows.
   The key was pressed that evening and opened its terminal.
