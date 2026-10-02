@@ -97,11 +97,11 @@ once every 50 seconds between them, and draw the shared copy and the warning in 
 
 With an Elgato Stream Deck, one key can carry the 5h and 7d rows: the same cells, colours and
 countdowns, drawn by the same `statusai.exe`, which the Stream Deck app starts as its plugin. Press
-the key for a new Claude Code tab in Windows Terminal, and hold it for a new window. It keeps the
-figures up to date while Claude works where there is no status line, in the VS Code extension for
-instance, and fetches nothing while Claude is idle. It is not in a release yet:
-[the Stream Deck key](docs/guide/stream-deck.md) says what it shows, what it costs and how to
-install it from a build.
+the key for a new Claude Code tab in Windows Terminal, and hold it for a new window; either comes
+up in front of what you were doing. It keeps the figures up to date while Claude works where
+there is no status line, in the VS Code extension for instance, and fetches nothing while Claude
+is idle. It is not in a release yet: [the Stream Deck key](docs/guide/stream-deck.md) says what
+it shows, what it costs and how to install it from a build.
 
 ## Get it
 

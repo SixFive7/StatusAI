@@ -12,6 +12,9 @@ under *Unreleased*, and the entries before the first release are by date.
   times to 100%. A short press opens a new Claude Code tab in the Windows Terminal window used
   last, and a hold of half a second a new window. See
   [the Stream Deck key](docs/guide/stream-deck.md).
+- Either press ends with the terminal in front of whatever was there, which Windows does not do
+  for a program in the background: the window is brought up, a minimised one is brought back, and
+  the tab opens in the terminal window that was on top of the others.
 - The key keeps the shared usage up to date while Claude works where no status line runs, in the
   VS Code extension for instance: once every 62 seconds while a session is writing its transcript,
   once more a minute after the last write, and not at all while Claude is idle, while the key is
@@ -21,7 +24,7 @@ under *Unreleased*, and the entries before the first release are by date.
 - When fetching fails twice in a row the key greys its meters and says why and how old they are,
   as the status line's `⚠` row does; once a limit's window has ended it reads 0% until the next
   fetch; and after five minutes without a fetch its times to 100% read `idle`.
-- It costs the status line nothing that could be measured. The exe is 75.776 bytes larger and a
+- It costs the status line nothing that could be measured. The exe is 91.136 bytes larger and a
   render takes as long as it did. The process that stays up for the key holds 13,3 MB, 3,9 MB of
   it private, and used 0,22 s of processor time in half an hour of Claude working; a refresh is a
   second process for half a second.
@@ -32,16 +35,27 @@ under *Unreleased*, and the entries before the first release are by date.
 - `src/Deck.cs` holds the plugin, websocket client included, and `streamdeck/` the plugin's
   folder as the app wants it. `RenderRows` takes a row's forecast from `Pace()`, which the key
   draws by as well.
+- A press is a process of its own, `statusai --deck-press`, as a fetch is `statusai --refresh`.
+  Starting Windows Terminal by its alias loads Windows' app model into the process that does it:
+  63 handles and 17 libraries that never go, which is what the plugin was found holding a day
+  after its first press, and what it no longer takes on.
+- The plugin hands on none of the handles the Stream Deck app starts it with, so a terminal
+  opened by a press does not hold the app's log files open; and it draws its key again when the
+  deck comes back after a lock or a sleep.
 - Thirteen render cases for the key's face: 180 renders of 74 cases.
   [Test-Deck.ps1](tests/Test-Deck.ps1) runs the exe as a plugin against a stand-in for the Stream
-  Deck app, offline, and takes its websocket client through the protocol in 12 cases: long frames,
-  fragments, ping and pong, a close from either side, a dropped connection.
+  Deck app, offline, in 15 cases: its websocket client through the protocol (long frames,
+  fragments, ping and pong, a close from either side, a dropped connection), a deck that goes and
+  comes back, and a hundred refreshes that leave the handle count where it was. `-Live` adds
+  three that press the key for real, with no terminal open, one open and one minimised, and
+  hold the terminal to being in front each time.
 - [Deploy.ps1](scripts/Deploy.ps1) keeps an installed plugin's copy of `statusai.exe` in step with
   the status line's, moving the running copy aside to replace it, and `-Deck` installs the plugin.
 - The figure generator draws the key's two figures from the recorded faces, and the plugin's own
   pictures with them.
 - [The design record](docs/design/stream-deck.md) has what the Stream Deck app can and cannot do,
-  the four ways of building the key with their measurements, and how the refresh rule was chosen.
+  the four ways of building the key with their measurements, how the refresh rule was chosen, how
+  a press gets its terminal to the front, and what the first day on the device showed.
 - The key is not in the release zip yet: `Package.ps1` does not build the plugin's installer.
 
 ## 1.0.0 - 2026-09-24

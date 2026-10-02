@@ -48,7 +48,10 @@ The key leaves out what a row has more: the projection `⇢`, and the third row 
 | long: held for half a second | a new Windows Terminal window; it opens while the key is still down | `wt.exe -w new` |
 
 Both open Windows Terminal's default profile, so the key opens Claude Code when that profile runs
-it. The tab or window is started and nothing more: whether it comes to the front is up to Windows.
+it. And both end with the terminal in front of whatever you were working in. Windows does not do
+that for a program in the background, which gets a flashing taskbar button instead, so the key
+sees to it: the terminal window is brought up, a minimised one is brought back, and the tab
+opens in the terminal window that was on top of your others.
 
 A short press acts when the key comes up, because until then it could still become a long one.
 
@@ -88,6 +91,7 @@ hour of Claude working in the VS Code extension with no terminal open:
 | its processor time | 0,22 s in 33 minutes, a hundredth of a percent of one core |
 | one refresh, every 62 seconds | a second `statusai.exe` that lives for as long as the fetch takes, 0,3 to 0,6 s: 0,05 s of processor time, and 19 MB of memory for that long |
 | one redraw | well under a millisecond, and one message of about 4 kB to the app |
+| one press | a second `statusai.exe` for the second or so it takes to open the terminal and bring it to the front; nothing of it stays in the process that stays up |
 | on disk | the plugin's folder holds its own copy of `statusai.exe`, 4,9 MiB |
 
 When something else does the fetching, as a terminal's status line does, the process starts no
@@ -127,7 +131,8 @@ it deploys a build; see [development.md](../development.md#deploying).
 | what you see | what to do |
 |---|---|
 | the key shows the plugin's blank picture, `—` on both meters, and stays that way | The plugin is not running, or has nothing to draw yet. `%APPDATA%\Elgato\StreamDeck\logs\com.sixfive7.statusai0.log` holds one line for every start, `statusai 1.0.0 of <date> started as the Stream Deck plugin`, and one for anything that stopped it. No line at all means the app did not start it: quit Stream Deck and start it again. |
-| a yellow warning sign flashes on the key when you press it | Windows Terminal could not be started. The reason is in the same log. |
+| a yellow warning sign flashes on the key when you press it | Windows Terminal could not be started. The same log has Windows' error number for why: 2 is "not found", which is Windows Terminal not being installed. |
+| the terminal opens behind the window you are in, its taskbar button flashing | Windows refused every way the key has of bringing it forward. Nothing is logged for this; [development.md](../development.md#the-presses-on-the-live-desktop) has the test that shows which way works on your PC. |
 | both meters grey, `⚠ no token` | Claude Code is not signed in with a Claude account, as with the [status line](install.md#when-something-is-missing). |
 | the figures are old while Claude is working | The key only refreshes while it is visible. Otherwise, look at the log. |
 | a press opens a shell and not Claude Code | The key opens Windows Terminal's default profile. Make the profile that runs `claude` the default one, in Windows Terminal's settings under *Startup*. |

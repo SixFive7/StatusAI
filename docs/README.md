@@ -35,7 +35,7 @@ Why it is the way it is, and what was tried and rejected.
 | [design/rejected-designs.md](design/rejected-designs.md) | the limit-row designs that were rejected, and why |
 | [design/house-style/](design/house-style/) | the house style for visual documentation. **Read its README first: the example's subject matter is wrong on purpose.** |
 | [design/packaging-plan.md](design/packaging-plan.md) | packaging, Velopack auto-update, the install surface, the landmines |
-| [design/stream-deck.md](design/stream-deck.md) | the record of the Stream Deck key's design of 1 October 2026: what the app can and cannot do, the four ways of building it with their measurements, and how it decides when to fetch |
+| [design/stream-deck.md](design/stream-deck.md) | the record of the Stream Deck key's design of 1 and 2 October 2026: what the app can and cannot do, the four ways of building it with their measurements, how it decides when to fetch, how a press gets its terminal to the front, and what the first day on the device showed |
 
 ## Development
 

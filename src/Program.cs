@@ -26,14 +26,16 @@ const string Forest = "\x1b[38;2;40;164;40m";
 // count of failed fetches, the prediction history and the euro rate.
 const string RegKey = @"Software\StatusAI";
 
-// Three ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
+// Four ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
 // with -port, -pluginUUID, -registerEvent and -info: this process is then the plugin, which stays
 // up for as long as the app does and draws the key (Deck.cs). --refresh brings the shared usage
 // up to date the way a render does, when it is 50 seconds old, and draws nothing: it is how the
-// key fetches. --deck-face prints the key as SVG, as it would be drawn now or, with a number
-// after it, that many seconds after the last fetch.
+// key fetches. --deck-press is what a press of the key starts: it opens a tab or a window in
+// Windows Terminal and brings it to the front. --deck-face prints the key as SVG, as it would be
+// drawn now or, with a number after it, that many seconds after the last fetch.
 if (Deck.IsPluginStart(args)) { Environment.ExitCode = Deck.Run(args, DeckHost()); return; }
 if (args.Length == 1 && args[0] == "--refresh") { GetUsage(); return; }
+if (args.Length == 2 && args[0] == "--deck-press" && args[1] is "tab" or "window") { Environment.ExitCode = Deck.Open(args[1] == "window"); return; }
 if (args.Length is 1 or 2 && args[0] == "--deck-face") {
     double age = args.Length == 2 && double.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double a) ? a : -1;
     using var faceOut = Console.OpenStandardOutput();

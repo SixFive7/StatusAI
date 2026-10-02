@@ -103,18 +103,18 @@ process then stays up for as long as the app does.
 Stream Deck  --starts-->  statusai.exe, the plugin's copy  <--websocket-->  Stream Deck
                                 |
                                 |  waits on    the websocket, HKCU\Software\StatusAI, ~/.claude/projects
-                                +--> statusai.exe --refresh     GetUsage(): the 50 s cache, the lock, Fetch()
-                                +--> wt.exe                     a key press
+                                +--> statusai.exe --refresh       GetUsage(): the 50 s cache, the lock, Fetch()
+                                +--> statusai.exe --deck-press    a key press: wt.exe, and its window to the front
 ```
 
 It waits and never polls. Three things wake it, and a timer for what is due:
 
 | it waits on | which is signalled by | and then |
 |---|---|---|
-| the websocket to the app | a message: the key appears or disappears, is pressed or released, the system woke up | draws the key, or acts on the press |
+| the websocket to the app | a message: the key appears or disappears, is pressed or released, a deck came back, the system woke up | draws the key, or acts on the press |
 | a change notification on `HKCU\Software\StatusAI` | a fetch by anyone: a terminal's status line, or `--refresh` | draws the key 100 ms later, once every value of the fetch has landed |
 | a change notification on `~/.claude/projects` and everything under it | a write by any Claude Code session of any kind, which is where they keep their transcripts | notes that Claude is working, and refreshes when a refresh is due |
-| a timer | the next minute, the half second of a held key, the next refresh | redraws the countdowns, makes a press a long one, refreshes |
+| a timer | the next minute, the half second of a held key, the next refresh, a fifth of a second while a press is opening its terminal | redraws the countdowns, makes a press a long one, refreshes, reads how the press ended |
 
 The folder's notification stays signalled until it is armed again, so a burst of writes is one
 wake-up: 65.900 appends in 30 seconds cost the process two wake-ups and no processor time that
@@ -141,6 +141,40 @@ the last write of a burst is followed by one more refresh a minute later, which 
 sees what the last reply cost; after that nothing is fetched until Claude writes again. And
 nothing is refreshed while no key is visible: the write stays noted until one is.
 
+**A key press is a third process, `statusai --deck-press tab` or `window`.** It starts
+`wt.exe -w 0 nt` or `wt.exe -w new` and brings the terminal's window to the front, which Windows
+does not do for a program in the background: it keeps the foreground for the program the user is
+working in, and one that asks for it from behind gets a flashing taskbar button. So the window
+is brought up from that process, in the ways Windows lets through, tried in turn until
+`GetForegroundWindow()` says it is there:
+
+1. as the program that last provided input: an input event that moves nothing and presses
+   nothing is sent first, then `SetForegroundWindow`;
+2. as part of the program in front, with `AttachThreadInput` for the moment;
+3. as after a press of Alt, which lifts the guard for everyone. Twice at most, since that one is
+   seen by the program in front.
+
+For a tab, the window it will go to is brought up before the tab is asked for: the terminal
+window on top of the others on this desktop, a minimised one only when there is no other. The
+window in front is the one Windows Terminal counts as used last, so the tab opens where the user
+is already looking. For a new window, the process waits for one that was not there before, up to
+eight seconds, and brings that up. It ends with 0 when the terminal was in front without being
+asked for, 10 plus the number of times it had to be asked for, 1 when it did not get there, and
+100 plus Windows' error when `wt.exe` could not be started, which the plugin shows as an alert
+on the key and one line in the log.
+
+It is a process of its own for what it would otherwise leave behind. `wt.exe` is a Store app's
+alias, and starting one loads Windows' app model and the shell into the process that does it:
+63 handles, 17 libraries and 3 MB that stay for good, which is what the plugin was found
+holding a day after its first press.
+The plugin looks at the process every fifth of a second until it has ended, a second or so.
+
+**Nothing the app hands down is handed on.** The app starts a plugin with a dozen of its own
+handles open to it, its log files and its crash reporter's lock among them, and a program
+started from the plugin would be given them in turn: a terminal opened by a key press would hold
+the app's log open for as long as it runs. The plugin marks every handle it has as its own
+before it starts anything.
+
 **It draws by the status line's own rules.** `Program.cs` hands `Deck.cs` its functions in a
 `Deck.Host`: `Look`, the rows as they stand without a fetch, which is `Saved()`; `Pace`, the time
 to 100% and its colour, which `RenderRows` uses too; `BarFill`, `ZoneColor`, `PctColor`,
@@ -151,7 +185,7 @@ the [render tests](../development.md#the-render-tests) hold it to its recorded b
 
 **The websocket client is written out** in `Deck.cs`, about a hundred lines of RFC 6455: one
 connection, text messages, no extensions. The framework's own would have cost 282 kB in the exe
-and a thread pool in the process; with this one the whole mode adds 76 kB, and the process runs
+and a thread pool in the process; with this one the whole mode adds 91 kB, and the process runs
 on three threads. [Test-Deck.ps1](../development.md#the-stream-deck-tests) takes it through the
 protocol against a stand-in for the app.
 
@@ -167,17 +201,22 @@ when it starts and one for anything fatal or for a program it could not start.
 
 Two details of running as a plugin. The exe is a console program, so the app gives it a console
 host of its own, `conhost.exe`, 7,5 MB that nothing writes to: the process lets go of it with
-`FreeConsole()` as it starts. And its standard handles are the app's pipes, which a terminal
-started from a key press would inherit and hold for as long as it runs: they are made
-non-inheritable first.
+`FreeConsole()` as it starts. And which keys show is the app's to say, with `willAppear` and
+`willDisappear`: the plugin keeps no list of decks, so the order in which the app reports a
+deck and its keys cannot matter to it. When a deck comes back, after a lock or a sleep or a
+cable, or the system wakes up, it draws the keys that show again whether or not their picture
+changed, since the deck may have lost it.
 
 With `STATUSAI_OFFLINE` set, the mode touches nothing live, like a render: the rows come from the
-fixture, the registry is not watched, a refresh is not started and a key press starts nothing.
-Both are reported to the app's log instead, which is what the tests read.
+fixture, the registry is not watched, the `--refresh` it starts has nothing to fetch, and a key
+press starts nothing. Both are reported to the app's log, which is what the tests read. Two more
+variables are for trying it: `STATUSAI_DECK_TAB`, what the tab or window of a press runs in
+place of the default profile's command, with which a press is carried out even offline; and
+`STATUSAI_DECK_SLOT`, the seconds between refreshes, which only an offline plugin takes.
 
-The mode costs the status line nothing that could be measured. The exe is 75.776 bytes larger,
-5.158.912 against 5.083.136; 60 offline renders of each build, taken in turn, had a median of
-94,8 ms against 95,3 ms, and the same 11,4 MB at their peak.
+The mode costs the status line nothing that could be measured. The exe is 91.136 bytes larger,
+5.174.272 against 5.083.136; 60 offline renders of each build, taken in turn, had a median of
+69,8 ms against 69,3 ms, and the same 11,9 MB at their peak.
 
 ## Portability
 
@@ -188,7 +227,7 @@ The token accounting is fully portable, but the code around it uses a few Window
 | `Registry.CurrentUser` (9 sites) | limit-bar cache, and the FX rate cache |
 | `WindowsIdentity` / `WindowsPrincipal` | mutex naming |
 | `Global\` mutex | single-flight on the usage fetch |
-| `RegNotifyChangeKeyValue`, `FindFirstChangeNotificationW`, `FreeConsole`, `SetHandleInformation` | the Stream Deck key, which is Windows-only as a whole: it opens Windows Terminal |
+| `RegNotifyChangeKeyValue`, `FindFirstChangeNotificationW`, `FreeConsole`, `SetHandleInformation`, `SetForegroundWindow`, `SendInput` and the other window calls | the Stream Deck key, which is Windows-only as a whole: it opens Windows Terminal |
 | `net10.0-windows` TFM | consequence of the above |
 
 Everything in the walker is cross-platform: `Path`, `FileStream`, `BinaryReader`, `JsonDocument`,

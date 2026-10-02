@@ -128,18 +128,21 @@ and plays one case after another.
 ./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe
 ```
 
-12 cases, about half a minute, exit code 0 when every one passes. It needs no Stream Deck and no app,
-and Windows PowerShell 5.1 and PowerShell 7 both run it. The websocket client in `Deck.cs` is
-written by hand, so the cases take it through the protocol a part at a time:
+15 cases, about three quarters of a minute, exit code 0 when every one passes. It needs no Stream
+Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The websocket client in
+`Deck.cs` is written by hand, so the cases take it through the protocol a part at a time:
 
 | case | holds the plugin to |
 |---|---|
 | registers, says so, and draws the key | the headers of its handshake, its registration, the one line it logs as it starts, and a picture that is `tests/expected/key.svg` byte for byte |
+| handles the app hands down are not handed on | started with a file open to it the way the app's log is, not one of its handles is left marked for a program it starts to be given |
 | frames with 16 and 64 bit lengths, in and out | messages of 2.000 and 70.000 bytes received, and of 300 and 70.000 bytes sent, each masked and with the length field its size calls for |
 | a message in fragments, with a ping between them | three fragments put together, and the ping between two of them answered straight away |
 | a ping is answered, a pong is ignored | a pong that carries what the ping did, at 0, 3 and 125 bytes |
 | a short press on release, a long press after 500 ms | nothing while the key is down and the tab when it comes up; the window 500 ms into a hold, and nothing at its release |
 | a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
+| the deck goes and comes back | nothing drawn or fetched for a key that does not show; the key drawn again, and the refresh that was waiting made once, whether the app names the key before the deck or the deck before the key; the picture sent again when a deck or the system comes back with nothing said about the key |
+| a hundred refreshes, and as many handles as before | with a slot of no length, a hundred writes are a hundred `--refresh` processes, and the plugin's handle count after them is what it was before |
 | the app closes | a close in answer, and exit code 0 |
 | a frame the protocol forbids | a masked frame, a reserved bit, a ping in fragments, a continuation of nothing, a message inside another and an opcode that does not exist: each a close with status 1002 and exit code 1; a frame announced at 17 MiB: 1009 |
 | the connection drops | exit code 1 after a reset, and after a connection that ends inside a frame |
@@ -148,15 +151,47 @@ written by hand, so the cases take it through the protocol a part at a time:
 | `--refresh` and `--deck-face` do not wait for stdin | both end by themselves with stdin left open, as it is for a plugin |
 
 Every plugin runs with `STATUSAI_OFFLINE` on a fresh copy of the `shot` home. Offline, the mode
-touches nothing live, and where it would start a program it says so in the app's log instead:
-`offline: would run ...\wt.exe -w 0 nt` for a press, `offline: would run --refresh` for a
-refresh. So **no test opens a terminal or fetches anything**, and the same switch runs the plugin
-by hand without either. One thing more is offline only: a `sendToPlugin` from the app is answered
-with its own payload, which is how a case makes the plugin send a frame of any length.
+touches nothing live, and says in the app's log what it did in place of it:
+`offline: would run ...\wt.exe -w 0 nt` for a press, which starts nothing, and
+`offline: ran --refresh` for a refresh, which starts the same `statusai --refresh` as ever, with
+nothing to fetch. So **no test opens a terminal or fetches anything**, and the same switch runs
+the plugin by hand without either. Two things more are offline only. A `sendToPlugin` from the
+app is answered with its own payload, which is how a case makes the plugin send a frame of any
+length. And `STATUSAI_DECK_SLOT` is taken for the seconds between refreshes, 62 without it,
+which is how a case fits a hundred of them in a few seconds.
 
 What these tests cannot cover is the app: that it starts the exe, shows the picture and sends the
 events the stand-in sends. That takes a Stream Deck; see
 [the key on a live machine](#the-key-on-a-live-machine).
+
+### The presses, on the live desktop
+
+Whether a press ends with the terminal in front is a question about the desktop, and the cases
+above cannot ask it. `-Live` adds three that do:
+
+```powershell
+./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe -Live -Case 'live*'
+```
+
+| case | a press, then a hold |
+|---|---|
+| no terminal open | each opens a window, and it is in front |
+| a terminal open behind another window | the tab goes to that window and brings it up; the hold brings up a new one |
+| the terminal minimised | the window is brought back with its tab; the hold brings up a new one |
+
+They are real presses. The plugin is given `STATUSAI_DECK_TAB`, the command a tab runs in place
+of the default profile's own, and with that set a press is carried out even offline: it starts
+`statusai --deck-press`, which starts Windows Terminal. The tab runs `ping` under the title
+"statusai test" and closes by itself after three seconds, so no Claude Code session comes of
+it, and the window that was in front is put back there. A case reports how the terminal got to
+the front: without being asked for, or after so many times. The plugin under test is started by
+the script, a program in the background with no claim on the foreground, which is the position
+the plugin is in under the app.
+
+The cases move windows about on your desktop, so they are only run on request, and they skip
+themselves where they would be in the way: on a locked session, while a full-screen program, a
+game or a presentation is in front, and while a Windows Terminal window of your own is open,
+since a press would put its tab there. Nothing that was open before is closed, moved or resized.
 
 ## Deploying
 

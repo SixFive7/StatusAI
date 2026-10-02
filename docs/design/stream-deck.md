@@ -4,7 +4,9 @@
 
 The record of the design of 1 October 2026: what was asked for, what the Stream Deck app can and
 cannot do, the four ways of building the key with what each was measured to cost, and how the key
-decides when to fetch. What the key does now is in [stream-deck.md](../guide/stream-deck.md) and
+decides when to fetch. And of the day after, when it had been on the device for a night: how a
+press gets its terminal to the front, what a press left in the plugin, and what a locked session
+did to the key. What the key does now is in [stream-deck.md](../guide/stream-deck.md) and
 [architecture.md](../reference/architecture.md#the-stream-deck-key). Like the other pages in this
 folder it is a record: add to it, and leave what was decided as it stands.
 
@@ -19,6 +21,9 @@ with. Then, in the order they were decided:
 - a short press for a new tab in the Windows Terminal window used last, a long press for a new
   window;
 - no code to bring the terminal to the front: see what Windows does first.
+
+A day later, with the key pressed for the first time: the terminal does have to come to the
+front. That part is [further down](#the-terminal-in-front).
 
 ## What the app can do
 
@@ -167,3 +172,92 @@ terminal was open.
 
 What the key looks like on the device itself, what a press does there, and whether it brings
 Windows Terminal to the front, had not been looked at when this was written.
+
+## The terminal, in front
+
+2 October 2026. The key was pressed on the device for the first time, and the terminal it opened
+stayed behind the window in front. That was Windows' answer to "see what Windows does first", and
+what was asked for next was plain: both presses have to end with the terminal in front.
+
+**Why it stayed behind.** Windows keeps the foreground for the program the user is working in.
+A program may put a window in front if it is the one in front itself, was started by it, or was
+the last to be given input; any other gets a flashing taskbar button in place of it. The plugin
+is none of those: the app started it, in the background, hours earlier, and the deck's keys are
+not input as Windows counts it. The terminal a press starts inherits that standing.
+
+**What gets past it**, and what was looked at:
+
+| way | what it does | |
+|---|---|---|
+| provide input, then ask | Windows lets through the program that provided the last input. An input event that moves nothing and presses nothing counts, and is seen by no program | **used**, first |
+| attach to the thread in front | sharing its input queue makes the caller part of the program in front for the moment | **used**, second |
+| a press of Alt, then ask | Windows lifts the guard for everyone when Alt goes down. The program in front sees the key, and a lone Alt opens its menu, so it is sent twice, the second to close what the first opened | **used**, last and twice at most |
+| allow it beforehand | `AllowSetForegroundWindow` for everyone, before the terminal is started, so that it can come up by itself. It lasts until the next input from the user, which may come first | used for a new window, and not relied on |
+| minimise and restore | restoring a window activates it, at the price of a window that visibly drops and comes back | rejected |
+
+**Which window.** For a new window there is no question: the one that was not there before the
+press. For a tab there is, when more than one terminal window is open, because `wt.exe -w 0`
+leaves the choice to Windows Terminal, which takes the one used last, and nothing outside it
+can ask which that will be. So the choice is made before the tab is asked for: the terminal
+window on top of the others on this desktop, a minimised one only when there is no other, is
+brought to the front first, which makes it the one used last. The tab then opens in the window
+that is already in front, and nothing has to be found afterwards.
+
+**Where it runs.** In the process the press is given anyway (see below). It can take up to eight
+seconds, when Windows Terminal has to start first, and the plugin's loop does not wait for it.
+
+## What a press left in the plugin
+
+A day after its first press the plugin's process held 266 handles where it had held 203, and
+16,6 MB of memory in use where it had held 13,3. It was not a leak. The count stood at 266
+through 70 refreshes, as it had stood at 203 through the first 50, and a list of the 266 by kind
+had no handle to a process in it. It had registry keys under `AppModel\StateRepository`, COM's
+catalogue and its port, the shell's caches, a window station and a desktop, and 44 libraries
+where a plugin that has just started has 27, `apisethost.appexecutionalias.dll` and
+`daxexec.dll` among the 17: what Windows loads into a process that starts a Store app by its
+alias, which is what `wt.exe` is.
+
+A program that does nothing else showed the same. Before its first start of an alias
+(`winget.exe --version`, which opens no window) it held 195 handles and 13,3 MB; after it 258
+and 17,7 MB, with 15 libraries more; after the second and the third start, 258 still. An
+ordinary program started the same way (`cmd.exe /c exit`) cost it 2 handles. Its 63 handles are
+the plugin's 63.
+
+**Decided:** a press runs in a process of its own, `statusai --deck-press`, for the reason the
+fetch runs in `--refresh`: what it loads goes when it does, and the process that stays up
+stays as small as it was.
+
+The same list showed twelve handles the plugin had not opened but been given. The app starts
+its plugins with its own inheritable handles open to them, and its two log files and its crash
+reporter's lock were among those. .NET starts a program with such handles handed on, so each
+`--refresh` held them for its third of a second, and Windows Terminal, when a press was what
+started it, for as long as it stayed open. **Decided:** the plugin marks every handle it has as
+its own before it starts anything. In the test for it, a plugin started with a file open to it
+the way the app's log is held 22 inheritable handles before the change and none after.
+
+## A night with the session locked
+
+The session was locked from 01:03 to 21:00 on 2 October. The app lets go of the deck for as long
+as that lasts (`Session -> suspend` in its log, and the device `disconnected`) and takes it up
+again afterwards. Another plugin on the same deck had lost its keys by then: it went on being
+sent its data and drew nothing. So the question was whether this one had.
+
+It had not. What can be said from what was left behind:
+
+- The key did not show while the deck was away. The plugin's count of I/O operations over its 27
+  hours, 4.818, is what its refreshes alone come to at the 35 a refresh that were measured; a
+  redraw a minute through those twenty hours would have added 1.200. So the app sent
+  `willDisappear` for the key when it let go of the deck.
+- It showed again afterwards. The first fetch after the lock came at 21:15:04, when Claude was
+  next put to work, and one every 62 seconds from then on, which only happens while a key shows.
+  The key was pressed that evening and opened its terminal.
+- The refresh rule itself was not put to the test: no session wrote a transcript while the
+  session was locked.
+
+The plugin cannot lose its keys the way the other one did. It keeps no list of decks: a key
+shows from its `willAppear` to its `willDisappear`, whatever the app says about decks before,
+between or after. What was added is the other half. When the app reports a deck as connected, or
+the system as awake, the keys that show are drawn again whether or not their picture changed, in
+case the deck came back without it.
+[Test-Deck.ps1](../development.md#the-stream-deck-tests) plays a deck going and coming back in
+both orders.
