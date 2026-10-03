@@ -190,16 +190,22 @@ it, and the window that was in front is put back there. A case reports how the t
 the front, without being asked for or after so many times, and how many handles the plugin
 held before and after its two presses.
 
-Where the plugin under test stands matters as much as what it does. Windows lets a program put
-a window in front when it was started by the program in front, and so on down a line of
-programs each started by the one before; a plugin started by the script is on such a line
-whenever the script was started from the window in front, from a terminal or an editor. Its
-terminal then comes to the front with nothing done for it, and a case would prove nothing. So
-the plugin is started through WMI, by the service Windows has for that, with the script's
-environment handed over, which is where the app's plugin stands. And the first of the four
-cases is the control: a terminal started the same way, with nothing done for it, has to stay
-behind the window in front. Where it comes to the front by itself, the control is skipped and
-says so, and the three cases after it say that their presses prove nothing about a plugin.
+Where the plugin under test stands matters as much as what it does. Windows lets a program started
+by the program in front put a window in front, and a plugin started by the script descends from the
+window in front whenever the script was started from it, from a terminal or an editor: its terminal
+could then come to the front with nothing done for it, and a case would prove nothing. So the
+plugin is started through WMI, by the service Windows has for that, with the script's environment
+handed over, which is where the app's plugin stands, and the terminal windows the cases open for
+themselves are started the same way. The first of the four cases is the control: with Windows
+Terminal running and a window of it behind the one in front, a new window is asked of it with
+nothing done for it, and has to stay behind. A Windows Terminal that is not running yet is no
+control, since its first window came to the front whoever started it. Where the control comes to
+the front by itself, it is skipped and says so, and the three cases after it say that their presses
+prove nothing about a plugin.
+
+The cases were last run on 3 October 2026, and the control as it now stands has not been run;
+[the design record](design/stream-deck.md#the-deploy-and-the-live-cases) has what those runs
+showed.
 
 The cases move windows about on your desktop, so they are only run on request, and they skip
 themselves where they would be in the way: on a locked session, while a full-screen program, a
@@ -276,8 +282,10 @@ means the status line's binary is in place and the plugin's copy is not in step 
 It was tried that way on 2026-10-01, under both PowerShells: no plugin folder and no `-Deck`,
 `-WhatIf`, a first install, a rerun that finds everything in step, a copy held by a running
 process, which is moved aside and replaced and whose old file the next run removes, and a plugins
-folder that does not exist, which ends with exit 4. Step 3 has not been tried yet: nothing has
-been deployed over a plugin the app was running.
+folder that does not exist, which ends with exit 4. Step 3 was tried on the app itself on
+2026-10-03, with the plugin's running copy moved aside and the build put in its place: the
+script ended the plugin's process, the app started the new copy 2,5 seconds later, and no
+window of the app showed.
 
 ## Releasing
 

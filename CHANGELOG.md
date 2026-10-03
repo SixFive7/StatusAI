@@ -24,8 +24,8 @@ under *Unreleased*, and the entries before the first release are by date.
 - When fetching fails twice in a row the key greys its meters and says why and how old they are,
   as the status line's `⚠` row does; once a limit's window has ended it reads 0% until the next
   fetch; and after five minutes without a fetch its times to 100% read `idle`.
-- It costs the status line nothing that could be measured. The exe is 91.136 bytes larger and a
-  render takes as long as it did. The process that stays up for the key holds 13,3 MB, 3,9 MB of
+- It costs the status line nothing that could be measured. The exe is 91.648 bytes larger and a
+  render takes as long as it did. The process that stays up for the key holds 12,9 MB, 3,8 MB of
   it private, and used 0,22 s of processor time in half an hour of Claude working; a refresh is a
   second process for half a second.
 - `statusai --deck-face` prints the key as SVG.
@@ -55,6 +55,8 @@ under *Unreleased*, and the entries before the first release are by date.
   time. Their plugin is started through WMI, where it stands as the app's plugin does.
 - [Deploy.ps1](scripts/Deploy.ps1) keeps an installed plugin's copy of `statusai.exe` in step with
   the status line's, moving the running copy aside to replace it, and `-Deck` installs the plugin.
+  It ends the plugin's process for the app to start the new copy: the app's own ways of
+  restarting a plugin are turned away outside its developer mode.
 - The figure generator draws the key's two figures from the recorded faces, and the plugin's own
   pictures with them.
 - [The design record](docs/design/stream-deck.md) has what the Stream Deck app can and cannot do,

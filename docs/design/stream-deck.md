@@ -6,9 +6,9 @@ The record of the design of 1 October 2026: what was asked for, what the Stream 
 cannot do, the four ways of building the key with what each was measured to cost, and how the key
 decides when to fetch. And of the day after, when it had been on the device for a night: how a
 press gets its terminal to the front, what a press left in the plugin, and what a locked session
-did to the key. And of the night after that: what a press still left in the plugin, and where the
-tests of the foreground had stood. What the key does now is in
-[stream-deck.md](../guide/stream-deck.md) and
+did to the key. And of the night after that: what a press still left in the plugin, where the tests
+of the foreground had stood, and the first deploy over a running plugin. What the key does now is
+in [stream-deck.md](../guide/stream-deck.md) and
 [architecture.md](../reference/architecture.md#the-stream-deck-key). Like the other pages in this
 folder it is a record: add to it, and leave what was decided as it stands.
 
@@ -314,10 +314,64 @@ above are given against 32 now. Whether to find the folder another way is open.
 place the test runs from, the way the first plugin started it, with nothing done for it. It came to
 the front by itself, with VS Code in front. Windows had not let the foreground go because the user
 had been away: on this PC `SPI_GETFOREGROUNDLOCKTIMEOUT` reads 2.147.483.647 ms, so the guard does
-not run out. That leaves the other way through: a program started by the program in front may take
-the foreground as that program may, and so, it turned out, may the programs it starts in turn, and
-the test had been started from VS Code by a line of such programs. So the two presses had come to
+not run out. Two things could have let it through. The test had been started from VS Code, by a
+line of programs each started by the one before, and Windows lets a program started by the program
+in front take the foreground. And no Windows Terminal was running, so the terminal was a program
+that had just been started, bringing up its first window. Either way the two presses had come to
 the front without being asked for, and proved nothing about a plugin, which the app started hours
-before and in the background. The live cases now start their plugin through WMI, whose service
-starts it in the session with nothing of the test's standing, and the first case is that control: a
-terminal started the same way, with nothing done for it, which has to stay behind.
+before and in the background. The live cases were made to start their plugin through WMI, with
+nothing of the test's standing, behind a control: a terminal started the same way, with nothing
+done for it, which has to stay behind. What came of that is in the next section.
+
+## The deploy, and the live cases
+
+3 October 2026, the build of `3e3e6ab`, `6604056b...` by its SHA-256.
+
+**The deploy.** `Deploy.ps1` ran at 02:24, with nothing full-screen in front, no game running, and
+the lock on the Stream Deck app that another session restarting the app kept to as well. The
+render tests passed on the build, 180 of 180; the status line's binary was backed up and
+replaced at the first attempt; the plugin's copy was moved aside and the build put in its place.
+Both had the build's hash. The plugin was not started again: the script asked the app with
+`StreamDeck.exe --restart com.sixfive7.statusai`, which hands the app the link
+`streamdeck://plugins/restart/com.sixfive7.statusai`, and the app logged `Feature only enabled
+in developer mode`. So the script ended with exit 4, with both files new and the plugin still
+running the previous build from the file moved aside, which works as it did. Three minutes
+later the session that was restarting the app restarted it for its own work, and the app
+started the plugin from the new copy: `Plugin connected` at 02:27:52, and the plugin's line
+`statusai 1.0.0 of 2026-10-03 00:56 started as the Stream Deck plugin`. None of its handles was
+marked for a program it starts, where the build before kept those the app hands down: the
+running code was the new build's.
+
+**Decided:** the app starts a plugin again by itself when its process ends, which needs no
+developer mode; the Discord mixer's had been ended at 00:07:03 and was connected again at 00:07:07.
+So `Deploy.ps1` ends the plugin's process and waits for the app to start the new copy, and takes a
+copy moved aside by an earlier run that still runs as a plugin that was not started again. That was
+tried on the app at 02:32, with the running copy moved aside and the same build put in its place:
+the script ended the process, the app had the plugin connected again 2,5 seconds later, no window
+of the app showed, the window in front stayed where it was, and the key was still at 7,2 on its
+page of 32 actions. After each of these runs the status line rendered all 180 renders of the render
+tests from the deployed binary.
+
+The plugin then held 206 handles, and 208 from its first refresh on, which is the 2 that the
+first program a process starts costs it; 12,7 to 12,9 MB of memory in use, 3,8 to 3,9 MB of it
+private; three threads and 31 libraries. It refreshed every 62 seconds while Claude worked in
+VS Code with no terminal open.
+
+**The live cases.** They were run three times on 3 October, while the user was at the PC and had
+not touched it for a minute. At 00:14 the plugin was started by the test; at 01:59 and 02:15, with
+this build, through WMI. Each time the press and the hold of the case with no terminal open came to
+the front without being asked for. At 00:14 the case failed on the plugin's handles, as above; at
+01:59 and 02:15 the plugin held 2 handles more after the two presses, the 2 of the first program it
+started. The control did not hold up. At 01:59 WMI would not start the terminal's alias
+(`Win32_Process.Create` returned 8). At 02:15, started through a hidden `cmd`, its terminal came to
+the front by itself, as the one started from the test had at 00:14, though nothing of the test's
+standing was in its line: with no Windows Terminal running, its first window came to the front
+whoever started it. Whether the user had a terminal open when the key was found wanting is not
+known. With one open, a new tab or window is made by a Windows Terminal that is running already,
+and that is what the control has to stand for: it now asks a running Windows Terminal for a new
+window, and the terminal windows the cases open for themselves are started through WMI as well.
+Neither that control nor the two cases with a terminal open has been run: each run put test windows
+in front of the user's work, ten of them in all with the run by hand on 2 October, and the runs
+were stopped when the user asked what they were. Whether a press gets the terminal to the front
+from where the plugin stands, with Windows Terminal running, has not been seen in a test. The
+user's own press is that test.

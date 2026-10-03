@@ -191,7 +191,7 @@ the [render tests](../development.md#the-render-tests) hold it to its recorded b
 
 **The websocket client is written out** in `Deck.cs`, about a hundred lines of RFC 6455: one
 connection, text messages, no extensions. The framework's own would have cost 282 kB in the exe
-and a thread pool in the process; with this one the whole mode adds 91 kB, and the process runs
+and a thread pool in the process; with this one the whole mode adds 92 kB, and the process runs
 on three threads. [Test-Deck.ps1](../development.md#the-stream-deck-tests) takes it through the
 protocol against a stand-in for the app.
 
@@ -221,9 +221,9 @@ variables are for trying it: `STATUSAI_DECK_TAB`, what the tab or window of a pr
 place of the default profile's command, with which a press is carried out even offline; and
 `STATUSAI_DECK_SLOT`, the seconds between refreshes, which only an offline plugin takes.
 
-The mode costs the status line nothing that could be measured. The exe is 91.136 bytes larger,
-5.174.272 against 5.083.136; 60 offline renders of each build, taken in turn, had a median of
-69,8 ms against 69,3 ms, and the same 11,9 MB at their peak.
+The mode costs the status line nothing that could be measured. The exe is 91.648 bytes larger,
+5.174.784 against 5.083.136; 60 offline renders of each build, taken in turn, had a median of
+66,8 ms against 68,0 ms, and the same 11,9 MB at their peak.
 
 ## Portability
 

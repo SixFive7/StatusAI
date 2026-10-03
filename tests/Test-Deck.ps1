@@ -20,20 +20,21 @@
     nothing on the desktop is touched.
 
     -Live adds the four cases that cannot be had that way, because they are about the desktop.
-    The first is the control: a terminal started with nothing done for it, which has to stay
-    behind the window in front, as it did for the plugin before it was taught otherwise. Then a
-    press with no terminal open, with one open behind another window, and with one minimised,
-    each once as a short press and once as a hold, and every time the terminal has to end up in
-    front. For these the plugin is started through WMI, by a Windows service, so that it stands
-    where the real one does: a program that this script starts itself is let through to the
-    foreground whenever the script is, and the script is whenever it was started from the window
-    in front. The cases open real Windows Terminal windows and take the foreground for a few
-    seconds at a time. The tabs they open run `cmd /c ping` in place of the default profile's
-    command, carry a title that starts with "statusai test", and close by themselves; the
-    foreground goes back to the window that had it. Nothing that was open before is closed,
-    moved or resized, and the cases are skipped where they would be in the way: on a locked
-    session, while a full-screen program or a presentation is in front, and while a Windows
-    Terminal window of your own is open, since a press would put its tab there.
+    The first is the control: with Windows Terminal running, a new window asked of it with
+    nothing done for it has to stay behind the window in front, as the plugin's did before it
+    was taught otherwise. Then a press with no terminal open, with one open behind another
+    window, and with one minimised, each once as a short press and once as a hold, and every
+    time the terminal has to end up in front. For these the plugin, and the terminal windows the
+    cases open for themselves, are started through WMI, by a Windows service, so that they stand
+    where the real ones do: a program that this script starts itself descends from the window in
+    front whenever the script was started from it, and Windows lets a program started by the
+    program in front take the foreground. The cases open real Windows Terminal windows and take
+    the foreground for a few seconds at a time. The tabs they open run `cmd /c ping` in place of
+    the default profile's command, carry a title that starts with "statusai test", and close by
+    themselves; the foreground goes back to the window that had it. Nothing that was open before
+    is closed, moved or resized, and the cases are skipped where they would be in the way: on a
+    locked session, while a full-screen program or a presentation is in front, and while a
+    Windows Terminal window of your own is open, since a press would put its tab there.
 
     Runs under Windows PowerShell 5.1 and PowerShell 7. Exit code 0 when every case passes, 1
     when any fails, 2 when the run could not start.
@@ -699,11 +700,11 @@ $Cases['--refresh and --deck-face do not wait for stdin'] = {
 # itself.
 #
 # What these cases are about is the foreground, which Windows keeps for the program the user is
-# working in and for whatever that program starts, down the line. A plugin started by this
-# script would be on such a line whenever the script was started from the window in front, and
-# its terminal would come to the front with nothing done for it. The app's plugin is on no such
-# line. So the plugin is started through WMI here, by the service Windows has for that, and the
-# first case is the control that says whether that is where the real plugin stands.
+# working in and for what that program starts. A plugin started by this script descends from the
+# window in front whenever the script was started from it, and its terminal could come to the
+# front with nothing done for it. The app's plugin does not. So the plugin is started through WMI
+# here, by the service Windows has for that, and the first case is the control that says whether
+# a terminal asked for from there is kept behind.
 if ($Live) {
     Add-Type -TypeDefinition @'
 using System;
@@ -816,6 +817,14 @@ public static class Desk {
         '--title "{0}" --suppressApplicationTitle cmd /c "ping -n {1} 127.0.0.1 >nul"' -f $title, ($seconds + 1)
     }
 
+    # Windows Terminal, started apart with nothing done for it, as the plugin's first version
+    # started it. WMI cannot start an app execution alias itself (Win32_Process.Create returns
+    # 8), so it starts a hidden cmd, which starts the terminal.
+    function Start-TerminalApart([string] $arguments) {
+        $line = '"{0}" {1}' -f $WtExe, $arguments
+        [void] (Start-Apart ('"{0}" /d /c "{1}"' -f (Join-Path $env:SystemRoot 'System32\cmd.exe'), $line) $script:RunRoot @{} $true)
+    }
+
     # the moments at which a terminal that jumps to the front would be in the way
     function Assert-Free {
         $desk = [Desk]::InputDesktop()
@@ -834,13 +843,12 @@ public static class Desk {
     }
 
     # A terminal window of the test's own, which closes by itself, and behind the window that was
-    # in front before it. Skipped when no other window can be put in front of it.
+    # in front before it. Skipped when no other window can be put in front of it. It is started
+    # apart, so that the Windows Terminal it starts owes nothing to this script's standing, as the
+    # one a user opened long before a press owes nothing to the plugin's.
     function Open-Base([int] $seconds, [IntPtr] $was) {
         $before = @([Desk]::Terminals())
-        $psi = New-Object System.Diagnostics.ProcessStartInfo $WtExe
-        $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-        $psi.Arguments = '-w new ' + (Get-TabCommand $BaseTitle $seconds)
-        [System.Diagnostics.Process]::Start($psi).Dispose()
+        Start-TerminalApart ('-w new ' + (Get-TabCommand $BaseTitle $seconds))
         $script:Base = [IntPtr]::Zero
         $ok = Wait-Until { foreach ($w in [Desk]::Terminals()) { if ($before -notcontains $w -and [Desk]::Title($w) -eq $BaseTitle) { $script:Base = $w; return $true } }; $false } 10000
         if (-not $ok) { Fail 'the test could not open a terminal window of its own' }
@@ -918,24 +926,33 @@ public static class Desk {
     }
 
     # Whether Windows keeps a program that stands where the plugin does from the foreground, on
-    # this desktop, now: the three cases after it rest on that. A terminal is started as the
-    # plugin first started one, with nothing done for it, and has to stay behind the window in
-    # front. Where it comes to the front by itself, the case is skipped and says why.
+    # this desktop, now: the cases after it rest on that. Windows Terminal is running, with a
+    # window behind the one in front, as it is for a user who has a terminal open; a new window
+    # is asked of it as the plugin first asked, with nothing done for it, and has to stay behind
+    # the window in front. A Windows Terminal that is not running yet is no control: a program
+    # that has just been started may bring up its first window, and the terminal's first window
+    # comes to the front whoever starts it. Where the control comes to the front, the case is
+    # skipped and says why.
     $Cases['live: the control: a terminal started with nothing done for it stays behind'] = {
         Assert-Free
         $was = [Desk]::GetForegroundWindow()
         if ($was -eq [IntPtr]::Zero) { throw [Skip]::new('no window is in front for a terminal to stay behind') }
-        $before = @([Desk]::Terminals())
-        [void] (Start-Apart ('"{0}" -w new {1}' -f $WtExe, (Get-TabCommand $ControlTitle 3)) $script:RunRoot @{} $false)
-        $script:Control = [IntPtr]::Zero
-        $ok = Wait-Until { foreach ($w in [Desk]::Terminals()) { if ($before -notcontains $w -and [Desk]::Title($w) -eq $ControlTitle) { $script:Control = $w; return $true } }; $false } 10000
-        if (-not $ok) { Fail 'the control terminal did not open' }
-        Start-Sleep -Milliseconds 1200            # as long as a press gives a terminal to get to the front
-        $front = [Desk]::GetForegroundWindow()
-        $script:Guarded = $front -ne $script:Control
-        Write-Host "      in front a second after the control terminal opened: $([Desk]::Describe($front))"
-        [void] (Wait-Until { -not [Desk]::IsWindow($script:Control) } 12000)
-        if ([Desk]::IsWindow($was) -and [Desk]::GetForegroundWindow() -ne $was) { [void] [Desk]::Front($was) }
+        $base = Open-Base 12 $was
+        try {
+            $before = @([Desk]::Terminals())
+            Start-TerminalApart ('-w new ' + (Get-TabCommand $ControlTitle 3))
+            $script:Control = [IntPtr]::Zero
+            $ok = Wait-Until { foreach ($w in [Desk]::Terminals()) { if ($before -notcontains $w -and [Desk]::Title($w) -eq $ControlTitle) { $script:Control = $w; return $true } }; $false } 10000
+            if (-not $ok) { Fail 'the control terminal did not open' }
+            Start-Sleep -Milliseconds 1200            # as long as a press gives a terminal to get to the front
+            $front = [Desk]::GetForegroundWindow()
+            $script:Guarded = $front -ne $script:Control -and $front -ne $base
+            Write-Host "      in front a second after the control terminal opened: $([Desk]::Describe($front))"
+            [void] (Wait-Until { -not [Desk]::IsWindow($script:Control) } 12000)
+        } finally {
+            [void] (Wait-Until { -not [Desk]::IsWindow($base) } 20000)
+            if ([Desk]::IsWindow($was) -and [Desk]::GetForegroundWindow() -ne $was) { [void] [Desk]::Front($was) }
+        }
         if (-not $script:Guarded) { throw [Skip]::new('Windows let the control terminal come to the front by itself: on this desktop, now, the cases after it say nothing about a plugin') }
     }
 
