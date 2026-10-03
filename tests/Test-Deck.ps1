@@ -825,14 +825,20 @@ public static class Desk {
         [void] (Start-Apart ('"{0}" /d /c "{1}"' -f (Join-Path $env:SystemRoot 'System32\cmd.exe'), $line) $script:RunRoot @{} $true)
     }
 
-    # the moments at which a terminal that jumps to the front would be in the way
-    function Assert-Free {
+    # The moments at which a terminal that jumps to the front would be in the way. A Windows
+    # Terminal window of your own skips the case, unless $others is 'allow': a case that makes its
+    # own terminal window and presses for that one, which is then on top of yours, and only needs
+    # the window in front not to be a terminal. A tab of a press that went to your window all the
+    # same would close by itself, as every test tab does.
+    function Assert-Free([string] $others = 'skip') {
         $desk = [Desk]::InputDesktop()
         if ($desk -ne 'Default') { throw [Skip]::new("the session is locked, or its input goes to another desktop ($desk)") }
         $busy = [Desk]::Busy()
         if ($busy) { throw [Skip]::new($busy) }
         foreach ($w in [Desk]::Terminals()) {
-            if (-not [Desk]::Title($w).StartsWith($TestTitle)) { throw [Skip]::new("a Windows Terminal window of your own is open ($([Desk]::Describe($w))), and a press would put its tab there") }
+            if ([Desk]::Title($w).StartsWith($TestTitle)) { continue }
+            if ($others -ne 'allow') { throw [Skip]::new("a Windows Terminal window of your own is open ($([Desk]::Describe($w))), and a press would put its tab there") }
+            if ([Desk]::Class([Desk]::GetForegroundWindow()) -eq [Desk]::TerminalClass) { throw [Skip]::new("a Windows Terminal window is in front ($([Desk]::Describe([Desk]::GetForegroundWindow()))), so there is no terminal behind for a press to bring up") }
         }
     }
 
@@ -865,7 +871,7 @@ public static class Desk {
     # press was carried out, and the window in front is the terminal with the test tab. $base is
     # the test's own terminal window when there is one. Returns the window in front.
     function Invoke-Press($s, [string] $context, [bool] $hold, [IntPtr] $base) {
-        Assert-Free
+        Assert-Free $script:Others
         $before = @([Desk]::Terminals())
         $what = 'tab'; if ($hold) { $what = 'window' }
         Send-Event $s 'keyDown' $context
@@ -894,8 +900,9 @@ public static class Desk {
         Need $ok 'the tab the test opened did not close by itself'
     }
 
-    function Invoke-BothPresses([string] $context, [bool] $withBase, [bool] $minimised) {
-        Assert-Free
+    function Invoke-BothPresses([string] $context, [bool] $withBase, [bool] $minimised, [string] $others = 'skip') {
+        $script:Others = $others
+        Assert-Free $others
         $was = [Desk]::GetForegroundWindow()
         $base = [IntPtr]::Zero
         if ($withBase) { $base = Open-Base 22 $was }
@@ -934,7 +941,7 @@ public static class Desk {
     # comes to the front whoever starts it. Where the control comes to the front, the case is
     # skipped and says why.
     $Cases['live: the control: a terminal started with nothing done for it stays behind'] = {
-        Assert-Free
+        Assert-Free 'allow'
         $was = [Desk]::GetForegroundWindow()
         if ($was -eq [IntPtr]::Zero) { throw [Skip]::new('no window is in front for a terminal to stay behind') }
         $base = Open-Base 12 $was
@@ -957,7 +964,7 @@ public static class Desk {
     }
 
     $Cases['live: no terminal open: a press opens one in front, and so does a hold'] = { Invoke-BothPresses 'F1' $false $false }
-    $Cases['live: a terminal open behind another window: a press puts its tab there and brings it up, a hold brings up a new one'] = { Invoke-BothPresses 'F2' $true $false }
+    $Cases['live: a terminal open behind another window: a press puts its tab there and brings it up, a hold brings up a new one'] = { Invoke-BothPresses 'F2' $true $false 'allow' }
     $Cases['live: the terminal minimised: a press brings it back with its tab, a hold brings up a new one'] = { Invoke-BothPresses 'F3' $true $true }
 }
 
