@@ -404,3 +404,10 @@ quarter of a megabyte of private memory, 3,83 MB against 3,58. In the test for i
 not offline, with a copy of the test home as its `USERPROFILE`, may not have `shell32.dll` or
 `windows.storage.dll` loaded and may hold no more than 10 handles over one that is offline; the
 build before fails it on both libraries.
+
+Deployed at 03:17 the same night, with the same checks as before: both copies had the build's hash,
+the script ended the plugin's process and the app had the new copy connected 2,5 seconds later, no
+window showed, the key was at 7,2, and the status line rendered all 180 renders from the deployed
+binary. The plugin then held 171 handles and 26 libraries, 173 from its first refresh on, with
+11,0 MB of memory in use and 3,6 MB of it private and none of the shell's libraries loaded, where
+the build before had held 206 and 208, 31 libraries, 12,7 to 13,1 MB and 3,8 to 3,9 MB.

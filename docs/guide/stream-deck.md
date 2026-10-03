@@ -87,7 +87,7 @@ hour of Claude working in the VS Code extension with no terminal open:
 
 | | |
 |---|---|
-| the process that stays up | 12,7 to 13,5 MB of memory in use, 3,8 to 4,0 MB of it private; 3 threads |
+| the process that stays up | 11,0 MB of memory in use, 3,6 MB of it private; 3 threads |
 | its processor time | 0,22 s in 33 minutes, a hundredth of a percent of one core |
 | one refresh, every 62 seconds | a second `statusai.exe` that lives for as long as the fetch takes, 0,3 to 0,6 s: 0,05 s of processor time, and 19 MB of memory for that long |
 | one redraw | well under a millisecond, and one message of about 4 kB to the app |

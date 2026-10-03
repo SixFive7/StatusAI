@@ -25,7 +25,7 @@ under *Unreleased*, and the entries before the first release are by date.
   as the status line's `⚠` row does; once a limit's window has ended it reads 0% until the next
   fetch; and after five minutes without a fetch its times to 100% read `idle`.
 - It costs the status line nothing that could be measured. The exe is 91.648 bytes larger and a
-  render takes as long as it did. The process that stays up for the key holds 12,9 MB, 3,8 MB of
+  render takes as long as it did. The process that stays up for the key holds 11,0 MB, 3,6 MB of
   it private, and used 0,22 s of processor time in half an hour of Claude working; a refresh is a
   second process for half a second.
 - `statusai --deck-face` prints the key as SVG.
