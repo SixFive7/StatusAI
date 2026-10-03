@@ -259,9 +259,10 @@ binary is in place, or was in place already, so the key and the status line are 
 2. It copies the manifest and the pictures, moves the plugin's `statusai.exe` aside as
    `statusai.exe.old.<unix-seconds>`, copies the build in under its name and verifies its SHA-256.
    A copy that lands wrong is removed and the previous one moved back.
-3. It asks the app to restart the plugin, with `streamdeck://plugins/restart/com.sixfive7.statusai`,
-   waits up to 20 seconds for a process running the new copy, and removes the old file once
-   nothing runs it; a file that is still running is left for the next deploy.
+3. It asks the app to restart the plugin, by starting `StreamDeck.exe --restart com.sixfive7.statusai`
+   with its window hidden, which hands the restart to the app that runs and ends; waits up to 20
+   seconds for a process running the new copy; and removes the old file once nothing runs it. A
+   file that is still running is left for the next deploy.
 
 `./scripts/Deploy.ps1 -Deck` installs the plugin where it is not installed yet: the folder is
 created and filled, and Stream Deck has to be quit and started again to find it. Without `-Deck`

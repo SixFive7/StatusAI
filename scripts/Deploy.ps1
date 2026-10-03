@@ -38,7 +38,7 @@
          statusai.exe.old.<unix-seconds>, which Windows allows while it runs, copy the build in
          under its name, and verify its SHA-256. A copy that lands wrong is removed and the old
          one moved back.
-      9. Ask the app to restart the plugin (streamdeck://plugins/restart/<uuid>), wait for a
+      9. Ask the app to restart the plugin (StreamDeck.exe --restart <uuid>, hidden), wait for a
          process running the new copy, and remove the old file once nothing runs it.
 
     Without a plugin folder nothing of this happens, unless -Deck asks for a first install: the
@@ -195,7 +195,13 @@ function Sync-Deck {
         Write-Host '  Stream Deck is not running; it starts the new copy when it does'
     } elseif ($exeStale) {
         $since = Get-Date
-        try { Start-Process "streamdeck://plugins/restart/$uuid" } catch { Write-Host "  could not ask the app to restart the plugin: $($_.Exception.Message)" -ForegroundColor Yellow }
+        # The app restarts one plugin when it is started a second time with --restart and the
+        # plugin's uuid: that second StreamDeck.exe hands the restart to the one that runs, and
+        # ends. Its window is hidden, and nothing of the app shows.
+        $app = @(Get-Process -Name StreamDeck -ErrorAction SilentlyContinue | Where-Object { $_.Path } | ForEach-Object { $_.Path } | Select-Object -First 1)
+        if ($app.Count -eq 0) { $app = @(Join-Path $env:ProgramFiles 'Elgato\StreamDeck\StreamDeck.exe') }
+        try { Start-Process -FilePath $app[0] -ArgumentList '--restart', $uuid -WindowStyle Hidden }
+        catch { Write-Host "  could not ask the app to restart the plugin: $($_.Exception.Message)" -ForegroundColor Yellow }
         $seen = $false
         foreach ($i in 1..40) {
             Start-Sleep -Milliseconds 500
