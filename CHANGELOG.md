@@ -40,16 +40,19 @@ under *Unreleased*, and the entries before the first release are by date.
   63 handles and 12 libraries that never go, which is what the plugin was found holding a day
   after its first press. The plugin waits on that process with its other waits and asks Windows
   how it ended, since .NET's own way of asking costs the process that asks 13 handles for good. A
-  press leaves the plugin with the handles it had.
+  press leaves the plugin with the handles it had. And the plugin finds the home folder in
+  `%USERPROFILE%`, where a render asks the shell, which would load five of the shell's libraries
+  and 35 handles into the process that stays up.
 - The plugin hands on none of the handles the Stream Deck app starts it with, so a terminal
   opened by a press does not hold the app's log files open; and it draws its key again when the
   deck comes back after a lock or a sleep.
 - Thirteen render cases for the key's face: 180 renders of 74 cases.
   [Test-Deck.ps1](tests/Test-Deck.ps1) runs the exe as a plugin against a stand-in for the Stream
-  Deck app, offline, in 17 cases: its websocket client through the protocol (long frames,
-  fragments, ping and pong, a close from either side, a dropped connection), a deck that goes and
-  comes back, a hundred refreshes and forty presses that leave the handle count where it was, and
-  a press with no Windows Terminal to start. `-Live` adds four: a control, a terminal started
+  Deck app, offline but for one, in 18 cases: its websocket client through the protocol (long
+  frames, fragments, ping and pong, a close from either side, a dropped connection), a deck that
+  goes and comes back, a hundred refreshes and forty presses that leave the handle count where it
+  was, a press with no Windows Terminal to start, and a plugin that is not offline and finds its
+  home folder without the shell. `-Live` adds four: a control, a terminal started
   with nothing done for it, which has to stay behind; and three that press the key for real, with
   no terminal open, one open and one minimised, and hold the terminal to being in front each
   time. Their plugin is started through WMI, where it stands as the app's plugin does.

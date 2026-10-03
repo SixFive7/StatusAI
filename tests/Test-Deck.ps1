@@ -12,12 +12,15 @@
     7, 16 and 64 bit lengths in both directions, a message in fragments, ping and pong, a close
     from either side, a connection that drops, and an app that is not there or answers wrongly.
 
-    Everything runs offline. Each plugin gets a fresh copy of the `shot` home as STATUSAI_OFFLINE,
-    so the key it draws is tests/expected/key.svg, the registry cache, the usage lock and the
-    network are never touched, a key press opens nothing and a refresh fetches nothing: the
-    plugin reports what a press would have run, the --deck-press it starts ends at once, and the
-    --refresh it starts has nothing to fetch. No terminal is ever opened by these tests, and
-    nothing on the desktop is touched.
+    Everything runs offline but one case. Each plugin gets a fresh copy of the `shot` home as
+    STATUSAI_OFFLINE, so the key it draws is tests/expected/key.svg, the registry cache, the
+    usage lock and the network are never touched, a key press opens nothing and a refresh
+    fetches nothing: the plugin reports what a press would have run, the --deck-press it starts
+    ends at once, and the --refresh it starts has nothing to fetch. The one case is about how the
+    plugin finds the home folder when it is not offline. Its plugin has a copy of that home as
+    its USERPROFILE and no key showing, so it draws, reads, fetches and writes nothing; all it
+    touches outside that home is a watch on HKCU\Software\StatusAI. No terminal is ever opened
+    by these tests, and nothing on the desktop is touched.
 
     -Live adds the four cases that cannot be had that way, because they are about the desktop.
     The first is the control: with Windows Terminal running, a new window asked of it with
@@ -569,6 +572,31 @@ $Cases['the deck goes and comes back: the key is drawn again, in whichever order
     Send-Text $s '{"event":"systemDidWakeUp"}'
     [void] (Expect-Event $s 'setImage' 3000 'L1')
     Expect-Nothing $s 500 'after the wake-up'
+}
+
+$Cases['not offline, the home folder is found without the shell'] = {
+    # The plugin as the app runs it, not offline, beside one that is. Its home folder is its
+    # USERPROFILE, here a copy of the test home, and no key shows, so it draws, reads, fetches and
+    # writes nothing. Found by asking the shell, as a render finds it, the folder would cost the
+    # plugin five of the shell's libraries and 35 handles, for good.
+    $handles = @{}
+    foreach ($offline in $true, $false) {
+        $more = @{}
+        if (-not $offline) { $more = @{ STATUSAI_OFFLINE = '' } }
+        $s = New-Session $more
+        if (-not $offline) { $s.More['USERPROFILE'] = $s.HomeDir }
+        Connect-Plugin $s
+        [void] (Expect-Event $s 'registerPlugin' 5000)
+        $f = Expect-Event $s 'logMessage' 5000
+        Need (($f.json.payload.message -match ', offline$') -eq $offline) "the plugin said '$($f.json.payload.message)', which is not what it was started as"
+        Start-Sleep -Milliseconds 500
+        $s.Run.Proc.Refresh()
+        $handles[$offline] = $s.Run.Proc.HandleCount
+        $shell = @($s.Run.Proc.Modules | ForEach-Object { $_.ModuleName.ToLowerInvariant() } | Where-Object { $_ -in 'shell32.dll', 'windows.storage.dll' })
+        Need ($shell.Count -eq 0) "the plugin, $(if ($offline) { 'offline' } else { 'not offline' }), has the shell loaded: $($shell -join ', ')"
+    }
+    # the one is watching the registry key and the other is not: a handle or three, and not 35 more
+    Need ($handles[$false] - $handles[$true] -le 10) "the plugin held $($handles[$false]) handles not offline and $($handles[$true]) offline"
 }
 
 $Cases['a hundred refreshes, and as many handles as before'] = {

@@ -128,7 +128,7 @@ and plays one case after another.
 ./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe
 ```
 
-17 cases, under a minute, exit code 0 when every one passes. It needs no Stream
+18 cases, under a minute, exit code 0 when every one passes. It needs no Stream
 Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The websocket client in
 `Deck.cs` is written by hand, so the cases take it through the protocol a part at a time:
 
@@ -144,6 +144,7 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | no Windows Terminal: an alert on the key, why in the log | with `%LOCALAPPDATA%` a folder that has no `wt.exe`, each of four holds shows the alert and logs `could not start ...\wt.exe: Windows error 2`, and the handle count stays where the first left it |
 | a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
 | the deck goes and comes back | nothing drawn or fetched for a key that does not show; the key drawn again, and the refresh that was waiting made once, whether the app names the key before the deck or the deck before the key; the picture sent again when a deck or the system comes back with nothing said about the key |
+| not offline, the home folder is found without the shell | a plugin that is not offline, with a copy of the test home as its `USERPROFILE` and no key showing, has neither `shell32.dll` nor `windows.storage.dll` loaded, and no more than 10 handles over one that is offline |
 | a hundred refreshes, and as many handles as before | with a slot of no length, a hundred writes are a hundred `--refresh` processes, and the plugin's handle count after them is what it was before |
 | the app closes | a close in answer, and exit code 0 |
 | a frame the protocol forbids | a masked frame, a reserved bit, a ping in fragments, a continuation of nothing, a message inside another and an opcode that does not exist: each a close with status 1002 and exit code 1; a frame announced at 17 MiB: 1009 |
@@ -152,7 +153,10 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | an app that never answers the handshake | gone after its ten seconds, with exit code 1 |
 | `--refresh` and `--deck-face` do not wait for stdin | both end by themselves with stdin left open, as it is for a plugin |
 
-Every plugin runs with `STATUSAI_OFFLINE` on a fresh copy of the `shot` home. Offline, the mode
+Every plugin but one runs with `STATUSAI_OFFLINE` on a fresh copy of the `shot` home; the one
+is the case about the home folder, whose plugin has that copy as its `USERPROFILE`, shows no key,
+and so draws, reads, fetches and writes nothing, and only watches `HKCU\Software\StatusAI`.
+Offline, the mode
 touches nothing live, and says in the app's log what it did in place of it:
 `offline: would run ...\wt.exe -w 0 nt` for a press, whose `statusai --deck-press` opens nothing
 and ends with 0, and `offline: ran --refresh` for a refresh, which starts the same

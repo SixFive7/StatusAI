@@ -173,7 +173,8 @@ holding a day after its first press. The plugin waits on the press's process wit
 waits and asks Windows for its exit code: .NET's `Process.HasExited` would first look up the
 debug privilege, once in a process, and the call to the security authority that takes starts
 Windows' RPC in it, 13 handles that stay. Where `wt.exe` is comes from `%LOCALAPPDATA%`, and
-from the shell only when that is not set.
+from the shell only when that is not set; the home folder, for `~/.claude/projects`, comes from
+`%USERPROFILE%` the same way, where a render asks the shell for it.
 
 **Nothing the app hands down is handed on.** The app starts a plugin with a dozen of its own
 handles open to it, its log files and its crash reporter's lock among them, and a program

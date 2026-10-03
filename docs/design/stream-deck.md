@@ -308,7 +308,8 @@ offline, has 210 handles and 32 libraries before it has done anything, where an 
 172 and 27, under the same test. The five are the shell's: `shell32`, `windows.storage`,
 `shcore`, `shlwapi` and `profapi`, loaded by the one call that finds the home folder,
 `Environment.GetFolderPath(SpecialFolder.UserProfile)`, for `~/.claude/projects`. The figures
-above are given against 32 now. Whether to find the folder another way is open.
+above are given against 32 now. Whether to find the folder another way was left open, and is
+decided in [the section after next](#the-home-folder-without-the-shell).
 
 **Where the live cases had stood.** Before the cases ran, a terminal was started from the same
 place the test runs from, the way the first plugin started it, with nothing done for it. It came to
@@ -375,3 +376,31 @@ in front of the user's work, ten of them in all with the run by hand on 2 Octobe
 were stopped when the user asked what they were. Whether a press gets the terminal to the front
 from where the plugin stands, with Windows Terminal running, has not been seen in a test. The
 user's own press is that test.
+
+**On the user's word.** The user then pressed the key on the device in all three ways, and each
+time the terminal came to the front: a tab, a window, and a minimised terminal brought back. At
+03:09 the control and the two cases with a terminal open were run once more, with the user's go,
+the plugin started through WMI and no terminal of the user's open. The case with a terminal behind
+another window passed: its press was brought to the front after being asked for once, by the input
+event that moves and presses nothing, and its hold came up by itself. The case with the terminal
+minimised passed, both by themselves. The plugin held 2 handles more after each case's two presses,
+148 against 150. The control came to the front by itself once again: the test's own window had
+started Windows Terminal a second before, and a terminal that has just started brought its new
+window up as it had its first. A control that holds needs a Windows Terminal that was running
+before the test. Six test windows appeared, each in front for about three seconds, and the window
+that had been in front was in front again after each.
+
+## The home folder without the shell
+
+3 October 2026, decided by the user. The plugin finds the home folder for `~/.claude/projects` in
+`%USERPROFILE%`, which Windows sets for every program the user starts, and asks the shell only
+where the variable is not set. The status line's own `Home()` still asks the shell: a render is
+gone a moment later.
+
+Measured against the same stand-in, with no key showing: a plugin that is not offline held 210
+handles and 32 libraries before the change, and 175 and 27 after it; one that is offline held 172
+and 27 both times. So the shell had cost the plugin 35 handles and its five libraries, and about a
+quarter of a megabyte of private memory, 3,83 MB against 3,58. In the test for it, a plugin that is
+not offline, with a copy of the test home as its `USERPROFILE`, may not have `shell32.dll` or
+`windows.storage.dll` loaded and may hold no more than 10 handles over one that is offline; the
+build before fails it on both libraries.

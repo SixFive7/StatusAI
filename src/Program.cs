@@ -188,7 +188,13 @@ static Deck.Host DeckHost() => new() {
     FetchedAt = () => Offline() is null ? RegLong("ts") : 0,
     TriedAt = () => Offline() is null ? RegLong("tryTs") : 0,
     Pace = Pace, Hm = Hm, BarFill = BarFill, ZoneColor = ZoneColor, PctColor = PctColor, SevColor = SevColor,
-    Forest = Forest, Offline = Offline(), ProjectsDir = Path.Combine(Home(), ".claude", "projects") };
+    Forest = Forest, Offline = Offline(), ProjectsDir = Path.Combine(DeckHome(), ".claude", "projects") };
+
+// The home folder for the key, whose process stays up for as long as the app does: %USERPROFILE%,
+// which Windows sets for every program the user starts, and Home() only where it is not set. Home()
+// asks the shell, which loads five of its libraries and 35 handles into the process that asks, for
+// good. A render is gone a moment later; the plugin is not.
+static string DeckHome() => Offline() ?? (Environment.GetEnvironmentVariable("USERPROFILE") is { Length: > 0 } profile ? profile : Home());
 
 // Two columns when the terminal has room: the account sits right of 5h and the scoped
 // row right of 7d. The two left-column rows render to one visible width, so a fixed gap
