@@ -344,14 +344,14 @@ marked for a program it starts, where the build before kept those the app hands 
 running code was the new build's.
 
 **Decided:** the app starts a plugin again by itself when its process ends, which needs no
-developer mode; the Discord mixer's had been ended at 00:07:03 and was connected again at 00:07:07.
-So `Deploy.ps1` ends the plugin's process and waits for the app to start the new copy, and takes a
-copy moved aside by an earlier run that still runs as a plugin that was not started again. That was
-tried on the app at 02:32, with the running copy moved aside and the same build put in its place:
-the script ended the process, the app had the plugin connected again 2,5 seconds later, no window
-of the app showed, the window in front stayed where it was, and the key was still at 7,2 on its
-page of 32 actions. After each of these runs the status line rendered all 180 renders of the render
-tests from the deployed binary.
+developer mode; another plugin's process had been ended at 00:07:03 and was connected again at
+00:07:07. So `Deploy.ps1` ends the plugin's process and waits for the app to start the new copy,
+and takes a copy moved aside by an earlier run that still runs as a plugin that was not started
+again. That was tried on the app at 02:32, with the running copy moved aside and the same build put
+in its place: the script ended the process, the app had the plugin connected again 2,5 seconds
+later, no window of the app showed, the window in front stayed where it was, and the key was still
+at 7,2 on its page of 32 actions. After each of these runs the status line rendered all 180 renders
+of the render tests from the deployed binary.
 
 The plugin then held 206 handles, and 208 from its first refresh on, which is the 2 that the
 first program a process starts costs it; 12,7 to 12,9 MB of memory in use, 3,8 to 3,9 MB of it
