@@ -38,8 +38,10 @@
          statusai.exe.old.<unix-seconds>, which Windows allows while it runs, copy the build in
          under its name, and verify its SHA-256. A copy that lands wrong is removed and the old
          one moved back.
-      9. Ask the app to restart the plugin (StreamDeck.exe --restart <uuid>, hidden), wait for a
-         process running the new copy, and remove the old file once nothing runs it.
+      9. End the plugin's process, which the app starts again by itself, from the new copy; wait
+         for that process, and remove the old file once nothing runs it. A copy that an earlier
+         run moved aside and that is still running is taken as the plugin not having been
+         started again yet, and is dealt with the same way.
 
     Without a plugin folder nothing of this happens, unless -Deck asks for a first install: the
     folder is then created and filled, and the app has to be restarted to see it.
@@ -146,16 +148,24 @@ function Sync-Deck {
     }
     $assets = (Resolve-Path -LiteralPath $assets).Path
 
-    # the copy an earlier run moved aside, if nothing runs it any more
+    # A copy an earlier run moved aside, if nothing runs it any more. One that cannot be removed
+    # is still running: the plugin was not started again from the copy that replaced it.
+    $behind = $false
     if (-not $first) {
-        Get-ChildItem -LiteralPath $dest -Filter 'statusai.exe.old.*' | ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop } catch { } }
+        foreach ($old in @(Get-ChildItem -LiteralPath $dest -Filter 'statusai.exe.old.*')) {
+            # with -WhatIf nothing is removed, so whether it still runs cannot be told: say it may
+            if ($WhatIfPreference) { $behind = $true; continue }
+            try { Remove-Item -LiteralPath $old.FullName -Force -ErrorAction Stop } catch { $behind = $true }
+        }
     }
     # what differs: the manifest and the pictures from the repository's, the exe from the build
     $files = @(Get-ChildItem -LiteralPath $assets -Recurse -File | ForEach-Object { $_.FullName.Substring($assets.Length + 1) })
     $stale = @($files | Where-Object { (Hash (Join-Path $dest $_)) -ne (Hash (Join-Path $assets $_)) })
     $exeStale = (Hash $exe) -ne $newHash
-    if (-not $exeStale -and $stale.Count -eq 0) { Write-Host "stream deck    : $dest is in step with the build"; return 0 }
-    $what = if ($first) { 'install the Stream Deck plugin' } else { 'bring the Stream Deck plugin in step with the build' }
+    if (-not $exeStale -and $stale.Count -eq 0 -and -not $behind) { Write-Host "stream deck    : $dest is in step with the build"; return 0 }
+    $what = if ($first) { 'install the Stream Deck plugin' }
+            elseif ($exeStale -or $stale.Count -gt 0) { 'bring the Stream Deck plugin in step with the build' }
+            else { 'start the Stream Deck plugin again, from the copy that is in step' }
     if (-not $PSCmdlet.ShouldProcess($dest, $what)) { return 0 }
 
     try {
@@ -182,7 +192,11 @@ function Sync-Deck {
             return 4
         }
     }
-    Write-Host ("stream deck    : {0} {1}, sha256 matches the build" -f $dest, $(if ($first) { 'installed' } else { 'brought in step' }))
+    if ($first -or $exeStale -or $stale.Count -gt 0) {
+        Write-Host ("stream deck    : {0} {1}, sha256 matches the build" -f $dest, $(if ($first) { 'installed' } else { 'brought in step' }))
+    } else {
+        Write-Host "stream deck    : $dest is in step with the build, and a copy from before it still runs"
+    }
 
     # ------------------------------------------------------------------ the running plugin
     $isOwn = [string]::Equals((Resolve-Path -LiteralPath $plugins).Path.TrimEnd('\'), $own.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
@@ -193,34 +207,45 @@ function Sync-Deck {
         Write-Host '  Stream Deck finds a new plugin when it starts: quit it and start it again, then put StatusAI > Claude Code on a key'
     } elseif (-not $running) {
         Write-Host '  Stream Deck is not running; it starts the new copy when it does'
-    } elseif ($exeStale) {
+    } elseif ($exeStale -or $behind) {
+        # The app starts a plugin again by itself when its process ends, and that needs nothing of
+        # the app's developer mode. Its own ways of restarting a plugin do: the link
+        # streamdeck://plugins/restart/<uuid>, and StreamDeck.exe --restart <uuid>, which hands
+        # the app the same link, are turned away without it ("Feature only enabled in developer
+        # mode"). So the plugin's process, which runs the previous copy, is ended, and the app
+        # starts the new one in its place a few seconds later.
         $since = Get-Date
-        # The app restarts one plugin when it is started a second time with --restart and the
-        # plugin's uuid: that second StreamDeck.exe hands the restart to the one that runs, and
-        # ends. Its window is hidden, and nothing of the app shows.
-        $app = @(Get-Process -Name StreamDeck -ErrorAction SilentlyContinue | Where-Object { $_.Path } | ForEach-Object { $_.Path } | Select-Object -First 1)
-        if ($app.Count -eq 0) { $app = @(Join-Path $env:ProgramFiles 'Elgato\StreamDeck\StreamDeck.exe') }
-        try { Start-Process -FilePath $app[0] -ArgumentList '--restart', $uuid -WindowStyle Hidden }
-        catch { Write-Host "  could not ask the app to restart the plugin: $($_.Exception.Message)" -ForegroundColor Yellow }
-        $seen = $false
-        foreach ($i in 1..40) {
-            Start-Sleep -Milliseconds 500
-            $new = @(Get-CimInstance Win32_Process -Filter "Name = 'statusai.exe'" -ErrorAction SilentlyContinue |
-                     Where-Object { $_.ExecutablePath -eq $exe -and $_.CreationDate -gt $since })
-            if ($new.Count -gt 0) { $seen = $true; break }
+        $prefix = $dest.TrimEnd('\') + '\'
+        $old = @(Get-CimInstance Win32_Process -Filter "Name = 'statusai.exe'" -ErrorAction SilentlyContinue |
+                 Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -and $_.CommandLine -match '-pluginUUID' })
+        if ($old.Count -eq 0) {
+            Write-Host '  the plugin was not running; Stream Deck starts the new copy when it next starts the plugin'
+        } else {
+            foreach ($p in $old) {
+                try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; Write-Host ("  ended the plugin's process {0}, which had run since {1:yyyy-MM-dd HH:mm:ss}" -f $p.ProcessId, $p.CreationDate) }
+                catch { Write-Host "  could not end the plugin's process $($p.ProcessId): $($_.Exception.Message)" -ForegroundColor Red }
+            }
+            $new = @()
+            foreach ($i in 1..60) {
+                Start-Sleep -Milliseconds 500
+                $new = @(Get-CimInstance Win32_Process -Filter "Name = 'statusai.exe'" -ErrorAction SilentlyContinue |
+                         Where-Object { $_.ExecutablePath -eq $exe -and $_.CreationDate -gt $since -and $_.CommandLine -match '-pluginUUID' })
+                if ($new.Count -gt 0) { break }
+            }
+            if ($new.Count -eq 0) {
+                Write-Host '  no process running the new copy came within 30 s: Stream Deck starts it when it is next started' -ForegroundColor Red
+                return 4
+            }
+            Write-Host ("  the app started the plugin again, from the new copy: process {0}, {1:N1} s after the old one was ended" -f $new[0].ProcessId, ($new[0].CreationDate - $since).TotalSeconds)
         }
-        if (-not $seen) {
-            Write-Host '  the app was asked to restart the plugin, and no process running the new copy came within 20 s: the key still runs the previous build until Stream Deck is restarted' -ForegroundColor Red
-            return 4
-        }
-        Write-Host '  the app restarted the plugin, which now runs the new copy'
     }
     if ($isOwn -and $running -and -not $first -and $stale.Count -gt 0) {
         Write-Host '  the manifest or a picture changed, and Stream Deck reads those when it starts'
     }
-    if ($aside -and (Test-Path -LiteralPath $aside)) {
-        try { Remove-Item -LiteralPath $aside -Force -ErrorAction Stop }
-        catch { Write-Host "  $(Split-Path -Leaf $aside) is still running and is removed by the next deploy" }
+    foreach ($old in @(Get-ChildItem -LiteralPath $dest -Filter 'statusai.exe.old.*')) {
+        $gone = $false
+        foreach ($i in 1..10) { try { Remove-Item -LiteralPath $old.FullName -Force -ErrorAction Stop; $gone = $true; break } catch { Start-Sleep -Milliseconds 300 } }
+        if (-not $gone) { Write-Host "  $($old.Name) is still running and is removed by the next deploy" }
     }
     return 0
 }
