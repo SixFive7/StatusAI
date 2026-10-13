@@ -47,3 +47,9 @@
   - Added in 2.1.80: https://code.claude.com/docs/en/changelog#2-1-80
   - Noted under [known gaps](docs/reference/limits.md#known-gaps)
   - How a failed fetch is retried: [when a fetch fails](docs/reference/limits.md#when-a-fetch-fails)
+- **Watch, long term: claude-swap's issue about rewriting `~/.claude.json` in place.**
+  On Windows claude-swap writes `~/.claude.json` with `shutil.move`, which copies over the file
+  instead of replacing it, so a reader can find it cut short during a switch. Check the issue now
+  and then. Once a release carries the fix, decide whether StatusAI still needs to read the file
+  again when it does not parse, and note in the docs which release fixed it.
+  - Reported on 13 October 2026: https://github.com/realiti4/claude-swap/issues/461
