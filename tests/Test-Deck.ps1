@@ -16,7 +16,9 @@
     STATUSAI_OFFLINE, so the key it draws is tests/expected/key.svg, the registry cache, the
     usage lock and the network are never touched, a key press opens nothing and a refresh
     fetches nothing: the plugin reports what a press would have run, the --deck-press it starts
-    ends at once, and the --refresh it starts has nothing to fetch. The one case is about how the
+    ends at once, and the --refresh it starts has nothing to fetch. The case about a new token
+    takes the switch-pending home instead, with the times in its fetch block written as seconds
+    from now, since the plugin keeps time by this machine's clock. The one case is about how the
     plugin finds the home folder when it is not offline. Its plugin has a copy of that home as
     its USERPROFILE and no key showing, so it draws, reads, fetches and writes nothing; all it
     touches outside that home is a watch on HKCU\Software\StatusAI. No terminal is ever opened
@@ -130,11 +132,26 @@ $script:RunRoot = $null
 $script:ExePath = $null
 $script:HomeNo = 0
 
-function New-Home {
+function New-Home([string] $from = 'shot') {
     $script:HomeNo++
     $h = Join-Path $script:RunRoot ('home{0}' -f $script:HomeNo)
-    Copy-Item -LiteralPath (Join-Path $Tests 'fixtures\homes\shot') -Destination $h -Recurse
+    Copy-Item -LiteralPath (Join-Path $Tests "fixtures\homes\$from") -Destination $h -Recurse
     New-Item -ItemType Directory -Path (Join-Path $h '.claude\projects\p') -Force | Out-Null
+    $h
+}
+
+# A home after a switch of account that nothing has fetched for: the switch-pending fixture, whose
+# shared copy was fetched with another token than the one signed in, with the time that token came,
+# tokenAt, set $age seconds before now, since the plugin keeps time by this machine's clock. $more:
+# other fields of its fetch block, set the same way, as seconds from now.
+function New-SwitchedHome([int] $age, [hashtable] $more = @{}) {
+    $h = New-Home 'switch-pending'
+    $path = Join-Path $h 'rows.json'
+    $rows = [IO.File]::ReadAllText($path, $Utf8) | ConvertFrom-Json
+    $at = { param([int] $s) [DateTimeOffset]::UtcNow.AddSeconds($s).ToString('yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture) }
+    $rows.fetch | Add-Member -NotePropertyName tokenAt -NotePropertyValue (& $at (-$age)) -Force
+    foreach ($k in $more.Keys) { $rows.fetch | Add-Member -NotePropertyName $k -NotePropertyValue (& $at $more[$k]) -Force }
+    [IO.File]::WriteAllText($path, ($rows | ConvertTo-Json -Depth 10), $Utf8)
     $h
 }
 
@@ -169,11 +186,12 @@ function Wait-Exit($run, [int] $ms, [string] $when) {
 }
 
 # ------------------------------------------------------------------ the app's side of the websocket
-function New-Session([hashtable] $more = @{}, [bool] $apart = $false) {
+function New-Session([hashtable] $more = @{}, [bool] $apart = $false, [string] $homeDir = '') {
     $l = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
     $l.Start()
+    if (-not $homeDir) { $homeDir = New-Home }
     $s = [pscustomobject]@{ Listener = $l; Port = ([System.Net.IPEndPoint] $l.LocalEndpoint).Port; Client = $null; Socket = $null
-                            Stream = $null; Run = $null; HomeDir = (New-Home); Request = ''; More = $more; Apart = $apart }
+                            Stream = $null; Run = $null; HomeDir = $homeDir; Request = ''; More = $more; Apart = $apart }
     [void] $script:Open.Add($s)
     $s
 }
@@ -328,8 +346,8 @@ function Read-Until-Quiet($s, [int] $firstMs, [int] $quietMs) {
 }
 
 # a session up to the point where the plugin has registered and said it started
-function Open-Plugin([hashtable] $more = @{}, [bool] $apart = $false) {
-    $s = New-Session $more $apart
+function Open-Plugin([hashtable] $more = @{}, [bool] $apart = $false, [string] $homeDir = '') {
+    $s = New-Session $more $apart $homeDir
     Connect-Plugin $s
     $f = Expect-Event $s 'registerPlugin' 5000
     Need ($f.json.uuid -eq $Uuid) "it registered as $($f.json.uuid), not with the uuid it was started with"
@@ -538,6 +556,34 @@ $Cases['a refresh when Claude writes, one a slot, and none while no key shows'] 
     Start-Sleep -Milliseconds 300
     [System.IO.File]::AppendAllText($file, "{}`n")
     Expect-Nothing $s 2500 'after writes inside the slot'
+}
+
+# A switch of account while Claude is idle: nothing is written, and the token signed in is not the
+# one the shared copy was fetched with. The key asks for one --refresh for it at a redraw, once the
+# switch is 15 s old, and no more for that token; none while a 429 holds the token off, and one at
+# the first redraw after the hold has lifted. What that --refresh does at a switch, claude-swap's
+# figure first and a fetch without it, is GetUsage()'s, which the render tests' swap cases hold to
+# its offline twin; offline it fetches and writes nothing.
+$Cases['a new token while nothing is written: one refresh once it is 15 s old, and none while a 429 holds it'] = {
+    $new = '^offline: ran --refresh for a new token$'
+    # the token came 8 s ago, so its refresh is due 7 s from now, at a redraw the plugin sets a time for
+    $s = Open-Plugin @{} $false (New-SwitchedHome 8)
+    [void] (Show-Key $s 'T1')
+    Expect-Nothing $s 1500 'while the switch is under 15 s old'
+    [void] (Expect-Log $s $new 7000)
+    # another redraw, as the next minute's would be: the token has had its refresh
+    Send-Text $s '{"event":"deviceDidConnect","device":"dev"}'
+    [void] (Expect-Event $s 'setImage' 3000 'T1')
+    Expect-Nothing $s 1500 'after another redraw, for a token that has had its refresh'
+
+    # a 429 holds the new token off for 3 s more: nothing until it lifts, then one at the next redraw
+    $s = Open-Plugin @{} $false (New-SwitchedHome 60 @{ heldUntil = 3 })
+    [void] (Show-Key $s 'T2')
+    Expect-Nothing $s 1500 'while a 429 holds the new token off'
+    Start-Sleep -Milliseconds 2600
+    Send-Text $s '{"event":"deviceDidConnect","device":"dev"}'
+    [void] (Expect-Event $s 'setImage' 3000 'T2')
+    [void] (Expect-Log $s $new 3000)
 }
 
 $Cases['the deck goes and comes back: the key is drawn again, in whichever order the app says so'] = {

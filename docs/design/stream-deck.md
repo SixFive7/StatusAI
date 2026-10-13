@@ -129,6 +129,14 @@ Three things follow from never fetching without a write, and were accepted:
 - An access token that has expired with no session open is never noticed, because nothing is
   fetched with it.
 
+One fetch without a write was added on 13 October 2026, by the user's choice: a token that nothing
+has fetched with, after a switch of account or a renewal, gets one `--refresh` at the key's next
+redraw once it is 15 seconds old, which at a switch takes claude-swap's figure where it has one.
+Without it a switch made while Claude was idle left the key saying `new account` until the next
+prompt. It was chosen over a watch on `.credentials.json`, whose fetch at the moment of the switch
+would have joined the burst of requests every switch sets off; see
+[limits.md](../reference/limits.md#when-the-token-changes).
+
 ## The key itself
 
 The face is the third of three that were drawn first: the label and the percentage, the ten cells,
@@ -476,6 +484,17 @@ wider than the key has room for. A `<switch>` on `requiredFonts` skips its branc
 and `font-stretch` is ignored. So each text names one family and none falls back. Bahnschrift has
 come with Windows since Windows 10 1709. Without it the app draws the key in its default typeface,
 in which the two times of a line run into each other.
+
+**Decided: no fallback, and a warning from the deploy.** 13 October 2026, by the user. A fallback
+cannot be had in the SVG the app draws: a fallback is a list of families, and QtSvg takes any list
+for one name it does not have and draws Tahoma, on every PC, Bahnschrift installed or not. It would
+cost every key its face to help the few PCs without the font. So the key keeps one family to a
+text, and `Deploy.ps1` warns instead: whenever it installs the plugin or brings it in step, it
+looks for `bahnschrift.ttf` in `%WINDIR%\Fonts` and for `bahnschrift*.ttf` among the fonts
+installed for one user, in `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, and where there is neither it
+says in yellow that the key is drawn in Tahoma and its two times on a line run into each other. It
+stops nothing: the status line and the plugin are deployed all the same. See
+[development.md](../development.md#the-stream-deck-plugins-copy).
 
 **The figures.** `figures.gen.js` draws the key's faces in Edge, which reads both family names as
 Bahnschrift's semi-condensed face and so drew the small line a sixth wider than QtSvg does. A page

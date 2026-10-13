@@ -6,6 +6,7 @@
 # SVG on one line, and the plugin folder's key.svg is a copy of one of them.
 *.ansi -text
 tests/expected/*.svg -text
+tests/expected/*.txt -text
 streamdeck/**/imgs/key.svg -text
 
 *.png binary

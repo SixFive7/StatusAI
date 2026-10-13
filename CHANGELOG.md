@@ -5,6 +5,51 @@ under *Unreleased*, and the entries before the first release are by date.
 
 ## Unreleased
 
+**A switch seen with Claude idle, and smaller fixes**
+
+- The Stream Deck key sees a token that nothing has fetched with, after a switch of account or a
+  renewal, at its next redraw, within a minute, Claude working or not. Once the switch is 15
+  seconds old it starts one `--refresh` for it, which takes claude-swap's figure for the new
+  account where it has a fresh one and fetches otherwise. Once a token, whatever comes of it, and
+  not while a 429 holds the token off. The 15 seconds keep the request out of the burst a switch
+  sets off. Before, the key refreshed only while something was being written, so after a switch
+  with Claude idle and no terminal open it said `new account` until the next prompt. Nothing
+  watches `.credentials.json`. See [when the token changes](docs/reference/limits.md#when-the-token-changes).
+- With no figures at all, on a first run or with the registry emptied, the first failed fetch
+  raises the `⚠` row at once, `⚠ usage — timed out after 3 s; no limit rows yet`, where it waited
+  for the second; the key says `⚠ timeout` and `no rows yet`. With nobody signed in the status line
+  stays quiet, as before.
+- `.credentials.json`, `~/.claude.json`, `settings.json`, claude-swap's table and the token cache
+  are read with the sharing that lets another program replace them meanwhile.
+  `.credentials.json` was read with `File.ReadAllText`, which lets others only read, so for the
+  milliseconds StatusAI had it open, Windows refused claude-swap's switch and Claude Code's renewal
+  of the token, which both move a new file over the old one.
+- A `~/.claude.json` that does not parse is read once more, 25 ms later, before the account counts
+  as unreadable. On Windows claude-swap rewrites that file in place, so a read during a switch could
+  find it cut short ([claude-swap#461](https://github.com/realiti4/claude-swap/issues/461)), and the
+  account line then said `not signed in` for a render.
+- A change of the model behind the scoped weekly row clears that row's reset time as well as its
+  series, as a switch of account does, so its series no longer restarts a second time when the new
+  model's meter first had no reset time.
+- The usage request names the installed Claude Code's version, `claude-code/2.1.296` say, where it
+  always said `claude-code/2.1.90`. It is the `version` the status-line payload carries, which a
+  render keeps in the registry for a day, `ccv` and `ccvTs`, so that the key's `--refresh` sends it
+  too; or else, as where Claude Code only runs in VS Code and no status line runs, the newest
+  version named by the VS Code extension's folders or the native installer's, compared as numbers,
+  looked for once a day at most and kept the same way; and `2.1.90` only where there is neither.
+  Nothing is started to find it. `statusai --user-agent` prints what the next request sends. See
+  [the endpoint](docs/reference/limits.md#the-endpoint).
+- `Deploy.ps1` warns, in yellow, when the PC has no Bahnschrift, whenever it installs the Stream
+  Deck plugin or brings it in step: the app then draws the key in Tahoma, and its two times on a
+  line run into each other. The deploy goes on. The key keeps one typeface to a text, since a
+  fallback list is Tahoma on every PC; see [the key, readable](docs/design/stream-deck.md#the-key-readable).
+- [limits.md](docs/reference/limits.md#response-shape) said the older top-level `five_hour` and
+  `seven_day` objects carry no reset time. Every response captured carries a `resets_at` in them;
+  it is the fallback that reads only `utilization`.
+- Nine render cases, four of the status line, one of the key and four of `--user-agent`, which a
+  case with `args` runs: 219 renders of 109 cases, the 209 before unchanged. One Stream Deck case,
+  19 in all. The exe is 16.384 bytes larger.
+
 **A key that can be read**
 
 - The Stream Deck key is drawn in Bahnschrift, the DIN typeface Windows comes with: the label and

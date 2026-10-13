@@ -52,19 +52,27 @@ dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe
 ```
 
-209 renders of 100 cases, about 25 seconds, exit code 0 when every one matches. A failure names the
+219 renders of 109 cases, about 25 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
 
-Nineteen of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
+Twenty of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
 `statusai --deck-face <face>` runs in a copy of its home and prints the key as SVG, as it is drawn
 that many seconds after the fetch its rows come from, and the bytes are compared with
 `tests/expected/<case>.svg`. They cover the key of the screenshot's rows, the same key a quarter of
 an hour and three and a half hours on, a row at 100%, rows without a trend, without a reset time
-and without a session meter, a fetch that is failing, no rows at all, a token renewed for the same
-account, the first fetch for another account, under way and failed, a 429 that holds the fetch off,
-for the same account and for a new one, and claude-swap's figure drawn at a switch.
+and without a session meter, a fetch that is failing, no rows at all, a first run whose first fetch
+failed, a token renewed for the same account, the first fetch for another account, under way and
+failed, a 429 that holds the fetch off, for the same account and for a new one, and claude-swap's
+figure drawn at a switch.
+
+Four cases have `args` instead: `statusai <args>` runs in a copy of its home, with no payload and
+no width, and what it prints is compared with `tests/expected/<case>.txt`. They are
+`statusai --user-agent`, the `User-Agent` the usage request sends, whose version offline comes only
+from the home's folders (see [the endpoint](reference/limits.md#the-endpoint)): the VS Code
+extension's newest of two folders, compared as numbers, the native installer's newest of three
+versions, the newest over both, and neither, which falls back to `2.1.90`.
 
 Nothing live is touched. Every render runs in a fresh copy of its home under `.work/test-renders/`,
 with `STATUSAI_OFFLINE` pointing at it (see
@@ -91,13 +99,19 @@ a run with another version says so first, because it may draw that line differen
 | `tests/fixtures/payloads/<payload>.json` | a status-line stdin payload, with a `transcript_path` relative to the home |
 | `tests/expected/<case>.w<width>.ansi` | the exact bytes that case draws at that width |
 | `tests/expected/<case>.svg` | the exact bytes of the Stream Deck key, for a case with a `face` |
+| `tests/expected/<case>.txt` | the exact bytes `statusai <args>` prints, for a case with `args` |
 | `tests/cship.toml` | cship's config for the renders |
 
 The fixtures carry no credentials. `.credentials.json` holds the plan fields, and in the 13 homes
 about a new token an `accessToken` that is made up, `fixture-token-after`. Every address in them is
 an `example.com` one, and every UUID a placeholder. Seven of the eight homes about claude-swap carry
 its table, `.claude-swap-backup/cache/usage.json`, in the shape claude-swap writes, with made-up
-figures; the eighth is a machine without claude-swap.
+figures; the eighth is a machine without claude-swap. Two homes carry a `.claude.json` that does not
+parse: `account-reread` one cut short, with the whole file beside it as `.claude.json.later`, and
+`account-unreadable` an empty one. Three carry the folders Claude Code's version is read from, with
+nothing of Claude Code in them but the names:
+`.vscode/extensions/anthropic.claude-code-<version>-win32-x64` with a `package.json` of four lines,
+and `.local/share/claude/versions/<version>`, a file of one line.
 
 The `showcase` case draws every row at once, with its token grid over a main thread and two
 sub-agents, one of them a nested workflow agent, whose files carry both
@@ -107,7 +121,9 @@ the limit rows through a usage response and through `rows.json` alone, the meter
 breakdown against the width, the on-credit alarm, the order of the `⚠` rows, where the width comes
 from (`COLUMNS`, `STATUSAI_WIDTH` before it, a value that is not a width, `statusLine.padding`), a
 usage fetch that fails once, twice, in another session and before any has worked, then recovers, a
-retry held off while the last attempt is under 50 seconds old and made once it is 50, a token
+first run whose first fetch fails, with somebody signed in and with nobody, a `~/.claude.json` cut
+short at the first read and whole at the second, and one that does not parse at either, a retry
+held off while the last attempt is under 50 seconds old and made once it is 50, a token
 renewed for the same account, a switch to another account whose first fetch is under way, fails, or
 is made at once while the old account's retries were held off, a 429 that holds the fetch off, its
 `Retry-After` read as seconds and as a date, a day of it held to the hour, one that cannot be read
@@ -116,9 +132,11 @@ claude-swap's figure drawn at a switch, and the render's own fetch where that fi
 over a minute old, from before the switch, for another account, of another schema or unreadable, or
 where the token was only renewed, and the payloads: fresh sessions that must stay quiet, and broken
 ones that must still warn, one of them so broken that cship prints nothing. What the tests cannot
-cover is the live fetch itself, the registry cache and the history. A failed fetch is the fixture's
-word, so the count and its row are under test and the network is not. The forecast is an input to a
-fixture, so the window checks and the slope are not under test.
+cover is the live fetch itself, the registry cache and the history: of the `User-Agent`'s version,
+the folders it is looked for in are under test, and the payload's version coming first and the day
+it is kept for are not. A failed fetch is the fixture's word, so the count and its row are under
+test and the network is not. The forecast is an input to a fixture, so the window checks and the
+slope are not under test, nor what a switch of account or of the scoped row's model clears of them.
 
 A deliberate change of output is recorded with `-Update`, which rewrites `tests/expected` and
 removes any render no case produces; read the diff before committing it. To add a case, add a home
@@ -139,7 +157,7 @@ and plays one case after another.
 ./tests/Test-Deck.ps1 -Exe .work/publish/statusai.exe
 ```
 
-18 cases, under a minute, exit code 0 when every one passes. It needs no Stream
+19 cases, about a minute, exit code 0 when every one passes. It needs no Stream
 Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The websocket client in
 `Deck.cs` is written by hand, so the cases take it through the protocol a part at a time:
 
@@ -154,6 +172,7 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | forty presses, and as many handles as before | two presses, then thirty one after the other and ten at once, each a `--deck-press` that is started, waited for and read; the plugin's handle count at most 6 up after the first two, which is what Windows takes for the first program a process starts, and where it was after the forty |
 | no Windows Terminal: an alert on the key, why in the log | with `%LOCALAPPDATA%` a folder that has no `wt.exe`, each of four holds shows the alert and logs `could not start ...\wt.exe: Windows error 2`, and the handle count stays where the first left it |
 | a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
+| a new token while nothing is written: one refresh once it is 15 s old, and none while a 429 holds it | with no write at all, a token the shared copy was not fetched with gets one refresh, `offline: ran --refresh for a new token`: not at the first redraw, when it is 8 seconds old, but at the moment it turns 15, which the plugin sets a timer for; none at the next redraw; and with a 429 holding that token off for 3 seconds, none until the hold lifts and one at the first redraw after |
 | the deck goes and comes back | nothing drawn or fetched for a key that does not show; the key drawn again, and the refresh that was waiting made once, whether the app names the key before the deck or the deck before the key; the picture sent again when a deck or the system comes back with nothing said about the key |
 | not offline, the home folder is found without the shell | a plugin that is not offline, with a copy of the test home as its `USERPROFILE` and no key showing, has neither `shell32.dll` nor `windows.storage.dll` loaded, and no more than 10 handles over one that is offline |
 | a hundred refreshes, and as many handles as before | with a slot of no length, a hundred writes are a hundred `--refresh` processes, and the plugin's handle count after them is what it was before |
@@ -164,14 +183,17 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | an app that never answers the handshake | gone after its ten seconds, with exit code 1 |
 | `--refresh` and `--deck-face` do not wait for stdin | both end by themselves with stdin left open, as it is for a plugin |
 
-Every plugin but one runs with `STATUSAI_OFFLINE` on a fresh copy of the `shot` home; the one
-is the case about the home folder, whose plugin has that copy as its `USERPROFILE`, shows no key,
+Every plugin but one runs with `STATUSAI_OFFLINE` on a fresh copy of a fixture's home, the `shot`
+home for all but the case about a new token, which takes `switch-pending` and writes the times in
+its `fetch` as seconds from now, since the plugin keeps time by the machine's clock. The one is the
+case about the home folder, whose plugin has a copy of `shot` as its `USERPROFILE`, shows no key,
 and so draws, reads, fetches and writes nothing, and only watches `HKCU\Software\StatusAI`.
 Offline, the mode
 touches nothing live, and says in the app's log what it did in place of it:
 `offline: would run ...\wt.exe -w 0 nt` for a press, whose `statusai --deck-press` opens nothing
-and ends with 0, and `offline: ran --refresh` for a refresh, which starts the same
-`statusai --refresh` as ever, with nothing to fetch. So **no test opens a terminal or fetches
+and ends with 0, and `offline: ran --refresh` for a refresh, or `offline: ran --refresh for a new
+token` for one after a switch, which starts the same `statusai --refresh` as ever, with nothing to
+fetch. So **no test opens a terminal or fetches
 anything**, and the same switch runs
 the plugin by hand without either. Two things more are offline only. A `sendToPlugin` from the
 app is answered with its own payload, which is how a case makes the plugin send a frame of any
@@ -293,6 +315,17 @@ created and filled, and Stream Deck has to be quit and started again to find it.
 and without a plugin folder, nothing of this happens. `-DeckDir` names another plugins folder,
 and with one the app is asked nothing, so this too can be tried on a scratch folder. Exit code 4
 means the status line's binary is in place and the plugin's copy is not in step with it.
+
+Whenever there is a plugin to install or keep in step, the script also looks for Bahnschrift, the
+typeface the key is drawn in: `bahnschrift.ttf` in `%WINDIR%\Fonts`, or `bahnschrift*.ttf` in
+`%LOCALAPPDATA%\Microsoft\Windows\Fonts`, where fonts installed for one user go. Without it the app
+draws the key in Tahoma, and the two times on a line of the key run into each other, so the script
+says so in yellow and deploys all the same. The key names no typeface to fall back on, for the
+reason in [the design record](design/stream-deck.md#the-key-readable). It was tried on 2026-10-13
+on scratch folders only, with `-DeckDir` and with `%WINDIR%` and `%LOCALAPPDATA%` pointed at empty
+folders: the warning under `-WhatIf`, with nothing written, and with a first install and with a
+plugin already in step, each ending with exit 0; and no warning with the PC's own fonts, nor with
+the font in the per-user folder only. Windows PowerShell 5.1 did the same.
 
 It was tried that way on 2026-10-01, under both PowerShells: no plugin folder and no `-Deck`,
 `-WhatIf`, a first install, a rerun that finds everything in step, a copy held by a running
@@ -489,6 +522,16 @@ and `<dir>/.claude.json` names another account, a render that would fetch first 
 `<dir>/.claude-swap-backup/cache/usage.json` through the same `SwapFigure()` as a live render, and
 draws the figure in place of its own fetch where it holds. `.claude.json` names the account by its
 `organizationUuid` as well as its address there, as claude-swap does.
+
+The plugin reads the same `fetch` offline, in place of the shared state it compares a redraw with:
+`okTok` against the token in `.credentials.json` to see a token nothing has fetched with, `tokenAt`
+for when it came, and `heldUntil` and `triedTok` for a 429's hold on it. It keeps time by the
+machine's clock, not by the fixture's `now`, so a fixture written for it gives those times as they
+are when the plugin runs; `Test-Deck.ps1` writes them as it starts a case.
+
+A `.claude.json` that does not parse is read once more, as a live render reads it, and offline the
+second read finds `<dir>/.claude.json.later` where the home has one: the file as it reads a moment
+later, once claude-swap has finished writing it.
 
 Keep the hours exact when comparing builds. A `usage.json` and a `rows.json` that should draw the
 same rows must agree on the hours to each reset down to the last bit: .NET's `TotalHours` is

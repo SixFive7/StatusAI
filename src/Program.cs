@@ -39,14 +39,29 @@ const long MaxHold = 3600;
 // account (SwapFigure): a minute, about one status-line render.
 const double SwapMaxAge = 60;
 
-// Four ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
+// How long to wait before ~/.claude.json is read a second time when it does not parse
+// (AccountInfo), in milliseconds. claude-swap's shutil.move wrote a file of 125 kB, the size of the
+// one on the machine this was written on, over the old one in 1,6 ms at the median and 6,5 ms at
+// most, in 200 tries with the Python it runs on (3.12.2).
+const int RereadMs = 25;
+
+// The User-Agent's version where no other is to be had (ClaudeVersion): the one this project first
+// identified with.
+const string FallbackVersion = "2.1.90";
+
+// How long the User-Agent's version is kept before it is looked for again, in seconds: a day, as
+// the euro rate is (ClaudeVersion).
+const long VersionMaxAge = 86400;
+
+// Five ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
 // with -port, -pluginUUID, -registerEvent and -info: this process is then the plugin, which stays
 // up for as long as the app does and draws the key (Deck.cs). --refresh brings the shared usage
 // up to date the way a render does, when it is 50 seconds old or was fetched with another token
 // than the one signed in now, and draws nothing: it is how the key fetches. --deck-press is what
 // a press of the key starts: it opens a tab or a window in Windows Terminal and brings it to the
 // front. --deck-face prints the key as SVG, as it would be drawn now or, with a number after it,
-// that many seconds after the last fetch.
+// that many seconds after the last fetch. --user-agent prints the User-Agent the next usage request
+// sends, and keeps nothing it found on the way.
 if (Deck.IsPluginStart(args)) { Environment.ExitCode = Deck.Run(args, DeckHost()); return; }
 if (args.Length == 1 && args[0] == "--refresh") { GetUsage(); return; }
 if (args.Length == 2 && args[0] == "--deck-press" && args[1] is "tab" or "window") { Environment.ExitCode = Deck.Open(args[1] == "window", Offline() is not null); return; }
@@ -55,6 +70,12 @@ if (args.Length is 1 or 2 && args[0] == "--deck-face") {
     using var faceOut = Console.OpenStandardOutput();
     using var faceWriter = new StreamWriter(faceOut, new UTF8Encoding(false));
     faceWriter.Write(Deck.Face(DeckHost(), age));
+    return;
+}
+if (args.Length == 1 && args[0] == "--user-agent") {
+    using var agentOut = Console.OpenStandardOutput();
+    using var agentWriter = new StreamWriter(agentOut, new UTF8Encoding(false));
+    agentWriter.Write(UserAgent(keep: false) + "\n");
     return;
 }
 
@@ -70,6 +91,7 @@ string cshipOut = RunCship(stdin);
 double costUsd = 0; long durMs = 0; int add = 0, del = 0;
 bool haveCost = false, haveDur = false, haveCtx = false, noMessagesYet = false;
 string transcriptPath = "";
+string claudeVersion = "";
 string stdinErr = "";
 try {
     using var d = JsonDocument.Parse(stdin);
@@ -97,6 +119,9 @@ try {
     }
     if (d.RootElement.TryGetProperty("transcript_path", out var tp) && tp.ValueKind == JsonValueKind.String)
         transcriptPath = tp.GetString() ?? "";
+    // the version of the Claude Code running this status line, for the usage request (KeepVersion)
+    if (d.RootElement.TryGetProperty("version", out var cv) && cv.ValueKind == JsonValueKind.String)
+        claudeVersion = cv.GetString() ?? "";
 } catch (Exception ex) {
     // this used to be a bare catch, and every downstream zero then looked like a real zero
     stdinErr = "payload unreadable — " + ex.GetType().Name;
@@ -105,6 +130,7 @@ try {
 // The columns the block may use, measured once: see Avail().
 int avail = Avail();
 
+KeepVersion(claudeVersion);
 var (usage, usageErr, fetchErr, _) = GetUsage();
 string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
 var (acctLine, signedIn) = BuildAccount();
@@ -128,8 +154,9 @@ var (tokenLines, tokenErr) = BuildTokens(transcriptPath, youngSession || noMessa
 var warns = new List<string>();
 if (stdinErr.Length > 0) warns.Add(stdinErr);
 if (usageErr.Length > 0) warns.Add(usageErr);
-// A usage fetch that has failed twice in a row. With nobody signed in there is no token to fetch
-// with and no limit rows to miss, and the account line already says so, so it stays quiet then.
+// A usage fetch that has failed twice in a row, or once where no rows stand in for it (FetchWarn).
+// With nobody signed in there is no token to fetch with and no limit rows to miss, and the account
+// line already says so, so it stays quiet then.
 if (fetchErr.Length > 0 && signedIn) warns.Add(fetchErr);
 if (stdinErr.Length == 0) {
     if (!haveCost && !haveDur) warns.Add("cost, duration — no cost block in the payload");
@@ -203,10 +230,39 @@ static Deck.Host DeckHost() => new() {
     FetchedAt = () => Offline() is null ? RegLong("ts") : 0,
     TriedAt = () => Offline() is null ? RegLong("tryTs") : 0,
     // a 429's hold on the token signed in now, while it stands, which MayRetry keeps every fetch away from
-    HeldUntil = () => Offline() is null && !NewToken(TokenPrint(Token(DeckHome())), RegStr("tryTok"))
-                      && RegLong("holdTs") is long held && Held(held, DateTimeOffset.UtcNow.ToUnixTimeSeconds()) ? held : 0,
+    HeldUntil = () => HoldNow(DeckHome()),
+    // the token signed in, while the shared copy was fetched with another, as after a switch of account
+    Switched = () => Unfetched(DeckHome()),
     Pace = Pace, Hm = Hm, BarFill = BarFill, ZoneColor = ZoneColor, PctColor = PctColor, SevColor = SevColor,
     Forest = Forest, Offline = Offline(), ProjectsDir = Path.Combine(DeckHome(), ".claude", "projects") };
+
+// When a 429's hold on the token signed in under home lifts, while it stands, and 0 otherwise. The
+// hold is the token's that drew it, the one last tried (tryTok), as in MayRetry. Offline the shared
+// state is the fixture's "fetch" (OfflineFetch), and the hold is measured against this machine's
+// clock, which the plugin keeps time by.
+static long HoldNow(string home) {
+    string tk = TokenPrint(Token(home)), triedTok; long held;
+    if (Offline() is null) (triedTok, held) = (RegStr("tryTok"), RegLong("holdTs"));
+    else { var f = OfflineFetch(home); (triedTok, held) = (f.triedTok, f.heldUntil); }
+    return !NewToken(tk, triedTok) && Held(held, DateTimeOffset.UtcNow.ToUnixTimeSeconds()) ? held : 0;
+}
+
+// The token signed in under home, when the shared copy was not fetched with it: its print, and when
+// it came, which is when .credentials.json was last written, in unix seconds. ("", 0) while the copy
+// is that token's, and while nobody is signed in. Offline the copy's token and the time are the
+// fixture's "okTok" and "tokenAt".
+static (string tk, long since) Unfetched(string home) {
+    string tk = TokenPrint(Token(home));
+    if (Offline() is not null) {
+        var f = OfflineFetch(home);
+        return NewToken(tk, f.okTok) ? (tk, f.tokenAt) : ("", 0);
+    }
+    if (!NewToken(tk, RegStr("tok"))) return ("", 0);
+    long since = 0;
+    try { since = new DateTimeOffset(File.GetLastWriteTimeUtc(Path.Combine(home, ".claude", ".credentials.json"))).ToUnixTimeSeconds(); }
+    catch { }
+    return (tk, since);
+}
 
 // The home folder for the key, whose process stays up for as long as the app does: %USERPROFILE%,
 // which Windows sets for every program the user starts, and Home() only where it is not set. Home()
@@ -303,7 +359,7 @@ static int Avail() => Math.Max(16, TermWidth() - 4 - 2 * Padding());
 // padding set only in a project goes unseen. A fraction is rounded up, to never overflow.
 static int Padding() {
     try {
-        using var fs = File.OpenRead(Path.Combine(Home(), ".claude", "settings.json"));
+        using var fs = Shared(Path.Combine(Home(), ".claude", "settings.json"));
         using var d = JsonDocument.Parse(fs, new JsonDocumentOptions {
             AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
         if (d.RootElement.ValueKind == JsonValueKind.Object
@@ -358,13 +414,13 @@ static string RunCship(string input) {
 // would corrupt the prediction history.
 //
 // Besides the rows and a lock failure it returns the reason for a fetch that has failed
-// twice in a row or more (FetchWarn), read from the shared state, so every session shows the
-// same row whether or not it was the one that fetched. A fresh cache means the last fetch
-// worked, so it comes with none. A failed fetch leaves the cache stale, so the next render
-// to take the lock is the retry. Once the ⚠ row shows, MayRetry spaces the retries 50 s
-// apart, and a render in between draws the saved rows and the warning at once, without taking
-// the lock. There is no second attempt inside one render, which would double the 3 s a render
-// can already spend waiting.
+// twice in a row or more, or once where nothing stands in for it (FetchWarn), read from the
+// shared state, so every session shows the same row whether or not it was the one that
+// fetched. A fresh cache means the last fetch worked, so it comes with none. A failed fetch
+// leaves the cache stale, so the next render to take the lock is the retry. Once the fetch has
+// failed twice, MayRetry spaces the retries 50 s apart, and a render in between draws the saved
+// rows and the warning at once, without taking the lock. There is no second attempt inside one
+// render, which would double the 3 s a render can already spend waiting.
 //
 // The copy is tied to the token it was fetched with (tok, its print). A token in
 // .credentials.json that is not that one, after an account switch or a renewal, makes the copy
@@ -478,10 +534,21 @@ static string Clock(long unix, TimeSpan? zone) {
 // is none to read.
 static string Token(string home) {
     try {
-        using var cd = JsonDocument.Parse(File.ReadAllText(Path.Combine(home, ".claude", ".credentials.json")));
+        using var fs = Shared(Path.Combine(home, ".claude", ".credentials.json"));
+        using var cd = JsonDocument.Parse(fs);
         return cd.RootElement.GetProperty("claudeAiOauth").GetProperty("accessToken").GetString() ?? "";
     } catch { return ""; }
 }
+
+// A file that another program replaces, opened to be read so as to let it do that meanwhile.
+// Claude Code renews its token and claude-swap switches accounts by writing .credentials.json anew
+// and moving it over the old one, in one step, and Windows refuses that step while the file is open
+// to anyone who did not allow it to be deleted: File.OpenRead and File.ReadAllText allow others only
+// to read. So .credentials.json is opened here, with every kind of sharing there is, and so are
+// ~/.claude.json and settings.json, which Claude Code and claude-swap write, claude-swap's
+// usage.json, and the token cache, which another render of the same session moves over its own.
+static FileStream Shared(string path) =>
+    new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
 // What the shared state keeps of a token: the first 8 hex digits of its SHA-256, enough to tell
 // one token from the next, and nothing to sign in with. "" for no token.
@@ -546,8 +613,7 @@ static Cached? FromSwap(string home, string tk) {
 static (Usage u, long at)? SwapFigure(string home, string email, string org, double changedAt, double now) {
     if (email.Length == 0) return null;
     try {
-        using var fs = new FileStream(Path.Combine(home, ".claude-swap-backup", "cache", "usage.json"), FileMode.Open,
-                                      FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var fs = Shared(Path.Combine(home, ".claude-swap-backup", "cache", "usage.json"));
         using var d = JsonDocument.Parse(fs);
         var root = d.RootElement;
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("schemaVersion", out var sv)
@@ -744,6 +810,19 @@ static double OfflineFx(string dir) {
     } catch { return 0; }
 }
 
+// What the plugin reads of the shared state offline, from the fixture's "fetch" as OfflineRows
+// reads it: the prints of the token the copy was fetched with (okTok) and of the token last tried
+// (triedTok), when a 429's hold lifts (heldUntil) and when the token signed in came (tokenAt), the
+// times in unix seconds; "" and 0 for what is not given.
+static (string okTok, string triedTok, long heldUntil, long tokenAt) OfflineFetch(string dir) {
+    try {
+        using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
+        if (!d.RootElement.TryGetProperty("fetch", out var fe) || fe.ValueKind != JsonValueKind.Object) return ("", "", 0, 0);
+        return (Str(fe, "okTok"), Str(fe, "triedTok"),
+                Time(fe, "heldUntil")?.ToUnixTimeSeconds() ?? 0, Time(fe, "tokenAt")?.ToUnixTimeSeconds() ?? 0);
+    } catch { return ("", "", 0, 0); }
+}
+
 static string LockName() {
     using var id = WindowsIdentity.GetCurrent();
     string sid = id.User?.Value ?? "nosid";
@@ -907,8 +986,9 @@ static Cached Record(Usage u, long now, string tk, string acct) {
         // switch, as a 5h with no window open, would then restart its series a second time.
         rsS = rsW = rsF = 0;
     }
-    // the scoped limit tracks a different model than before: its series is foreign too
-    if (scopedName.Length > 0 && oldName.Length > 0 && scopedName != oldName) vfF = now;
+    // The scoped limit tracks a different model than before: its series is foreign too, and so is
+    // the reset time WindowCheck compares it with, for the reason given for a switch above.
+    if (scopedName.Length > 0 && oldName.Length > 0 && scopedName != oldName) { vfF = now; rsF = 0; }
     var last = hist.Count > 0 ? hist[^1] : (t: 0L, s: -1, w: -1, f: -1);
     if (iS >= 0) WindowCheck(u.Meters[iS].Lim, ref rsS, ref vfS, last.s, now);
     if (iW >= 0) WindowCheck(u.Meters[iW].Lim, ref rsW, ref vfW, last.w, now);
@@ -946,15 +1026,17 @@ static (int fails, string why) AfterFetch(int fails, string why, string attempt)
 // The ⚠ reason once the fetch has failed twice in a row or more, and "" before that: the
 // usage source, why the latest attempt failed, and how old the rows still drawn are, from
 // okAt, the time of the last good fetch; 0 means there are no rows to draw. A single failure
-// is quiet while the last good rows stand in for it. Rows of another account (foreign) are not
-// drawn, so after a switch there are none to stand in, and the first failure is shown.
+// is quiet while the last good rows stand in for it. With none to stand in, the first failure is
+// shown: before any fetch has worked, on a first run or with the registry emptied, and after a
+// switch, since rows of another account (foreign) are not drawn. The status line leaves the row out
+// while nobody is signed in, whose account line says so already.
 //
 // So is a 429 that holds the fetch off (heldUntil, 0 for none), since no retry comes before the
 // time it names: the reason names that time, in zone (Clock), while it is still to come, as
 // "HTTP 429 from api.anthropic.com until 12:49:50", and once it has passed the row stays as any
 // other until a fetch succeeds.
 static string FetchWarn(int fails, string why, long okAt, long now, bool foreign, long heldUntil, TimeSpan? zone) {
-    if (fails < (foreign || heldUntil > 0 ? 1 : 2)) return "";
+    if (fails < (okAt <= 0 || foreign || heldUntil > 0 ? 1 : 2)) return "";
     return "usage — " + FetchWhy(why) + (Held(heldUntil, now) ? " until " + Clock(heldUntil, zone) : "") + "; "
          + (foreign ? "no limit rows for the new account yet"
             : okAt > 0 ? "the limit rows are " + Hm((now - okAt) / 3600.0) + " old" : "no limit rows yet");
@@ -1037,19 +1119,32 @@ static void WindowCheck(Lim lim, ref long storedRs, ref long vf, int lastPct, lo
 
 // read fresh every render (never cached) so an account switch shows immediately; in home, or in
 // Home() when none is given. org is the organisation, which claude-swap names an account by.
+//
+// A file that does not parse is read once more, RereadMs later, before the account counts as
+// unreadable. On Windows claude-swap writes ~/.claude.json over the old one in place (shutil.move,
+// which copies when the name is taken; https://github.com/realiti4/claude-swap/issues/461), so a
+// read in the middle of a switch can find it empty or cut short, and would then find no account:
+// "not signed in" on the account line, for that render. Offline, the file as it reads a moment
+// later is .claude.json.later beside it, where a fixture has one.
 static (string uuid, string email, string org) AccountInfo(string? home = null) {
-    string uuid = "", email = "", org = "";
-    try {
-        string p = Path.Combine(home ?? Home(), ".claude.json");
-        using var fs = File.OpenRead(p);
-        using var d = JsonDocument.Parse(fs);
-        if (d.RootElement.TryGetProperty("oauthAccount", out var a) && a.ValueKind == JsonValueKind.Object) {
-            if (a.TryGetProperty("accountUuid", out var u)) uuid = u.GetString() ?? "";
-            if (a.TryGetProperty("emailAddress", out var e)) email = e.GetString() ?? "";
-            org = Str(a, "organizationUuid");
-        }
-    } catch { }
-    return (uuid, email, org);
+    string p = Path.Combine(home ?? Home(), ".claude.json");
+    for (int reads = 1; ; reads++) {
+        string uuid = "", email = "", org = "";
+        try {
+            using var fs = Shared(p);
+            using var d = JsonDocument.Parse(fs);
+            if (d.RootElement.TryGetProperty("oauthAccount", out var a) && a.ValueKind == JsonValueKind.Object) {
+                if (a.TryGetProperty("accountUuid", out var u)) uuid = u.GetString() ?? "";
+                if (a.TryGetProperty("emailAddress", out var e)) email = e.GetString() ?? "";
+                org = Str(a, "organizationUuid");
+            }
+        } catch (JsonException) when (reads == 1) {
+            Thread.Sleep(RereadMs);
+            if (Offline() is not null && File.Exists(p + ".later")) p += ".later";
+            continue;
+        } catch { }
+        return (uuid, email, org);
+    }
 }
 
 // "max" + rateLimitTier "default_claude_max_20x" -> "Max 20"
@@ -1057,7 +1152,7 @@ static string Plan() {
     string sub = "", tier = "";
     try {
         string p = Path.Combine(Home(), ".claude", ".credentials.json");
-        using var fs = File.OpenRead(p);
+        using var fs = Shared(p);
         using var d = JsonDocument.Parse(fs);
         if (d.RootElement.TryGetProperty("claudeAiOauth", out var o) && o.ValueKind == JsonValueKind.Object) {
             if (o.TryGetProperty("subscriptionType", out var s)) sub = s.GetString() ?? "";
@@ -1116,8 +1211,9 @@ static long RegLong(string name) => long.TryParse(RegStr(name), out long v) ? v 
 static int RegInt(string name) => int.TryParse(RegStr(name), out int v) ? v : 0;
 
 // A good fetch: the rows and what came with them, the history, and a cleared count of
-// failures. val, the drawn rows builds before this one cached, is removed, so that a build
-// restored from a backup fetches afresh rather than drawing rows from before the switch.
+// failures. Nothing else is removed. val, the drawn rows that builds before 2026-09-24 cached, was
+// kept in the key of before the rename, HKCU\Software\cshipUsage, and this key has never held one,
+// so the line that removed it was dropped on 2026-09-24.
 //
 // The account the rows are for (acct) and the print of the token they were fetched with (tok)
 // are written after the rows and before ts. Saved reads them before the rows, so it can find
@@ -1426,6 +1522,91 @@ static string Hm(double hours) {
     return h > 0 ? $"{h}h{m:D2}m" : $"{m}m";
 }
 
+// What the usage request says it comes from: claude-code/<version>, with the installed Claude
+// Code's version (ClaudeVersion). keep: false finds that version without writing anything down.
+static string UserAgent(bool keep) => "claude-code/" + ClaudeVersion(keep);
+
+// The version of Claude Code the usage request names, the first of these there is:
+//
+//   - the one the status-line payload carries, which is the Claude Code running the status line. A
+//     render keeps it in the registry, ccv, with the time it was given, ccvTs (KeepVersion), and it
+//     stands for a day from then, so that the key's --refresh, which has no payload, sends it too;
+//   - the newest version installed (NewestInstalled), which can be one newer than the version
+//     running, downloaded and not yet started. Where Claude Code only runs in the VS Code extension
+//     no status line runs, and this is the version. It is kept the same way, so that the folders are
+//     looked through once a day at most and not at every fetch, and a payload version given
+//     meanwhile takes its place;
+//   - the version kept before, a day old or more, when nothing is installed where it is looked for;
+//   - FallbackVersion, which is then kept for a day as well.
+//
+// Nothing is started to find it: the payload says it, or the names of the folders do. With keep
+// false it is found the same way and nothing is written. Offline the registry is neither read nor
+// written, and the folders looked through are the ones under the fixture's home.
+static string ClaudeVersion(bool keep = true) {
+    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    string kept = Offline() is null ? RegStr("ccv") : "";
+    long keptAt = Offline() is null ? RegLong("ccvTs") : 0;
+    if (IsVersion(kept) && keptAt <= now && now - keptAt < VersionMaxAge) return kept;
+    string found = NewestInstalled(Home());
+    string version = found.Length > 0 ? found : IsVersion(kept) ? kept : FallbackVersion;
+    if (keep && Offline() is null) StoreVersion(version, now);
+    return version;
+}
+
+// A render's payload version, kept for ClaudeVersion: written when it is not the one kept, or the
+// one kept is a day old, so a status line that runs on renews it once a day. Offline nothing is kept.
+static void KeepVersion(string version) {
+    if (Offline() is not null || !IsVersion(version)) return;
+    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), keptAt = RegLong("ccvTs");
+    if (version == RegStr("ccv") && keptAt <= now && now - keptAt < VersionMaxAge) return;
+    StoreVersion(version, now);
+}
+
+static void StoreVersion(string version, long now) {
+    try {
+        using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
+        rk.SetValue("ccv", version);
+        rk.SetValue("ccvTs", now.ToString(CultureInfo.InvariantCulture));
+    } catch { }
+}
+
+// The newest version of Claude Code installed under home, by the names in two folders: the VS Code
+// extension's, .vscode\extensions\anthropic.claude-code-<version>-<platform>, and the native
+// installer's, which keeps an entry named for each version it has downloaded under
+// .local\share\claude\versions (a file each, on the machine this was written on). The versions are
+// compared number by number, so 2.1.100 is newer than 2.1.99. "" when there is none.
+static string NewestInstalled(string home) {
+    const string Extension = "anthropic.claude-code-";
+    var names = new List<string>();
+    try {
+        foreach (string dir in Directory.EnumerateDirectories(Path.Combine(home, ".vscode", "extensions"), Extension + "*")) {
+            string rest = Path.GetFileName(dir).Substring(Extension.Length);
+            int dash = rest.IndexOf('-');
+            names.Add(dash >= 0 ? rest.Substring(0, dash) : rest);
+        }
+    } catch { }
+    try {
+        foreach (string entry in Directory.EnumerateFileSystemEntries(Path.Combine(home, ".local", "share", "claude", "versions")))
+            names.Add(Path.GetFileName(entry));
+    } catch { }
+    string newest = ""; Version? best = null;
+    foreach (string name in names)
+        if (IsVersion(name) && Version.TryParse(name, out Version? v) && (best is null || v > best)) { newest = name; best = v; }
+    return newest;
+}
+
+// "2.1.296": two to four numbers between dots, as Claude Code numbers its versions, and so nothing
+// that could not stand in a User-Agent.
+static bool IsVersion(string v) {
+    if (v.Length is 0 or > 32) return false;
+    int dots = 0;
+    for (int i = 0; i < v.Length; i++) {
+        if (v[i] == '.') { if (i == 0 || i == v.Length - 1 || v[i - 1] == '.') return false; dots++; }
+        else if (v[i] is < '0' or > '9') return false;
+    }
+    return dots is >= 1 and <= 3;
+}
+
 // One call to the usage API, with the token from .credentials.json (Token). On a failure the
 // usage is null and why says what went wrong, as a kind FetchWhy has words for where there is
 // one: no token, timeout, offline, http <status>. A 429 also says when the server will take the
@@ -1438,7 +1619,7 @@ static (Usage? u, string why, long hold) Fetch(string token) {
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
         req.Headers.Add("Authorization", "Bearer " + token);
         req.Headers.Add("anthropic-beta", "oauth-2025-04-20");
-        req.Headers.Add("User-Agent", "claude-code/2.1.90");
+        req.Headers.Add("User-Agent", UserAgent(keep: true));
         using var resp = http.Send(req);
         if (!resp.IsSuccessStatusCode)
             return (null, "http " + (int)resp.StatusCode,
@@ -1485,8 +1666,8 @@ static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
             // resets_at is a time on every kind in the 2026-08-15 and 2026-09-23 responses,
             // weekly_scoped included, but on 2026-08-18 weekly_scoped at 0% sent null in three
             // samples in a row. So "no reset time" is a state a payload can report (the
-            // legacy shape below never has one), and it is carried as a flag rather than as
-            // an hrs of 0, which reads as "resets right now"
+            // fallback below reads none), and it is carried as a flag rather than as an hrs
+            // of 0, which reads as "resets right now"
             double hrs = 0; long rsu = 0; bool hasReset = false;
             if (lim.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
                 && DateTimeOffset.TryParse(ra.GetString(), out var rdt)) {
@@ -1498,8 +1679,9 @@ static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
             u.Meters.Add(new Meter(kind, label, scope, new Lim(pct, hrs, hasReset, rsu, sev)));
         }
     } else {
-        // the legacy shape carries utilization but no reset time, so both resets are
-        // unknown here, not zero minutes away
+        // the older top-level objects: they carry a resets_at as well, as in the 2026-08-15
+        // and 2026-09-23 responses, but only utilization is read here, so both resets are
+        // unknown on this path, not zero minutes away
         u.Meters.Add(new Meter("session", "5h", "",
             new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, false, 0, "")));
         u.Meters.Add(new Meter("weekly_all", "7d", "",
@@ -1807,7 +1989,8 @@ static TokState TokLoad(string sid) {
     try {
         string p = TokPath(sid);
         if (!File.Exists(p)) return st;
-        using var fs = new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.Read);
+        // another render of the same session may be moving its own copy over this one (TokSave)
+        using var fs = Shared(p);
         using var br = new BinaryReader(fs, new UTF8Encoding(false));
         if (br.ReadInt32() != 0x324B5443) return new TokState();   // "CTK2"; CTK1 caches rebuild
         for (int i = 0; i < 5; i++) st.Main[i] = br.ReadInt64();
@@ -1945,7 +2128,7 @@ sealed class TokState {
 }
 
 // HasReset is carried explicitly rather than inferred from Hours or ResetsUnix being 0.
-// The legacy five_hour/seven_day fallback shape has no reset time at all, and on 2026-08-18
+// The fallback to the older five_hour/seven_day objects reads no reset time, and on 2026-08-18
 // the API sent resets_at: null for weekly_scoped at 0% (on 2026-09-23, at 47%, it sent a
 // time there). Both used to arrive as Hours 0, which the rows drew as "↻ 0m", a claim that
 // the window resets this instant.

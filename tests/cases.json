@@ -1,5 +1,5 @@
 {
-  "about": "One render per case and width: the payload on stdin, a copy of the home as STATUSAI_OFFLINE and HOME, and STATUSAI_WIDTH set to the width, or, where a case has an env, exactly the STATUSAI_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. A case with a face is the Stream Deck key: statusai --deck-face <face> in a copy of the home, the key as it is drawn that many seconds after the fetch, with its bytes in expected/<case>.svg. Run Test-Renders.ps1; see docs/development.md.",
+  "about": "One render per case and width: the payload on stdin, a copy of the home as STATUSAI_OFFLINE and HOME, and STATUSAI_WIDTH set to the width, or, where a case has an env, exactly the STATUSAI_WIDTH and COLUMNS it names, {w} standing for the width. COLUMNS is cleared otherwise. The bytes are in expected/<case>.w<width>.ansi. A case with a face is the Stream Deck key: statusai --deck-face <face> in a copy of the home, the key as it is drawn that many seconds after the fetch, with its bytes in expected/<case>.svg. A case with args is statusai <args> in a copy of the home, with what it prints in expected/<case>.txt. Run Test-Renders.ps1; see docs/development.md.",
   "cship": "1.8.0",
   "cases": {
     "showcase": {
@@ -223,6 +223,18 @@
       "widths": [141],
       "checks": "Nobody signed in, so no token, twice: no ⚠ row, since the account line already says not signed in and there are no limit rows to miss."
     },
+    "first-run-failed": {
+      "home": "first-run-failed",
+      "payload": "fresh",
+      "widths": [100, 141],
+      "checks": "A first run, with nothing in the registry, whose first fetch times out: there are no rows to stand in for it, so the ⚠ row comes at that first failure rather than the second, and says there are no limit rows yet."
+    },
+    "first-run-signed-out": {
+      "home": "first-run-signed-out",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A first run with nobody signed in, whose first fetch finds no token: no ⚠ row, since the account line already says not signed in; the same bytes as fetch-signed-out at 141."
+    },
     "fetch-every-warning": {
       "home": "fetch-every-warning",
       "payload": "fresh-no-transcript-path",
@@ -366,6 +378,38 @@
       "payload": "fresh",
       "widths": [141],
       "checks": "A token renewed for the same account is no switch: claude-swap's fresh figure for it is not used and this render fetches, the same bytes as live at 141."
+    },
+    "account-reread": {
+      "home": "account-reread",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "~/.claude.json cut short at the first read, as claude-swap leaves it for a moment while it rewrites the file in place, and whole when it is read again 25 ms later (.claude.json.later): the account and its breakdown as ever, the same bytes as live at 141."
+    },
+    "account-unreadable": {
+      "home": "account-unreadable",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "~/.claude.json empty at both reads: the account counts as unreadable, so the account line says not signed in and the breakdown is left out, while the limit rows are drawn."
+    },
+    "agent-vscode": {
+      "home": "agent-vscode",
+      "args": "--user-agent",
+      "checks": "Claude Code only in VS Code, so no status line has given a version: the newest of the extension's two folders, 2.1.99 and 2.1.100 compared as numbers, and not another publisher's extension: claude-code/2.1.100."
+    },
+    "agent-native": {
+      "home": "agent-native",
+      "args": "--user-agent",
+      "checks": "The native installer's versions, 2.1.294 to 2.1.296, an entry named for each: claude-code/2.1.296."
+    },
+    "agent-both": {
+      "home": "agent-both",
+      "args": "--user-agent",
+      "checks": "Both places: the extension at 2.1.300, and the native installer's 2.1.301 and 2.1.31, which would come first if compared as text: claude-code/2.1.301."
+    },
+    "agent-none": {
+      "home": "shot",
+      "args": "--user-agent",
+      "checks": "Neither folder, and offline no version kept: the fallback, claude-code/2.1.90."
     },
     "rows-shot": {
       "home": "rows-shot",
@@ -526,7 +570,7 @@
     "key-legacy": {
       "home": "legacy-shape",
       "face": 0,
-      "checks": "The legacy shape, without reset times: ↻ — on both rows."
+      "checks": "The legacy shape, whose reset times are not read: ↻ — on both rows."
     },
     "key-no-session": {
       "home": "no-session",
@@ -547,6 +591,11 @@
       "home": "fetch-never-worked",
       "face": 0,
       "checks": "No token to fetch with and no rows yet: — on both rows, ⚠ no token, no rows yet."
+    },
+    "key-first-run-failed": {
+      "home": "first-run-failed",
+      "face": 0,
+      "checks": "A first run whose first fetch timed out: — on both rows, ⚠ timeout in red under the first and 'no rows yet' under the second, at that first failure."
     },
     "key-signed-out": {
       "home": "fetch-signed-out",

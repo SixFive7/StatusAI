@@ -43,7 +43,10 @@
     `Retry-After`.
   - In normal running none of our fetches, 58 an hour, was refused.
   - The allowance itself is still unknown. claude-swap's notes give other programs about 28 to 30
-    requests an hour, measured by its authors. We identify as `claude-code/2.1.90`.
+    requests an hour, measured by its authors. We identify as `claude-code/<version>`, with the
+    installed Claude Code's version: the one the status-line payload carries, or else the newest
+    the VS Code extension's or the native installer's folder names, and `2.1.90` only where there
+    is neither ([the endpoint](docs/reference/limits.md#the-endpoint)).
   - Added in 2.1.80: https://code.claude.com/docs/en/changelog#2-1-80
   - Noted under [known gaps](docs/reference/limits.md#known-gaps)
   - How a failed fetch is retried: [when a fetch fails](docs/reference/limits.md#when-a-fetch-fails)

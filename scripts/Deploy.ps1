@@ -46,6 +46,12 @@
     Without a plugin folder nothing of this happens, unless -Deck asks for a first install: the
     folder is then created and filled, and the app has to be restarted to see it.
 
+    Whenever there is a plugin to install or bring in step, the script also looks for the
+    typeface the key is drawn in, Bahnschrift: bahnschrift.ttf in %WINDIR%\Fonts, or
+    bahnschrift*.ttf in the folder of fonts installed for one user,
+    %LOCALAPPDATA%\Microsoft\Windows\Fonts. Without it the app draws the key in Tahoma, in which
+    the two times on a line of the key run into each other, so it says so, and goes on.
+
 .PARAMETER Source
     The new build. Default: the output of `dotnet publish -c Release -r win-x64` in src/.
 
@@ -125,6 +131,19 @@ function Remove-WithRetry([string] $p) {
     return 0
 }
 
+# The key names one typeface for each text, Bahnschrift, and no other to fall back on: the app draws
+# the SVG with QtSvg, which reads a list of families as one name it does not have and draws that
+# text in Tahoma, so a list would undo the face where Bahnschrift is installed as well (see
+# docs/design/stream-deck.md, the key, readable). Bahnschrift has come with Windows since Windows 10
+# 1709. Where it is missing all the same, the key comes out in Tahoma, which is too wide for it: that
+# is said, and nothing is stopped for it.
+function Test-KeyFont {
+    $system = $env:WINDIR -and (Test-Path -LiteralPath (Join-Path $env:WINDIR 'Fonts\bahnschrift.ttf') -PathType Leaf)
+    $user = $env:LOCALAPPDATA -and (Test-Path -Path (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts\bahnschrift*.ttf') -PathType Leaf)
+    if ($system -or $user) { return }
+    Write-Host 'stream deck    : Bahnschrift is not installed, so the app draws the key in Tahoma, and the two times on a line of the key run into each other' -ForegroundColor Yellow
+}
+
 # ------------------------------------------------------------------ the Stream Deck plugin's copy
 # The plugin is this same statusai.exe, which the app runs from the plugin's own folder for as
 # long as the app is open. That copy is therefore locked the whole time, where the status
@@ -147,6 +166,7 @@ function Sync-Deck {
         Write-Host "stream deck    : no plugin folder to copy at $assets" -ForegroundColor Red; return 4
     }
     $assets = (Resolve-Path -LiteralPath $assets).Path
+    Test-KeyFont
 
     # A copy an earlier run moved aside, if nothing runs it any more. One that cannot be removed
     # is still running: the plugin was not started again from the copy that replaced it.

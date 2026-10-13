@@ -162,15 +162,18 @@ instance; the limit rows need one.
 A figure that could not be read never looks like a real zero. A source that failed is named in a
 **red** `⚠` row at the foot of the block, and the figure itself reads `—`. That covers a payload
 that cannot be read, a missing cost or context figure, a transcript that should exist and does not,
-a usage fetch that is suspended or has failed twice in a row, or once for an account you have just
-switched to or with a refusal that says how long it lasts, and cship printing nothing. A brand-new
-session, before its first reply, is not a failure and says nothing.
+a usage fetch that is suspended or has failed twice in a row, or once before any fetch has worked,
+for an account you have just switched to, or with a refusal that says how long it lasts, and cship
+printing nothing. A brand-new session, before its first reply, is not a failure and says nothing.
 
-A usage fetch that fails once (when you're offline, say) is quiet. The limit rows keep showing the
-last good fetch, with its countdowns where they stood then, or are left out if there has been none,
-and the next render tries again. If that fails too, a red row names the reason and says how old the
-rows are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds. While
-the row shows, your open sessions try again at most once every 50 seconds between them.
+A usage fetch that fails once (when you're offline, say) is quiet while there are limit rows to
+show: they keep showing the last good fetch, with its countdowns where they stood then, and the
+next render tries again. If that fails too, a red row names the reason and says how old the rows
+are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds. From the
+second failure on, your open sessions try again at most once every 50 seconds between them. Where
+no fetch has worked yet, as on a first run, there is nothing to show, and the red row comes at the
+first failure: `⚠ usage — timed out after 3 s; no limit rows yet`. With nobody signed in it stays
+away, since the account line says `not signed in` already.
 
 An `HTTP 429` is the server refusing for a while, and it usually says how long. Then none of your
 sessions asks again before that time, and the red row comes at the first refusal and names the time

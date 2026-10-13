@@ -46,9 +46,9 @@ chosen from.
 |---|---|
 | `→idle`, in grey | Nothing has fetched for five minutes, which is what happens when Claude is not working. The pace the time to 100% was worked out from has stopped, so the key no longer states one. |
 | a meter at `0%`, grey, with `↻ —` | That limit's window has ended since the last fetch. What was used in it is gone, and the next window's reset time is not known until something fetches. |
-| both meters grey, `⚠` and a reason in red | The usage could not be fetched twice in a row: `timeout`, `offline`, `no token`, `HTTP 429`. The figures are the last good ones, and the line under the second meter says how old they are. It is the status line's own [`⚠` row](reading-the-status-line.md#when-a-row-says-), cut to fit. |
+| both meters grey, `⚠` and a reason in red | The usage could not be fetched twice in a row: `timeout`, `offline`, `no token`, `HTTP 429`. The figures are the last good ones, and the line under the second meter says how old they are. It is the status line's own [`⚠` row](reading-the-status-line.md#when-a-row-says-), cut to fit. Where there have never been any figures, as on a first run, this shows at the first failure, with `—` on both meters and `no rows yet` under the second. |
 | both meters grey, `⚠ 429 until 12:50` in red | The server refused the usage request and said when it would take it again: the time, to the minute and rounded up. Nothing asks before then, not the key and not a status line, so this shows at the first refusal. The line under the second meter says how old the figures are. After that time the next fetch tries again. |
-| both meters grey, `—`, and `new account` under the first | Claude Code has switched to another account. The figures the key had were the old account's, so it shows none until the new account's first fetch, or claude-swap's figure for it if claude-swap made the switch a moment before: a terminal's status line makes it at its next render, and the key itself once Claude writes something. |
+| both meters grey, `—`, and `new account` under the first | Claude Code has switched to another account. The figures the key had were the old account's, so it shows none until the new account's first fetch, or claude-swap's figure for it if claude-swap made the switch a moment before: a terminal's status line makes it at its next render, and the key itself at its next redraw once the switch is 15 seconds old, Claude working or not. |
 | both meters grey, `—`, `⚠` and a reason in red, `new account` under the second | That first fetch for the new account failed. There are no figures to stand in for it, so this shows at the first failure, not the second. |
 | `—` where a percentage would be | There is no such figure: nothing has been fetched yet, nobody is signed in, or the server sent no such limit. |
 
@@ -84,10 +84,19 @@ and is told the moment they change.
   that time.
 - **Nothing is happening.** Then nothing is fetched. The key keeps counting its countdowns down
   and shows `→idle` after five minutes.
+- **You switch accounts**, or Claude Code renews its token, and nothing has fetched with the new
+  one yet. The key sees it at its next redraw, within a minute, and once the switch is 15 seconds
+  old it starts one `statusai --refresh` for it, Claude working or not. At a switch made with
+  claude-swap that takes claude-swap's figure for the new account, fetched as it switched, and
+  asks Anthropic nothing; without it, it fetches. The 15 seconds keep that request out of the burst
+  a switch sets off, when claude-swap and every Claude Code window ask for the new account at once.
+  It is one refresh a token, whatever comes of it, and none while a refusal that says how long it
+  lasts holds that token off.
 
 So the key adds no call to Anthropic while a terminal is open, at most 58 an hour while Claude
-works elsewhere, and none while Claude is idle. It also fetches nothing while it is not visible,
-on another page or profile: the write is remembered, and the refresh comes when the key is back.
+works elsewhere, and none while Claude is idle, but for the one after a switch that claude-swap has
+no figure for, or after a renewal. It also fetches nothing while it is not visible, on another page
+or profile: the write is remembered, and the refresh comes when the key is back.
 
 Usage this PC cannot see, from another device or from a chat in the browser, shows up at the next
 fetch: when Claude next writes something here, or when you press the key, since the new session's
@@ -143,13 +152,13 @@ it deploys a build; see [development.md](../development.md#deploying).
 
 | what you see | what to do |
 |---|---|
-| the text runs together, in a plain wide typeface | Windows has no Bahnschrift, which every Windows 10 from 1709 on and every Windows 11 has. The app then draws the key in its own default typeface, which is too wide for it. |
+| the text runs together, in a plain wide typeface | Windows has no Bahnschrift, which every Windows 10 from 1709 on and every Windows 11 has. The app then draws the key in its own default typeface, Tahoma, which is too wide for it, and the two times on a line run into each other. `Deploy.ps1` says so in yellow whenever it installs the plugin or brings it in step on such a PC, and goes on with the deploy. |
 | the key shows the plugin's blank picture, `—` on both meters, and stays that way | The plugin is not running, or has nothing to draw yet. `%APPDATA%\Elgato\StreamDeck\logs\com.sixfive7.statusai0.log` holds one line for every start, `statusai 1.0.0 of <date> started as the Stream Deck plugin`, and one for anything that stopped it. No line at all means the app did not start it: quit Stream Deck and start it again. |
 | a yellow warning sign flashes on the key when you press it | Windows Terminal could not be started. The same log has Windows' error number for why: 2 is "not found", which is Windows Terminal not being installed. |
 | the terminal opens behind the window you are in, its taskbar button flashing | Windows refused every way the key has of bringing it forward. Nothing is logged for this; [development.md](../development.md#the-presses-on-the-live-desktop) has the test that shows which way works on your PC. |
 | both meters grey, `⚠ no token` | Claude Code is not signed in with a Claude account, as with the [status line](install.md#when-something-is-missing). |
 | the figures are old while Claude is working | The key only refreshes while it is visible. Otherwise, look at the log. |
-| `new account` stays after a switch | Nothing has fetched since: no terminal is open, and the key refreshes only while Claude writes. Start working, or press the key, since the new session's status line fetches as it starts. |
+| `new account` stays more than a minute after a switch | The key asks once for the new account's figures, at its first redraw once the switch is 15 seconds old, and only while it is visible. A fetch that failed says why in red under the first meter. If nothing came and nothing says why, press the key: the new session's status line fetches as it starts. |
 | a press opens a shell and not Claude Code | The key opens Windows Terminal's default profile. Make the profile that runs `claude` the default one, in Windows Terminal's settings under *Startup*. |
 
 ## Uninstall

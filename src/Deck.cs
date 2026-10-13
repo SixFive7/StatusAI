@@ -16,9 +16,10 @@ using Microsoft.Win32.SafeHandles;
 // It waits and never polls. Four things can wake it: a message from the app on its websocket, a
 // change to the registry key the limit rows are cached in, a write anywhere under
 // ~/.claude/projects, where every session of every kind keeps its transcripts, and the end of a
-// process that a key press started. It makes no fetch of its own: when the usage is due it starts
-// this exe again with --refresh, which goes through GetUsage() like any render, so the 50 second
-// cache, the lock and the count of failures are the status line's. A key press is this exe a
+// process that a key press started. It makes no fetch of its own: when the usage is due, or the
+// token signed in is one nothing has fetched with, it starts this exe again with --refresh, which
+// goes through GetUsage() like any render, so the 50 second cache, the lock, the count of failures
+// and claude-swap's figure at a switch are the status line's. A key press is this exe a
 // third time, with --deck-press, which starts Windows Terminal and brings it to the front. See
 // docs/reference/architecture.md.
 static class Deck {
@@ -29,6 +30,8 @@ static class Deck {
         public required Func<long> FetchedAt;                                 // unix seconds of the last good fetch, 0 offline
         public required Func<long> TriedAt;                                   // and of the last attempt
         public required Func<long> HeldUntil;                                 // and when a 429's hold on the token lifts, 0 for none
+        public required Func<(string token, long since)> Switched;            // the token signed in while the shared copy is another's:
+                                                                              // its print, and since when; ("", 0) while it is not
         public required Func<RowIn, (int now, int proj, string to100, int tone)> Pace;
         public required Func<double, string> Hm;
         public required Func<int, int> BarFill;
@@ -56,6 +59,7 @@ static class Deck {
     const int SlotSeconds = 62;      // while Claude works: one refresh a minute, just behind a terminal's own 60 s
     const int FreshSeconds = 50;     // GetUsage() fetches nothing while the shared copy is younger than this and of the token signed in
     const int IdleSeconds = 300;     // no fetch for this long means nothing has been running: a pace says nothing
+    const int SwitchSeconds = 15;    // a new token is refreshed for once it is this old: past the burst of requests a switch sets off
     const int SettleMs = 100;        // a fetch writes its values one by one; read them once they have all landed
     const int MaxMessage = 16 * 1024 * 1024;
 
@@ -136,6 +140,8 @@ static class Deck {
         var opening = new List<Opening>();                // presses whose terminal is being opened
         bool active = false; long activeSince = 0;        // a write was seen that no refresh has covered yet
         long refreshedAt = 0;                             // when this process last asked for a refresh
+        string switched = "";                             // the token this process last refreshed for while nothing was written (SwitchDue)
+        long switchAt = 0;                                // a new token too young to refresh for yet: when it no longer is
         long settleAt = 0;                                // the cache changed: draw it at this tick
         // Offline only, for the tests: a slot of another length, so that many refreshes fit in a run.
         int slot = offline && int.TryParse(Environment.GetEnvironmentVariable("STATUSAI_DECK_SLOT"), NumberStyles.None, CultureInfo.InvariantCulture, out int s) ? s : SlotSeconds;
@@ -155,6 +161,7 @@ static class Deck {
                 foreach (Hold k in held) wait = Math.Min(wait, k.Since + HoldMs - tick);
                 if (settleAt > 0) wait = Math.Min(wait, settleAt - tick);
                 if (active && shown.Count > 0) wait = Math.Min(wait, (RefreshDue(h, activeSince, refreshedAt, slot) - now) * 1000);
+                if (switchAt > 0 && shown.Count > 0) wait = Math.Min(wait, Math.Max(0, switchAt - now) * 1000);
                 // the countdowns on the key read in minutes: one look on each minute while a key shows
                 if (shown.Count > 0) wait = Math.Min(wait, (60 - DateTime.Now.Second) * 1000L + 50);
 
@@ -211,7 +218,15 @@ static class Deck {
                     } else if (offline) ws.Send(Log("offline: --deck-press " + o.What + " ended with " + code.ToString(CultureInfo.InvariantCulture)));
                 }
 
-                if (redraw && shown.Count > 0) Draw(ws, h, shown, now);
+                if (redraw && shown.Count > 0) {
+                    Draw(ws, h, shown, now);
+                    // a token that nothing has fetched with yet, as after a switch with Claude idle
+                    if (SwitchDue(h, now, switched, ref switchAt) is string token) {
+                        switched = token; refreshedAt = now;
+                        Refresh(ws);
+                        if (offline) ws.Send(Log("offline: ran --refresh for a new token"));
+                    }
+                }
 
                 // No refresh while no key is visible: there is nothing to draw it on. The write stays noted.
                 if (active && shown.Count > 0 && now >= RefreshDue(h, activeSince, refreshedAt, slot)) {
@@ -237,6 +252,29 @@ static class Deck {
     // 429 holds the token off, since --refresh would find the fetch held and do nothing.
     static long RefreshDue(Host h, long activeSince, long refreshedAt, int slot) =>
         Math.Max(Math.Max(activeSince, Math.Max(refreshedAt, Math.Max(h.FetchedAt(), h.TriedAt())) + slot), h.HeldUntil());
+
+    // A token that the shared copy was not fetched with, after a switch of account or a renewal. A
+    // terminal's status line fetches with it at its next render, but the refreshes above come only
+    // while something is being written, so after a switch with Claude idle and no terminal open the
+    // key went on saying "new account" until the next prompt. So at every redraw, the one on each
+    // minute among them, the key asks for one --refresh for such a token. GetUsage() then takes
+    // claude-swap's figure for the new account where it has a fresh one, and fetches otherwise.
+    //
+    // Once a token, whatever comes of it; not while a 429 holds the token off, but at the first redraw
+    // after the hold lifts; and not before the switch, when .credentials.json was written, is
+    // SwitchSeconds old: the burst of requests a switch sets off, six in 7 s on 13 October, is over by
+    // then, and claude-swap's figure, which it fetches at the switch, is there and still under the
+    // minute it may be old. Nothing watches .credentials.json: the switch is seen at the next redraw.
+    //
+    // The token's print when its refresh is due now, and null when it is not, with switchAt the time
+    // to look again where it is only that the switch is too recent.
+    static string? SwitchDue(Host h, long now, string refreshedFor, ref long switchAt) {
+        switchAt = 0;
+        var (token, since) = h.Switched();
+        if (token.Length == 0 || token == refreshedFor || h.HeldUntil() > now) return null;
+        if (since <= now && now - since < SwitchSeconds) { switchAt = since + SwitchSeconds; return null; }
+        return token;
+    }
 
     static long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 

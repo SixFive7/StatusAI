@@ -12,11 +12,33 @@ carries and which of it is drawn. The designs that were rejected are in
 GET https://api.anthropic.com/api/oauth/usage
 Authorization: Bearer <claudeAiOauth.accessToken from ~/.claude/.credentials.json>
 anthropic-beta: oauth-2025-04-20
-User-Agent: claude-code/2.1.90
+User-Agent: claude-code/<the installed Claude Code's version; see below>
 ```
 
 Undocumented, like everything else this project reads. Three-second timeout. A fetch that fails
 leaves the rows drawing the last good one; see [when a fetch fails](#when-a-fetch-fails).
+
+The version in the `User-Agent` is the installed Claude Code's, the first of these there is:
+
+1. The `version` the status-line payload carries, which is the Claude Code running the status line.
+   A render keeps it in the registry, `ccv`, with the time it was given, `ccvTs`, and it stands for
+   a day from then, so the [Stream Deck key](architecture.md#the-stream-deck-key)'s `--refresh`,
+   which has no payload, sends it too. A status line that goes on running renews it once a day.
+2. The newest version installed, by the names of two folders: the VS Code extension's,
+   `%USERPROFILE%\.vscode\extensions\anthropic.claude-code-<version>-<platform>`, and the native
+   installer's, `%USERPROFILE%\.local\share\claude\versions`, which holds an entry named for each
+   version it has downloaded. The versions are compared number by number, so `2.1.100` is newer
+   than `2.1.99`. Where Claude Code only runs in the VS Code extension no status line runs, and this
+   is the version sent. It can be one newer than the version running, downloaded and not yet
+   started. The fetch that looks keeps what it found in `ccv` and `ccvTs` as well, so the folders
+   are looked through once a day at most, and a payload version given meanwhile takes its place.
+3. The version kept before, a day old or more, when neither folder names one.
+4. `2.1.90`, the version this project first identified with, kept for a day the same way.
+
+Nothing is started to find it: the payload says it, or the names of the folders do.
+`statusai --user-agent` prints the `User-Agent` the next request would send, found the same way,
+and writes nothing; offline it looks only in the fixture's folders, which is how the
+[render tests](../development.md#the-render-tests) hold the lookup to its order and its comparison.
 
 ### Who fetches, and when
 
@@ -31,7 +53,9 @@ Every fetch goes through `GetUsage()`, whoever asks for it:
   [Stream Deck key](architecture.md#the-stream-deck-key) starts it while Claude is working and its
   key is visible: 62 seconds after the last fetch or attempt by anyone, which leaves a status line
   that has fetched two seconds ahead of it for good, and not at all while the shared copy is under
-  50 seconds old.
+  50 seconds old. And once for a token that nothing has fetched with, after a switch of account or
+  a renewal, Claude working or not: at the key's next redraw once the switch is 15 seconds old; see
+  [when the token changes](#when-the-token-changes).
 
 Neither asks while a 429 holds the token off; see
 [a 429 that says how long](#a-429-that-says-how-long). And at a switch to another account neither
@@ -47,7 +71,7 @@ calls per hour come to this:
 |---|---|---|
 | a terminal session open | 60 an hour, 72 at most, by the status line | 59,8 to 60,1 s |
 | Claude working with no terminal open, the key visible | at most 58 an hour, by `--refresh`, and one more a minute after the last write | 61,6 to 62,7 s |
-| nothing happening, or no key visible | none | |
+| nothing happening, or no key visible | none; with the key visible, one for a token that nothing has fetched with, after a switch or a renewal, unless claude-swap's figure stands in for it | |
 
 The lock, the 50 seconds and the count of failures are shared, so the two never add up: with both
 running, whichever comes first fetches and the other finds the copy fresh. That is the status
@@ -73,10 +97,13 @@ reason and how old the rows still drawn are, and stays until a fetch succeeds:
 ⚠ usage — timed out after 3 s; no limit rows for the new account yet
 ```
 
-The first one is quiet because the last good rows stand in for it. Right after a switch to another
-account there are none to stand in, since the old account's are not drawn, so the new account's
-first failure raises the row at once, with the last of the reasons above; see
-[when the token changes](#when-the-token-changes).
+The first one is quiet because the last good rows stand in for it. Where there are none to stand
+in, the first failure raises the row at once. Before any fetch has worked, on a first run or with
+the registry emptied, it ends in `no limit rows yet`, as the fourth above does. Right after a switch
+to another account the old account's rows are not drawn, so the new account's first failure raises
+it with the last of the reasons above; see [when the token changes](#when-the-token-changes). The
+first of these waited for the second failure until 13 October, so a first run whose first fetch
+failed showed no limit rows, and no reason for them, until the next render failed as well.
 
 The timeout is HttpClient's own three seconds. Offline is a name that did not resolve or a network
 that is down or out of reach. A response that is not JSON reads `unreadable response`, one without a
@@ -173,6 +200,21 @@ at most, and draws the new account's rows itself, so none of this is seen. The a
 only once the token has changed: a copy fetched with the token signed in now belongs to that
 token's account, whatever `~/.claude.json` says.
 
+On Windows claude-swap writes `~/.claude.json` over the old one in place, where it moves a new
+`.credentials.json` over the old one in one step (reported as
+[claude-swap#461](https://github.com/realiti4/claude-swap/issues/461)), so a read in the middle of
+a switch can find `~/.claude.json` empty or cut short. One that does not parse is read once more,
+25 milliseconds later, before the account counts as unreadable; until 13 October such a read found
+no account, and the account line of that render said `not signed in`. claude-swap's `shutil.move`
+rewrote a file of 125 kB, the size of the one on the machine this was written on, in 1,6 ms at the
+median and 6,5 ms at most, in 200 tries.
+
+Every file another program replaces, `.credentials.json`, `~/.claude.json`, `settings.json` and
+claude-swap's table among them, is read with the sharing that lets that program replace it
+meanwhile. `.credentials.json` was read with `File.ReadAllText`, which lets others only read, and
+for the milliseconds StatusAI had it open, Windows refused claude-swap's switch and Claude Code's
+renewal of the token, which both move a new file over the old one.
+
 It costs no width. Withheld rows take their lines away rather than adding any, and the key says
 `new account` on a small line it already had. The new `⚠` reason ends in 37 characters where
 `the limit rows are 2m old` has 25: the longest row it makes,
@@ -190,9 +232,17 @@ request, `~/.claude.json` names the new account by then.
 that reads them while a fetch is being written can find rows newer than the token and the account
 it read, and so withhold them for once, but never draw old rows under a new token.
 
-Neither surface is woken by the switch itself: the status line draws it at its next render, which
-Claude Code runs every 60 seconds and at every message, and the key at its next redraw, which is
-once a minute while it shows. See [known gaps](#known-gaps).
+Neither surface is woken by the switch itself, since nothing watches `.credentials.json`. The status
+line draws it at its next render, which Claude Code runs every 60 seconds and at every message. The
+key sees it at its next redraw, once a minute while it shows, and then asks for one `--refresh` for
+the new token, Claude working or not, which takes claude-swap's figure for the new account where it
+has a fresh one and fetches where it has not, as a render does. It waits until the switch, the time
+`.credentials.json` was written, is 15 seconds old: the burst of requests a switch sets off is over
+by then, six requests in 7 seconds on 13 October, and claude-swap's figure, fetched at the switch,
+is still under the minute it may be old. It asks once a token, whatever comes of it, and not while a
+429 holds the token off, but at the first redraw after the hold lifts. Until 13 October the key
+refreshed only while something was being written, so after a switch with Claude idle and no
+terminal open it said `new account` until the next prompt. See [known gaps](#known-gaps).
 
 ### claude-swap's figure at a switch
 
@@ -246,9 +296,11 @@ is no host line to insert it into. See [layout.md](layout.md#when-there-is-no-ho
 ## Response shape
 
 Two shapes ship in the same payload. `ParseUsage()` prefers the `limits` array and falls back to
-the legacy top-level `five_hour` / `seven_day` objects, which carry `utilization` but no reset
-time, so on the fallback path every row shows a reset of `—` and no projection is possible. The
-live fetch and the offline render both parse through it, so a fixture exercises the same code.
+the older top-level `five_hour` / `seven_day` objects. Those carry `utilization` and a `resets_at`
+as well: every response captured has both, from the 2026-08-15 sample below to the live response
+of 2026-09-23 in `tests/fixtures/homes/live/usage.json`. The fallback reads only `utilization`,
+though, so on that path every row shows a reset of `—` and no projection is possible. The live
+fetch and the offline render both parse through it, so a fixture exercises the same code.
 
 ```jsonc
 {
@@ -404,9 +456,9 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   dim, as do `early`, `maxed` and `never`. The same rule holds on every row: 5h, 7d, scoped.
 - No reset time is its own state, carried as `Lim.HasReset`. On 2026-08-18 `weekly_scoped` at 0%
   returned `resets_at: null`, three samples running (the 08-15 and 09-23 responses carry a time
-  there), and the legacy `five_hour` / `seven_day` shape has no reset at all. Both used to arrive
-  as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant. They now
-  render `↻ —`, and while a row is in that state its projection is suppressed and its `→` is
+  there), and the fallback to the older `five_hour` / `seven_day` objects reads none. Both used to
+  arrive as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant. They
+  now render `↻ —`, and while a row is in that state its projection is suppressed and its `→` is
   neither red nor forest, since there is no deadline to test against.
 - A row at 100% is blocked until its window resets, so where it is heading does not apply for now.
   `→` reads `maxed` (or `early` if there is no trend yet), and the `⇢` segment is kept but drawn
@@ -432,6 +484,12 @@ The reset times were kept until 2026-10-13. A meter that has no reset time at th
 5h with no window open, then kept the old account's, and once the new account's window opened and
 sent one of its own, the two were further apart than 60 seconds and the series restarted a second
 time, five minutes after the switch on the day it was found.
+
+The scoped row has the same guard of its own. When it follows another model than before, `sn`, its
+series is foreign: `vfF` starts again, and since 13 October so does `rsF`, the reset time it is
+compared with, which was kept as the old model's until then. A new model's meter that came without
+a reset time, as a `weekly_scoped` at 0% can, would otherwise have restarted its series a second
+time once its window opened.
 
 The switch is visible in practice. The limit rows go until the new account's first good fetch,
 which the render that notices the new token normally makes at once (see
@@ -463,9 +521,13 @@ whole series was foreign and was thrown away. That is correct behaviour, not a b
   fetch. None has been seen.
 - Nothing watches `.credentials.json`, so a switch is not drawn the moment it happens. The status
   line shows it at its next render, within 60 seconds and at the next message; the key at its next
-  redraw, within a minute while it shows, and until then each shows what it drew last. The key
-  fetches only while Claude is writing, so after a switch with Claude idle and no terminal open
-  it reads `new account` until something fetches.
+  redraw, within a minute while it shows, with the new account's figures once the switch is 15
+  seconds old (see [when the token changes](#when-the-token-changes)). Until then each shows what
+  it drew last.
+- The fallback to the older `five_hour` / `seven_day` objects reads only `utilization`, though every
+  response captured carries a `resets_at` in them as well (see [response shape](#response-shape)), so
+  a response without `limits[]`, which no captured response has been, draws no reset time and no
+  projection.
 - Only a token that changes is compared. A copy fetched with the token signed in now is drawn as
   that token's account's even if `~/.claude.json` names another, which a switch could only cause
   in the moment between its two writes.

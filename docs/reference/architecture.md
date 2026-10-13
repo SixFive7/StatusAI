@@ -87,11 +87,23 @@ where claude-swap made the switch and fetched the new account a moment before, i
 is not installed, or its file does not hold, the request is made; see
 [limits.md](limits.md#claude-swaps-figure-at-a-switch).
 
+**The files other programs replace are read so as to let them.** `.credentials.json`, which Claude
+Code renews and claude-swap switches by moving a new file over the old one, `~/.claude.json`,
+`settings.json`, claude-swap's table and the token cache are opened with every kind of sharing, so
+that Windows never refuses such a replace for the moment StatusAI has the file open. A
+`~/.claude.json` that does not parse, as claude-swap leaves it for a moment on Windows, is read once
+more 25 ms later; see [limits.md](limits.md#when-the-token-changes).
+
+`ccv` is the version of Claude Code the usage request names in its `User-Agent`, and `ccvTs` when it
+was found: the payload's `version`, which a render keeps, or else the newest version installed in
+the VS Code extension's folder or the native installer's, looked for once a day at most; see
+[limits.md](limits.md#the-endpoint).
+
 ## State
 
 | location | contents |
 |---|---|
-| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `tryTok`, `holdTs`, `hist`, `acct`, `tok`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`). `tok` and `tryTok` are 8 hex digits of a token's SHA-256, never the token |
+| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `tryTok`, `holdTs`, `hist`, `acct`, `tok`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`), Claude Code's version for the `User-Agent` (`ccv`, `ccvTs`). `tok` and `tryTok` are 8 hex digits of a token's SHA-256, never the token |
 | `%LOCALAPPDATA%\StatusAI\tokens\<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
 | named mutex `Global\StatusAI.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 | `%APPDATA%\Elgato\StreamDeck\Plugins\com.sixfive7.statusai.sdPlugin\` | the Stream Deck plugin, where it is installed: its manifest, its pictures and its own copy of `statusai.exe`. It keeps no state of its own |
@@ -130,7 +142,7 @@ It waits and never polls. Four things wake it, and a timer for what is due:
 | a change notification on `HKCU\Software\StatusAI` | a fetch by anyone: a terminal's status line, or `--refresh` | draws the key 100 ms later, once every value of the fetch has landed |
 | a change notification on `~/.claude/projects` and everything under it | a write by any Claude Code session of any kind, which is where they keep their transcripts | notes that Claude is working, and refreshes when a refresh is due |
 | the process of a key press | its end, a second or so after the press | reads its exit code: an alert on the key when Windows Terminal could not be started |
-| a timer | the next minute, the half second of a held key, the next refresh | redraws the countdowns, makes a press a long one, refreshes |
+| a timer | the next minute, the half second of a held key, the next refresh, a new token turning 15 seconds old | redraws the countdowns, makes a press a long one, refreshes |
 
 The folder's notification stays signalled until it is armed again, so a burst of writes is one
 wake-up: 65.900 appends in 30 seconds cost the process two wake-ups and no processor time that
@@ -157,6 +169,17 @@ Arming the folder's notification again reports the writes made since it was last
 the last write of a burst is followed by one more refresh a minute later, which is the one that
 sees what the last reply cost; after that nothing is fetched until Claude writes again. And
 nothing is refreshed while no key is visible: the write stays noted until one is.
+
+**A new token gets one refresh, written to or not.** At every redraw, the one on each minute among
+them, the key compares the token in `.credentials.json` with the one the shared copy was fetched
+with, as `Saved()` does for its face (`Deck.SwitchDue`). After a switch of account or a renewal that
+nothing has fetched for yet, it starts one `--refresh` for that token, which at a switch takes
+claude-swap's figure where it has a fresh one and fetches otherwise. It waits until the token is 15
+seconds old, by the time `.credentials.json` was written, so that the request stays out of the burst
+a switch sets off, and sets a timer for that moment where a redraw comes sooner; it asks once a
+token, and not while a 429 holds that token off. Nothing watches the file: a switch is seen within
+the minute, and with Claude idle and no terminal open the key no longer says `new account` until
+the next prompt. See [limits.md](limits.md#when-the-token-changes).
 
 **A key press is a third process, `statusai --deck-press tab` or `window`.** It starts
 `wt.exe -w 0 nt` or `wt.exe -w new` and brings the terminal's window to the front, which Windows
@@ -232,7 +255,8 @@ cable, or the system wakes up, it draws the keys that show again whether or not 
 changed, since the deck may have lost it.
 
 With `STATUSAI_OFFLINE` set, the mode touches nothing live, like a render: the rows come from the
-fixture, the registry is not watched, the `--refresh` it starts has nothing to fetch, and the
+fixture, and so do the token the copy was fetched with and a 429's hold, the registry is not
+watched, the `--refresh` it starts has nothing to fetch, and the
 `--deck-press` a key press starts opens nothing and ends with 0. Both are reported to the app's
 log, which is what the tests read. Two more
 variables are for trying it: `STATUSAI_DECK_TAB`, what the tab or window of a press runs in
@@ -249,7 +273,7 @@ The token accounting is fully portable, but the code around it uses a few Window
 
 | Windows-only API | belongs to |
 |---|---|
-| `Registry.CurrentUser` (9 sites) | limit-bar cache, and the FX rate cache |
+| `Registry.CurrentUser` (10 sites) | limit-bar cache, the FX rate cache, and Claude Code's version |
 | `WindowsIdentity` / `WindowsPrincipal` | mutex naming |
 | `Global\` mutex | single-flight on the usage fetch |
 | `RegNotifyChangeKeyValue`, `FindFirstChangeNotificationW`, `FreeConsole`, `SetHandleInformation`, `SetForegroundWindow`, `SendInput` and the other window calls | the Stream Deck key, which is Windows-only as a whole: it opens Windows Terminal |
