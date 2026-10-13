@@ -920,6 +920,51 @@ const secQ6 = `
   <p class="recline"><b>Decided: e, a variant of a, built on 2026-09-24.</b> A row at 100% keeps its <code>⇢</code> segment,
   greyed; <code>→</code> still reads <code>maxed</code>, or <code>early</code> while there is no trend yet.</p>
 </div>`;
+// Q7, decided 2026-10-13. A record in words: what it draws is held by the render tests' token and
+// switch cases (tests/cases.json), not by the captures or the port this page draws its rows from.
+const secQ7 = `
+<div class="q" id="q7"><h3 class="qh">Q7: What do the limit rows show right after a switch to another account? ${DECIDED('decided, 2026-10-13')}</h3>
+  <p class="primer">StatusAI keeps one copy of the usage for the machine, not one per account. The claude-swap tool switches
+  Claude Code between accounts by rewriting <code>.credentials.json</code> and then <code>~/.claude.json</code>, and running sessions
+  follow at their next request. The copy noticed a switch only at its next good fetch, by comparing the account in
+  <code>~/.claude.json</code> with the one it had stored, <code>acct</code>. Until then the status line and the Stream Deck key drew
+  the previous account's figures as current: for up to 50 seconds normally, and for as long as the new account's fetches
+  failed, quietly at the first failure and then under a <code>⚠</code> row that gave an age but no account. On 12 October the
+  first good fetch came 5 min 18 s after a switch.</p>
+  ${optCard({ letter: 'a', title: 'Tie the copy to the token it was fetched with', status: 'chosen',
+    note: `As decided: "Store a short fingerprint of the token with the cached figures. If the token changes, fetch at once
+    instead of waiting up to 50 s, and grey the meters until that fetch succeeds."`,
+    body: `<p class="opt-w">A good fetch stores <code>tok</code> beside <code>acct</code>: the first 8 hex digits of the access token's
+    SHA-256, never the token. A render or a <code>--refresh</code> whose token is not <code>tok</code> fetches at once, through the lock,
+    and a token not tried yet is tried even while the old one's retries are held off.</p>
+    <p class="opt-w">A token Claude Code renews for the same account, about every 8 hours, keeps the figures drawn while that fetch
+    runs. Another account in <code>~/.claude.json</code>, or one that cannot be read, withholds them on both surfaces until the new
+    account's first good fetch: the status line has no limit rows, and its <code>⚠</code> row comes at the first failure,
+    <code>no limit rows for the new account yet</code>; the key greys both meters with no figures in them and says
+    <code>new account</code>, with <code>⚠ timeout</code> or another reason above it once that fetch has failed. The render that notices
+    the new token normally makes the fetch itself, within its 3 seconds, so none of this is seen.</p>
+    <p class="opt-w">It costs no width: rows are withheld, not added, and the longest new <code>⚠</code> row, 87 columns, is 12 longer
+    than the same reason with an age. The render tests hold it to seven cases: <code>token-renewed</code>, <code>switch-pending</code>,
+    <code>switch-failed</code> and <code>switch-tried-at-once</code>, and the key's <code>key-token-renewed</code>,
+    <code>key-switch-pending</code> and <code>key-switch-failed</code>.</p>` })}
+  ${optCard({ letter: 'b', title: 'Keep the history and the reset times per account', status: 'no',
+    note: `Switching back to an account would take up its forecast where it was left. It costs more state in the registry, and an
+    account's first use would still start at <code>→ early</code>. No width: the rows stay as they are.` })}
+  ${optCard({ letter: 'c', title: 'Name the account on the key, and in the <code>⚠</code> row', status: 'no',
+    note: `Every switch would show, at the cost of room on the key's face and of the name's length on the <code>⚠</code> row.
+    Without a, the old account's figures could still linger beside the new name. Not chosen: the status line already names the
+    account, and the key does not have to.` })}
+  ${optCard({ letter: 'd', title: 'Draw every account on the key, the ones not in use from claude-swap\'s cache', status: 'no',
+    note: `It would show which account has room before a switch. It would depend on claude-swap's file, whose figures for the
+    accounts not in use are 5 to 10 minutes old, and up to 2 hours old after a <code>429</code>.` })}
+  ${optCard({ letter: 'e', title: 'Draw the 5h and 7d rows from the <code>rate_limits</code> Claude Code passes to the status line', status: 'no',
+    note: `Right for every session by construction, since each session passes its own. It only reaches a status line in a terminal,
+    though, and every session on the machine at the time ran in VS Code, so the key would have kept fetching.` })}
+  <p class="recline"><b>Decided: a, on 2026-10-13.</b> The previous account's figures are never drawn as the new one's. Built with it,
+  as a fix of its own rather than part of this decision: a switch now also clears the reset times <code>rsS</code>, <code>rsW</code>
+  and <code>rsF</code>, whose leftovers restarted the new account's 5h series a second time, five minutes after a switch on
+  13 October.</p>
+</div>`;
 
 // method
 const secMethod = `
@@ -1181,15 +1226,16 @@ const DECISIONS = [
   ['q4', 'Q4', "What should → show for a meter the history doesn't track?", '<b>e, none of a to d.</b> Draw only the three known meters; name any other in an amber <code>⚠</code> row, pending review.', `deployed ${B2.tag}`],
   ['q5', 'Q5', 'How should the on-credit warning look?', '<b>a.</b> Its own red <code>⚠</code> row, as built.', 'no change, 2026-09-24'],
   ['q6', 'Q6', 'A maxed meter still shows a projection', '<b>e, a variant of a.</b> Keep <code>⇢</code>, drawn wholly dim like a disabled control.', `deployed ${B2.tag}`],
+  ['q7', 'Q7', 'What do the limit rows show right after a switch to another account?', '<b>a.</b> Tie the copy to its token: a new token fetches at once, and another account\'s figures are not drawn until its first good fetch.', 'decided 2026-10-13'],
 ];
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Limit rows: decisions of 23 and 24 September 2026</title>
+<title>Limit rows: decisions of 23 and 24 September and 13 October 2026</title>
 <style>${css}</style></head>
 <body><div class="wrap">
   <div class="band">
-    <div class="band-tag">Decided 23 and 24 Sep 2026, nothing pending</div>
-    <h2>The forecast stays as it is. What changed: a harmless → is drawn in forest green, and only the three known meters get a row, with any other flagged for review.</h2>
+    <div class="band-tag">Decided 23 and 24 Sep and 13 Oct 2026, nothing pending</div>
+    <h2>The forecast stays as it is. What changed: a harmless → is drawn in forest green, and only the three known meters get a row, with any other flagged for review. Since 13 October the rows are tied to the token they were fetched with, so a switch of account never draws the old account's figures as the new one's.</h2>
     <table class="dtab"><tbody>
     ${DECISIONS.map(([id, q, text, what, when]) => `<tr class="${when === 'pending' ? 'open' : ''}"><td>${id ? `<a href="#${id}">${q}</a>` : q}</td><td>${esc(text)}</td><td>${what}</td><td>${when}</td></tr>`).join('\n    ')}
     </tbody></table>
@@ -1200,12 +1246,13 @@ const html = `<!doctype html>
   </div>
 
   <header>
-    <div class="eyebrow">Decision record for the limit rows, 23 and 24 Sep 2026</div>
+    <div class="eyebrow">Decision record for the limit rows, 23 and 24 Sep and 13 Oct 2026</div>
     <h1>Limit-row decisions</h1>
     <p class="lede">At 19:57 on 23 September the 7d row said <b>100% in 4h35m</b> and <b>226% at the reset</b>, both from the
     pace of one busy hour. What to do about that, and about the other questions it led to on the same rows, was decided over the next hours.
     This page is the record: what was built, the design that was rejected together with the replay it was judged on, and every
-    option as it was drawn. Nothing on it is pending.</p>
+    option as it was drawn. Nothing on it is pending. Q7 came later, on 13 October, from a switch of account, and is a record in
+    words.</p>
   </header>
   ${secAsBuilt}
   <section class="rejected" id="rejected-c">
@@ -1232,6 +1279,7 @@ const html = `<!doctype html>
   ${secQ4}
   ${secQ5}
   ${secQ6}
+  ${secQ7}
   </section>
   ${secMethod}
 </div>

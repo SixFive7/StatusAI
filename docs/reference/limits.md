@@ -24,7 +24,9 @@ Every fetch goes through `GetUsage()`, whoever asks for it:
 
 - A render, once the shared copy is 50 seconds old. That is once a minute for as long as a terminal
   session is open, whether Claude is working in it or not, because Claude Code runs the status line
-  every 60 seconds.
+  every 60 seconds. A render that finds another token in `.credentials.json` than the one the copy
+  was fetched with fetches at once, however young the copy is; see
+  [when the token changes](#when-the-token-changes).
 - `statusai --refresh`, which calls `GetUsage()` and exits without drawing anything. The
   [Stream Deck key](architecture.md#the-stream-deck-key) starts it while Claude is working and its
   key is visible: 62 seconds after the last fetch or attempt by anyone, which leaves a status line
@@ -63,7 +65,13 @@ reason and how old the rows still drawn are, and stays until a fetch succeeds:
 ⚠ usage — HTTP 429 from api.anthropic.com; the limit rows are 5m old
 ⚠ usage — offline, api.anthropic.com not reached; the limit rows are 3m old
 ⚠ usage — no OAuth token in .credentials.json; no limit rows yet
+⚠ usage — timed out after 3 s; no limit rows for the new account yet
 ```
+
+The first one is quiet because the last good rows stand in for it. Right after a switch to another
+account there are none to stand in, since the old account's are not drawn, so the new account's
+first failure raises the row at once, with the last of the reasons above; see
+[when the token changes](#when-the-token-changes).
 
 The timeout is HttpClient's own three seconds. Offline is a name that did not resolve or a network
 that is down or out of reach. A response that is not JSON reads `unreadable response`, one without a
@@ -76,7 +84,9 @@ last attempt is 50 seconds old, so the open sessions between them make at most o
 seconds rather than one at every render, each of which could wait three seconds on a timeout. A
 render in between makes no attempt and takes no lock, and draws the saved rows and the `⚠` row
 straight away. Before that nothing is held back: after a single failure the next render to find the
-cache stale tries again. The rule is `MayRetry()`, which the offline renders go through as well.
+cache stale tries again. Nor is a token that has not been tried yet: after a switch the new
+account's token is tried at once, however the old one's attempts went. The rule is `MayRetry()`,
+which the offline renders go through as well.
 
 The count is kept beside the rows in the registry, `fail` for the failures in a row and `why` for
 the latest reason, so every session shows the same row, whether or not it was the one that fetched,
@@ -84,7 +94,57 @@ and `tryTs` for when the fetch was last tried, which the 50 seconds are measured
 sets `fail` back to 0. Only a fetch that finishes is counted: one cut short by such a cancel counts
 as neither, so in a busy session a timeout can go uncounted until a quiet moment. `tryTs`, though,
 is written as an attempt starts, so even one cut short holds the next attempt off once the row
-shows.
+shows. Beside it, `tryTok` is the print of the token the attempt was made with (see below). The
+count is of failures in a row with one token: the first attempt with a token not tried before
+starts it again, so the row says what the new token's own fetches came to.
+
+### When the token changes
+
+The shared copy is one for the machine, not one per account, so it is tied to the credential it
+was fetched with. A good fetch stores the print of its access token beside `acct`, in `tok`: the
+first 8 hex digits of the token's SHA-256, never the token itself. Every render, every
+`--refresh` and every drawing of the key reads the token in `.credentials.json` and compares its
+print with `tok`. While they are the same, nothing changes. When they are not, the copy is stale
+at once, 50 seconds or not, and the render fetches, through the lock like any other, so a dozen
+sessions make one request between them and not a dozen.
+
+A new token is not always another account. Claude Code renews the token about every 8 hours for
+the same account, and the claude-swap tool switches between accounts by rewriting
+`.credentials.json`, then `~/.claude.json` a moment later. So the account decides what a render
+that does not fetch draws while that fetch runs:
+
+| `~/.claude.json`'s `accountUuid` against `acct` | the status line | the Stream Deck key |
+|---|---|---|
+| the same: the token was renewed | the copy, as before | the copy, as before |
+| another, or either cannot be read: a switch | no limit rows, nor what came with them: the breakdown, the meters notice, the on-credit row | both meters grey, `—` and empty cells, `new account` on the first small line |
+| the same, after that fetch failed | the copy, and the `⚠` row from the second failure, as always | as always |
+| another, after that fetch failed | no limit rows, and the `⚠` row at once: `no limit rows for the new account yet` | `⚠` and the reason on the first small line, `new account` on the second |
+
+Normally the render that notices the new token is the one that fetches, which takes three seconds
+at most, and draws the new account's rows itself, so none of this is seen. The account is compared
+only once the token has changed: a copy fetched with the token signed in now belongs to that
+token's account, whatever `~/.claude.json` says.
+
+It costs no width. Withheld rows take their lines away rather than adding any, and the key says
+`new account` on a small line it already had. The new `⚠` reason ends in 37 characters where
+`the limit rows are 2m old` has 25: the longest row it makes,
+`⚠ usage — offline, api.anthropic.com not reached; no limit rows for the new account yet`, is 87
+columns, which fits whole in a terminal of 93 columns or more without `statusLine.padding`, and is
+shortened with `…` in a narrower one, like any other reason.
+
+A switch can also overtake a request. If, once the response is in, `.credentials.json` holds
+another token than the one the request was made with, the response may be the old account's, so
+it is dropped as an attempt that came to nothing, and the next render fetches with the new token
+at once. The account is read after the response, so that after a switch which came before the
+request, `~/.claude.json` names the new account by then.
+
+`tok` and `acct` are written after the rows and before `ts`, and read before the rows, so a render
+that reads them while a fetch is being written can find rows newer than the token and the account
+it read, and so withhold them for once, but never draw old rows under a new token.
+
+Neither surface is woken by the switch itself: the status line draws it at its next render, which
+Claude Code runs every 60 seconds and at every message, and the key at its next redraw, which is
+once a minute while it shows. See [known gaps](#known-gaps).
 
 ### None of it comes from stdin
 
@@ -277,12 +337,20 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
 
 A series is only meaningful within one account and one window. `WindowCheck` discards it when
 `resets_at` moves by more than 60 seconds, or when a percentage drops by more than 1: a drop cannot
-happen naturally inside a window, so it means the window rolled. An account switch clears `hist`
-outright.
+happen naturally inside a window, so it means the window rolled. An account switch, seen at the
+first good fetch for the new account, clears the whole series outright: `hist`, the times each
+series is valid from, `vfS`, `vfW` and `vfF`, and the reset times `WindowCheck` compares with,
+`rsS`, `rsW` and `rsF`.
 
-That last one is visible in practice. Switch accounts and all three rows immediately read
-`→ early`, because the whole series was foreign and was thrown away. That is correct behaviour, not
-a bug.
+The reset times were kept until 2026-10-13. A meter that has no reset time at the switch, such as a
+5h with no window open, then kept the old account's, and once the new account's window opened and
+sent one of its own, the two were further apart than 60 seconds and the series restarted a second
+time, five minutes after the switch on the day it was found.
+
+The switch is visible in practice. The limit rows go until the new account's first good fetch,
+which the render that notices the new token normally makes at once (see
+[when the token changes](#when-the-token-changes)), and then all three read `→ early`, because the
+whole series was foreign and was thrown away. That is correct behaviour, not a bug.
 
 ## Known gaps
 
@@ -293,9 +361,18 @@ a bug.
   regression-tested. See [development.md](../development.md#offline-beside-live-sessions).
 - A failed fetch keeps the last good rows, their countdowns stopped where that fetch measured them;
   from the second failure in a row a `⚠` row gives their age (see
-  [when a fetch fails](#when-a-fetch-fails)). Claude Code's payload has since gained
+  [when a fetch fails](#when-a-fetch-fails)). After a switch to another account there are no rows
+  at all until the new account's first good fetch. Claude Code's payload has since gained
   `rate_limits.five_hour` and `rate_limits.seven_day`, a used percentage and a reset time each,
   which could stand in for them and which nothing here reads.
+- Nothing watches `.credentials.json`, so a switch is not drawn the moment it happens. The status
+  line shows it at its next render, within 60 seconds and at the next message; the key at its next
+  redraw, within a minute while it shows, and until then each shows what it drew last. The key
+  fetches only while Claude is writing, so after a switch with Claude idle and no terminal open
+  it reads `new account` until something fetches.
+- Only a token that changes is compared. A copy fetched with the token signed in now is drawn as
+  that token's account's even if `~/.claude.json` names another, which a switch could only cause
+  in the moment between its two writes.
 - `is_active` and `group` are parsed past and discarded.
 - A new meter is not drawn until its code is reviewed. Only the session, `weekly_all` and one
   model-scoped `weekly_scoped` are; anything else is named in the amber `⚠` row instead (see

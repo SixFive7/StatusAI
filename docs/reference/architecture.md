@@ -50,7 +50,7 @@ Four clocks, stacked:
 | layer | interval | trigger |
 |---|---|---|
 | Claude Code running `statusai` | `refreshInterval: 60` | plus every new assistant message, after `/compact`, on permission-mode change; debounced 300 ms |
-| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s** | `FreshVal`: `now - t < 50`, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries; from the second failure in a row, only once the last attempt is 50 s old (`MayRetry`) |
+| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s**, and for one token | `FreshVal`: `now - t < 50` and the token in `.credentials.json` the one the copy was fetched with, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries; from the second failure in a row, only once the last attempt is 50 s old, unless the token has not been tried yet (`MayRetry`) |
 | EUR rate | cached **24 h** | ECB daily feed |
 | token rows, account line | **every render** | incremental parse of appended bytes only |
 
@@ -72,11 +72,19 @@ failed in a row and keep the latest reason, for the `⚠` row every session draw
 `tryTs` is when the fetch was last tried, which spaces the retries 50 s apart once that row shows;
 see [limits.md](limits.md#when-a-fetch-fails).
 
+**The cache is tied to the credential it was fetched with.** `tok` is the print of the access token
+of the last good fetch, the first 8 hex digits of its SHA-256, beside `acct`, the account it was
+for; `tryTok` is the print of the token last tried. A render whose token is not `tok` finds the
+copy stale and fetches at once. If `~/.claude.json` then names the same account, the token was
+renewed and the copy is drawn as before; if it names another, or cannot be read, the copy is the
+old account's and is not drawn, on the status line or the key, until the new account's first good
+fetch. See [limits.md](limits.md#when-the-token-changes).
+
 ## State
 
 | location | contents |
 |---|---|
-| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `hist`, `acct`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`) |
+| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `tryTok`, `hist`, `acct`, `tok`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`). `tok` and `tryTok` are 8 hex digits of a token's SHA-256, never the token |
 | `%LOCALAPPDATA%\StatusAI\tokens\<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
 | named mutex `Global\StatusAI.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 | `%APPDATA%\Elgato\StreamDeck\Plugins\com.sixfive7.statusai.sdPlugin\` | the Stream Deck plugin, where it is installed: its manifest, its pictures and its own copy of `statusai.exe`. It keeps no state of its own |
@@ -183,7 +191,8 @@ the app's log open for as long as it runs. The plugin marks every handle it has 
 before it starts anything.
 
 **It draws by the status line's own rules.** `Program.cs` hands `Deck.cs` its functions in a
-`Deck.Host`: `Look`, the rows as they stand without a fetch, which is `Saved()`; `Pace`, the time
+`Deck.Host`: `Look`, the rows as they stand without a fetch, which is `Saved()`, with the token and
+the account it compares read under `%USERPROFILE%` rather than through the shell; `Pace`, the time
 to 100% and its colour, which `RenderRows` uses too; `BarFill`, `ZoneColor`, `PctColor`,
 `SevColor` and `Hm`. So a cell on the key is lit and coloured by the same code as a cell on the
 status line. The key is an SVG, 144 by 144, that the app scales to the device; its layout is a

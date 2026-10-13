@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
@@ -29,10 +30,11 @@ const string RegKey = @"Software\StatusAI";
 // Four ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
 // with -port, -pluginUUID, -registerEvent and -info: this process is then the plugin, which stays
 // up for as long as the app does and draws the key (Deck.cs). --refresh brings the shared usage
-// up to date the way a render does, when it is 50 seconds old, and draws nothing: it is how the
-// key fetches. --deck-press is what a press of the key starts: it opens a tab or a window in
-// Windows Terminal and brings it to the front. --deck-face prints the key as SVG, as it would be
-// drawn now or, with a number after it, that many seconds after the last fetch.
+// up to date the way a render does, when it is 50 seconds old or was fetched with another token
+// than the one signed in now, and draws nothing: it is how the key fetches. --deck-press is what
+// a press of the key starts: it opens a tab or a window in Windows Terminal and brings it to the
+// front. --deck-face prints the key as SVG, as it would be drawn now or, with a number after it,
+// that many seconds after the last fetch.
 if (Deck.IsPluginStart(args)) { Environment.ExitCode = Deck.Run(args, DeckHost()); return; }
 if (args.Length == 1 && args[0] == "--refresh") { GetUsage(); return; }
 if (args.Length == 2 && args[0] == "--deck-press" && args[1] is "tab" or "window") { Environment.ExitCode = Deck.Open(args[1] == "window", Offline() is not null); return; }
@@ -91,7 +93,7 @@ try {
 // The columns the block may use, measured once: see Avail().
 int avail = Avail();
 
-var (usage, usageErr, fetchErr) = GetUsage();
+var (usage, usageErr, fetchErr, _) = GetUsage();
 string metaLine = BuildMeta(costUsd, durMs, add, del, EurPerUsd(), haveCost, haveDur);
 var (acctLine, signedIn) = BuildAccount();
 // A session a few seconds old may not have its transcript yet. That is a race, not a
@@ -180,11 +182,12 @@ return;
 
 // What the Stream Deck key takes from the code below, so that it draws by the status line's own
 // rules and never fetches by a path of its own. Look is the rows as they stand, without a fetch:
-// the last good ones and, once two fetches in a row have failed, the reason, exactly as a render
-// that did not fetch draws them. Offline they come from the fixture, and the registry is neither
-// read nor written.
+// the last good ones, or none while they are another account's, and the reason once fetching
+// fails, exactly as a render that did not fetch draws them. The token and the account it compares
+// are read in DeckHome(), so the plugin never asks the shell. Offline they come from the fixture,
+// and the registry is neither read nor written.
 static Deck.Host DeckHost() => new() {
-    Look = () => Offline() is string dir ? OfflineRows(dir) : Saved(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+    Look = () => Offline() is string dir ? OfflineRows(dir) : Saved(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), DeckHome()),
     FetchedAt = () => Offline() is null ? RegLong("ts") : 0,
     TriedAt = () => Offline() is null ? RegLong("tryTs") : 0,
     Pace = Pace, Hm = Hm, BarFill = BarFill, ZoneColor = ZoneColor, PctColor = PctColor, SevColor = SevColor,
@@ -347,29 +350,38 @@ static string RunCship(string input) {
 // apart, and a render in between draws the saved rows and the warning at once, without taking
 // the lock. There is no second attempt inside one render, which would double the 3 s a render
 // can already spend waiting.
-static (Cached c, string err, string fetchErr) GetUsage() {
+//
+// The copy is tied to the token it was fetched with (tok, its print). A token in
+// .credentials.json that is not that one, after an account switch or a renewal, makes the copy
+// stale at once, 50 s or not, so the render fetches, through the lock like any other, and a new
+// token is tried at once even while the old one's retries are being spaced out. A render that
+// does not fetch meanwhile draws the copy as before if it is the same account's, and no rows at
+// all if it is another's (Saved, Foreign).
+static (Cached c, string err, string fetchErr, bool foreign) GetUsage() {
     if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    if (FreshVal(now) is Cached fresh) return (fresh, "", "");
-    if (!MayRetry(RegInt("fail"), RegLong("tryTs"), now)) return Saved(now);
+    string home = Home(), tk = TokenPrint(Token(home));
+    if (FreshVal(now, tk) is Cached fresh) return (fresh, "", "", false);
+    if (!MayRetry(RegInt("fail"), RegLong("tryTs"), now, tk, RegStr("tryTok"))) return Saved(now, home);
     Mutex? mx = null; bool owned = false;
     try {
         mx = new Mutex(false, LockName());
         try { owned = mx.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
     } catch (Exception ex) {
         mx?.Dispose();
-        return (AnyVal() ?? Cached.None, LockError(ex), "");
+        var (last, _, _, foreign) = Saved(now, home);
+        return (last, LockError(ex), "", foreign);
     }
     try {
         // both checked again under the lock: another session may have fetched or tried since
         if (owned) {
             now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            if (FreshVal(now) is Cached fresh2) return (fresh2, "", "");
-            if (MayRetry(RegInt("fail"), RegLong("tryTs"), now) && FetchAndSave(now) is Cached got)
-                return (got, "", "");
+            if (FreshVal(now, tk) is Cached fresh2) return (fresh2, "", "", false);
+            if (MayRetry(RegInt("fail"), RegLong("tryTs"), now, tk, RegStr("tryTok")) && FetchAndSave(now) is Cached got)
+                return (got, "", "", false);
         }
         // another session holds the lock or has just tried, or this fetch failed
-        return Saved(now);
+        return Saved(now, home);
     } finally {
         if (owned) { try { mx!.ReleaseMutex(); } catch { } }
         mx?.Dispose();
@@ -377,19 +389,60 @@ static (Cached c, string err, string fetchErr) GetUsage() {
 }
 
 // A render without a fetch of its own: the last good rows, and the ⚠ reason once two fetches in
-// a row have failed
-static (Cached c, string err, string fetchErr) Saved(long now) {
+// a row have failed. Rows of another account than the one signed in now (Foreign) are not drawn:
+// none at all, and with nothing to stand in for a failed fetch, the ⚠ reason from the new token's
+// first failure. The token and the account are read in home, which the key gives as DeckHome().
+//
+// The copy's token and account are read before its rows, and Save writes them after the rows, so
+// a fetch landing in between can only make the rows newer than the token says, never older.
+static (Cached c, string err, string fetchErr, bool foreign) Saved(long now, string home) {
+    string tk = TokenPrint(Token(home)), okTok = RegStr("tok"), okAcct = RegStr("acct");
     var last = AnyVal();
-    return (last ?? Cached.None, "", FetchWarn(RegInt("fail"), RegStr("why"),
-                                               last is null ? 0 : RegLong("ts"), now));
+    bool foreign = last is not null && Foreign(tk, okTok, okAcct, home);
+    int fails = RegInt("fail");
+    // the count belongs to the token last tried; one not tried yet has no failures to show
+    if (foreign && RegStr("tryTok") != tk) fails = 0;
+    return (foreign ? Cached.None : last ?? Cached.None, "",
+            FetchWarn(fails, RegStr("why"), last is null || foreign ? 0 : RegLong("ts"), now, foreign), foreign);
 }
 
 // Whether a render may try the fetch: always until it has failed twice in a row, and from then
 // on, with the ⚠ row showing, only once the last attempt (tryTs) is 50 s old, so that the open
 // sessions between them retry once every 50 s instead of at every render. An attempt dated
-// after now, as when the clock has been set back, holds nothing off.
-static bool MayRetry(int fails, long triedAt, long now) =>
-    fails < 2 || now - triedAt >= 50 || triedAt > now;
+// after now, as when the clock has been set back, holds nothing off. Nor does a token that has
+// not been tried yet (tk against the last attempt's, tryTok): after a switch the new account's
+// token is tried at once, whatever came of the old one's attempts.
+static bool MayRetry(int fails, long triedAt, long now, string tk, string triedTok) =>
+    fails < 2 || now - triedAt >= 50 || triedAt > now || NewToken(tk, triedTok);
+
+// The OAuth token Claude Code signs in with, from .credentials.json under home, or "" when there
+// is none to read.
+static string Token(string home) {
+    try {
+        using var cd = JsonDocument.Parse(File.ReadAllText(Path.Combine(home, ".claude", ".credentials.json")));
+        return cd.RootElement.GetProperty("claudeAiOauth").GetProperty("accessToken").GetString() ?? "";
+    } catch { return ""; }
+}
+
+// What the shared state keeps of a token: the first 8 hex digits of its SHA-256, enough to tell
+// one token from the next, and nothing to sign in with. "" for no token.
+static string TokenPrint(string token) =>
+    token.Length == 0 ? "" : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)), 0, 4);
+
+// A token is new against a print kept with the shared copy when there is one to read and it is
+// not that one. With none to read there is nothing to compare, and everything stands as before.
+static bool NewToken(string tk, string kept) => tk.Length > 0 && tk != kept;
+
+// Whether the cached copy belongs to another account than the one signed in now. Only a token
+// that is not the one the copy was fetched with (okTok) raises the question, and a token Claude
+// Code has renewed for the same account, about every 8 hours, leaves the copy as it is. The copy
+// is foreign when ~/.claude.json names another account than its own (okAcct), or either cannot
+// be read.
+static bool Foreign(string tk, string okTok, string okAcct, string home) {
+    if (!NewToken(tk, okTok)) return false;
+    string acct = AccountInfo(home).uuid;
+    return acct.Length == 0 || okAcct.Length == 0 || acct != okAcct;
+}
 
 // What GetUsage returns, read from files instead of the machine. Two fixture shapes.
 //
@@ -421,12 +474,20 @@ static bool MayRetry(int fails, long triedAt, long now) =>
 //
 //   "fetch": { "fails": 1, "why": "timeout", "attempt": "timeout", "okAt": "2026-09-23T20:12:20Z" }
 //
+// Three more stand in for what the shared state keeps of the token and the account: "okTok",
+// the print of the token the last good fetch was made with (tok), "okAcct", the account it was
+// for (acct), and "triedTok", the print of the token last tried (tryTok), each "" when not given.
+// The token signed in now is the accessToken in the directory's .claude/.credentials.json, which
+// a fixture only carries, made up, where the case is about the token. A render that makes an
+// attempt has tried that token, and with a token not tried before the count starts again, as
+// SaveTry has it; rows of another account are not drawn, as in Saved.
+//
 // Either way the forecast is an input, not computed from a history. This path is here to
 // test the parsing, the drawing and the count of failed fetches: whether a render tries is
 // the live code's MayRetry, the count moves by its AfterFetch and the reason is its
 // FetchWarn. The rows also pass through the string the registry keeps them in, so RowsOut
 // and RowsIn are under test too.
-static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
+static (Cached c, string err, string fetchErr, bool foreign) OfflineRows(string dir) {
     try {
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
         var root = d.RootElement;
@@ -437,7 +498,9 @@ static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
         if (attempt.Length == 0) attempt = "ok";
         var okAt = (sim ? Time(fe, "okAt") : null) ?? now;
         long triedAt = (sim ? Time(fe, "triedAt") : null)?.ToUnixTimeSeconds() ?? 0;
-        if (!MayRetry(fails, triedAt, now.ToUnixTimeSeconds())) attempt = "none";
+        string tk = TokenPrint(Token(dir));
+        string okTok = sim ? Str(fe, "okTok") : "", okAcct = sim ? Str(fe, "okAcct") : "", triedTok = sim ? Str(fe, "triedTok") : "";
+        if (!MayRetry(fails, triedAt, now.ToUnixTimeSeconds(), tk, triedTok)) attempt = "none";
         bool ok = attempt == "ok";
 
         Cached? c = null;
@@ -445,7 +508,7 @@ static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
         if (File.Exists(usagePath)) {
             using var ud = JsonDocument.Parse(File.ReadAllText(usagePath));
             var u = ParseUsage(ud.RootElement, ok ? now : okAt);
-            if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters", "");
+            if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters", "", false);
             var (iS, iW, iF, ignored) = Known(u.Meters, Str(root, "sn"));
             var fc = root.TryGetProperty("forecast", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
             var rows = new List<RowIn>();
@@ -466,18 +529,26 @@ static (Cached c, string err, string fetchErr) OfflineRows(string dir) {
                                    r.GetProperty("hrs").GetDouble(), r.GetProperty("hasReset").GetBoolean(),
                                    r.GetProperty("rate").GetDouble(), r.GetProperty("gated").GetBoolean(),
                                    r.GetProperty("sev").GetString() ?? ""));
-            if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows", "");
+            if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows", "", false);
             c = new Cached(list, "", "", "");
-        } else if (ok) return (Cached.None, "offline — no usage.json and no rows in rows.json", "");
+        } else if (ok) return (Cached.None, "offline — no usage.json and no rows in rows.json", "", false);
 
         if (c is not null)
             c = c with { Rows = RowsIn(RowsOut(c.Rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote") };
+        if (attempt != "none") {
+            if (triedTok != tk) (fails, why) = (0, "");   // SaveTry: a token not tried before starts the count again
+            triedTok = tk;
+        }
         (fails, why) = AfterFetch(fails, why, attempt);
-        return (c ?? Cached.None, "", FetchWarn(fails, why, c is null ? 0 : okAt.ToUnixTimeSeconds(),
-                                                now.ToUnixTimeSeconds()));
+        // as Saved: rows another account's fetch drew are not drawn, and the count is the new token's
+        bool foreign = !ok && c is not null && Foreign(tk, okTok, okAcct, dir);
+        if (foreign && triedTok != tk) fails = 0;
+        return (foreign ? Cached.None : c ?? Cached.None, "",
+                FetchWarn(fails, why, c is null || foreign ? 0 : okAt.ToUnixTimeSeconds(), now.ToUnixTimeSeconds(), foreign),
+                foreign);
     } catch (Exception ex) {
         // a broken fixture is loud, like every other failed source
-        return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message), "");
+        return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message), "", false);
     }
 }
 
@@ -571,10 +642,15 @@ static string Short(string s, int max = 64) {
 // alarm and the ignored meters the same fetch produced, cached beside them so that a cache
 // hit draws everything a fetch would. A key without rows, as a build that cached drawn text
 // in val left it, reads as no cache, so the next render fetches.
-static Cached? FreshVal(long now) {
+//
+// Fresh is under 50 s old and fetched with the token tk is the print of: after a switch or a
+// renewal the copy is stale at once. ts is read first and written last, so a fresh one vouches
+// for the tok and the rows read after it.
+static Cached? FreshVal(long now, string tk) {
     try {
         using var rk = Registry.CurrentUser.OpenSubKey(RegKey);
-        if (rk?.GetValue("ts") is string ts && long.TryParse(ts, out long t) && now - t < 50) return FromKey(rk);
+        if (rk?.GetValue("ts") is string ts && long.TryParse(ts, out long t) && now - t < 50
+            && !NewToken(tk, rk.GetValue("tok") as string ?? "")) return FromKey(rk);
     } catch { }
     return null;
 }
@@ -618,9 +694,16 @@ static List<RowIn>? RowsIn(string s) {
 }
 
 static Cached? FetchAndSave(long now) {
-    SaveTry(now);
-    var (u, why) = Fetch();
+    string token = Token(Home()), tk = TokenPrint(token);
+    SaveTry(now, tk);
+    var (u, why) = Fetch(token);
     if (u is null) { SaveFailure(why); return null; }
+    // A switch that overtook the request: .credentials.json holds another token than the one the
+    // request was made with, so the response may be the account switched away from. It is dropped
+    // as an attempt that came to nothing, the count left as it was, and the next render tries the
+    // new token at once. The account is read after the request, since a switch writes
+    // .credentials.json first and ~/.claude.json a moment later.
+    if (TokenPrint(Token(Home())) != tk) return null;
     string acct = AccountInfo().uuid;
     var hist = LoadHist();
     string oldAcct = RegStr("acct"), oldName = RegStr("sn");
@@ -631,6 +714,10 @@ static Cached? FetchAndSave(long now) {
 
     if (acct.Length > 0 && oldAcct.Length > 0 && acct != oldAcct) {
         hist.Clear(); vfS = vfW = vfF = now;   // account switch: the whole series is foreign
+        // So are the reset times WindowCheck compares with. Kept, the old account's would stand
+        // until the new account's meter sends one of its own, and a meter that had none at the
+        // switch, as a 5h with no window open, would then restart its series a second time.
+        rsS = rsW = rsF = 0;
     }
     // the scoped limit tracks a different model than before: its series is foreign too
     if (scopedName.Length > 0 && oldName.Length > 0 && scopedName != oldName) vfF = now;
@@ -656,7 +743,7 @@ static Cached? FetchAndSave(long now) {
         rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, m.Lim.Sev));
     }
     var c = new Cached(rows, u.Bd, u.Cr, string.Join("\n", ignored));
-    Save(acct.Length > 0 ? acct : oldAcct, scopedName.Length > 0 ? scopedName : oldName,
+    Save(acct.Length > 0 ? acct : oldAcct, tk, scopedName.Length > 0 ? scopedName : oldName,
          rsS, rsW, rsF, vfS, vfW, vfF, hist, c, now);
     return c;
 }
@@ -670,11 +757,14 @@ static (int fails, string why) AfterFetch(int fails, string why, string attempt)
 
 // The ⚠ reason once the fetch has failed twice in a row or more, and "" before that: the
 // usage source, why the latest attempt failed, and how old the rows still drawn are, from
-// okAt, the time of the last good fetch; 0 means there are no rows to draw.
-static string FetchWarn(int fails, string why, long okAt, long now) {
-    if (fails < 2) return "";
+// okAt, the time of the last good fetch; 0 means there are no rows to draw. A single failure
+// is quiet while the last good rows stand in for it. Rows of another account (foreign) are not
+// drawn, so after a switch there are none to stand in, and the first failure is shown.
+static string FetchWarn(int fails, string why, long okAt, long now, bool foreign) {
+    if (fails < (foreign ? 1 : 2)) return "";
     return "usage — " + FetchWhy(why) + "; "
-         + (okAt > 0 ? "the limit rows are " + Hm((now - okAt) / 3600.0) + " old" : "no limit rows yet");
+         + (foreign ? "no limit rows for the new account yet"
+            : okAt > 0 ? "the limit rows are " + Hm((now - okAt) / 3600.0) + " old" : "no limit rows yet");
 }
 
 // A failed fetch in words. The registry's why holds a short kind for the failures the row has
@@ -699,11 +789,15 @@ static void SaveFailure(string why) {
     } catch { }
 }
 
-// When the fetch was last tried, which MayRetry measures from. Written before the attempt, so
-// one that Claude Code cuts short still counts.
-static void SaveTry(long now) {
+// When the fetch was last tried, which MayRetry measures from, and the print of the token it was
+// tried with (tryTok). Written before the attempt, so one that Claude Code cuts short still
+// counts. The count of failures in a row is a token's: the first attempt with a token not tried
+// before starts it again, so the new account's ⚠ row says what its own fetch came to.
+static void SaveTry(long now, string tk) {
     try {
         using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
+        if ((rk.GetValue("tryTok") as string ?? "") != tk) { rk.SetValue("fail", "0"); rk.SetValue("why", ""); }
+        rk.SetValue("tryTok", tk);
         rk.SetValue("tryTs", now.ToString());
     } catch { }
 }
@@ -745,11 +839,12 @@ static void WindowCheck(Lim lim, ref long storedRs, ref long vf, int lastPct, lo
     if (lim.ResetsUnix != 0) storedRs = lim.ResetsUnix;
 }
 
-// read fresh every render (never cached) so an account switch shows immediately
-static (string uuid, string email) AccountInfo() {
+// read fresh every render (never cached) so an account switch shows immediately; in home, or in
+// Home() when none is given
+static (string uuid, string email) AccountInfo(string? home = null) {
     string uuid = "", email = "";
     try {
-        string p = Path.Combine(Home(), ".claude.json");
+        string p = Path.Combine(home ?? Home(), ".claude.json");
         using var fs = File.OpenRead(p);
         using var d = JsonDocument.Parse(fs);
         if (d.RootElement.TryGetProperty("oauthAccount", out var a) && a.ValueKind == JsonValueKind.Object) {
@@ -826,11 +921,14 @@ static int RegInt(string name) => int.TryParse(RegStr(name), out int v) ? v : 0;
 // A good fetch: the rows and what came with them, the history, and a cleared count of
 // failures. val, the drawn rows builds before this one cached, is removed, so that a build
 // restored from a backup fetches afresh rather than drawing rows from before the switch.
-static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, long vfS, long vfW, long vfF,
+//
+// The account the rows are for (acct) and the print of the token they were fetched with (tok)
+// are written after the rows and before ts. Saved reads them before the rows, so it can find
+// rows newer than the token and the account it read, never older ones under a new token.
+static void Save(string acct, string tk, string scopedName, long rsS, long rsW, long rsF, long vfS, long vfW, long vfF,
                  List<(long t, int s, int w, int f)> hist, Cached c, long now) {
     try {
         using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
-        rk.SetValue("acct", acct);
         rk.SetValue("sn", scopedName);
         rk.SetValue("rsS", rsS.ToString()); rk.SetValue("rsW", rsW.ToString()); rk.SetValue("rsF", rsF.ToString());
         rk.SetValue("vfS", vfS.ToString()); rk.SetValue("vfW", vfW.ToString()); rk.SetValue("vfF", vfF.ToString());
@@ -839,6 +937,8 @@ static void Save(string acct, string scopedName, long rsS, long rsW, long rsF, l
         rk.SetValue("bd", c.Bd);
         rk.SetValue("cr", c.Cr);
         rk.SetValue("ig", c.Ig);
+        rk.SetValue("acct", acct);
+        rk.SetValue("tok", tk);
         rk.SetValue("fail", "0");   // a good fetch clears the count, as AfterFetch has it
         rk.SetValue("why", "");
         rk.SetValue("ts", now.ToString());   // freshness gate: must be the last write
@@ -1128,14 +1228,10 @@ static string Hm(double hours) {
     return h > 0 ? $"{h}h{m:D2}m" : $"{m}m";
 }
 
-// One call to the usage API. On a failure the usage is null and why says what went wrong, as
-// a kind FetchWhy has words for where there is one: no token, timeout, offline, http <status>.
-static (Usage? u, string why) Fetch() {
-    string token = "";
-    try {
-        using var cd = JsonDocument.Parse(File.ReadAllText(Path.Combine(Home(), ".claude", ".credentials.json")));
-        token = cd.RootElement.GetProperty("claudeAiOauth").GetProperty("accessToken").GetString() ?? "";
-    } catch { }
+// One call to the usage API, with the token from .credentials.json (Token). On a failure the
+// usage is null and why says what went wrong, as a kind FetchWhy has words for where there is
+// one: no token, timeout, offline, http <status>.
+static (Usage? u, string why) Fetch(string token) {
     if (token.Length == 0) return (null, "no token");
     string body;
     try {

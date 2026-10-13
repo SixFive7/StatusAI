@@ -23,7 +23,7 @@ How it works now.
 | [reference/architecture.md](reference/architecture.md) | components, the render chain, data sources, update cadence, state, the Stream Deck key, portability |
 | [reference/accounting.md](reference/accounting.md) | how tokens and tool calls are counted, the traps, verification |
 | [reference/layout.md](reference/layout.md) | the grid, number formatting, alignment, width budgets, the palette, the ⚠ rows |
-| [reference/limits.md](reference/limits.md) | the OAuth usage endpoint, who fetches from it and when, and what a failed fetch shows, the three meters drawn and the flag for any other, the product breakdown, the on-credit alarm, the projection |
+| [reference/limits.md](reference/limits.md) | the OAuth usage endpoint, who fetches from it and when, what a failed fetch shows and what a switch of account does, the three meters drawn and the flag for any other, the product breakdown, the on-credit alarm, the projection |
 
 ## Design
 

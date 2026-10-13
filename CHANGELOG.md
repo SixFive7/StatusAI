@@ -5,6 +5,27 @@ under *Unreleased*, and the entries before the first release are by date.
 
 ## Unreleased
 
+**Switching accounts**
+
+- The shared usage is tied to the token it was fetched with. A good fetch stores the first 8 hex
+  digits of the token's SHA-256 beside the account, never the token. A render or a refresh that
+  finds another token in `.credentials.json` fetches at once, through the lock, instead of drawing
+  a copy up to 50 seconds old, and a token not tried yet is tried at once even while the old one's
+  retries are being held off.
+- The previous account's figures are never drawn as the new one's. Until the new account's first
+  good fetch the status line has no limit rows, and if that fetch fails its `⚠` row comes at once:
+  `no limit rows for the new account yet`. The Stream Deck key greys both meters with no figures
+  in them and says `new account`. A token Claude Code renews for the same account keeps the
+  figures as they were while its fetch runs. See
+  [when the token changes](docs/reference/limits.md#when-the-token-changes).
+- A response that a switch overtakes, whose token is no longer the one in `.credentials.json`
+  when it arrives, is dropped, and the next render fetches with the new token.
+- An account switch now clears the reset times the window checks compare with, as well as the
+  history. They were kept, so a 5h meter that had no window open at the switch restarted its
+  series a second time once its window opened, five minutes after a switch on 13 October.
+- Seven render cases for it, four of the status line and three of the key: 188 renders of 81
+  cases. The exe is 5.120 bytes larger.
+
 **The Stream Deck key**
 
 - `statusai.exe` is also the plugin behind a key on an Elgato Stream Deck. The key draws the 5h

@@ -247,6 +247,30 @@
       "widths": [141],
       "checks": "The warning is showing and the last attempt was 50 s ago: one attempt, which works and clears the warning, the same bytes as live at 141."
     },
+    "token-renewed": {
+      "home": "token-renewed",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "Claude Code has renewed the token for the same account, and another session is making the fetch that calls for: the rows of the last good fetch as ever, and no warning, the same bytes as fetch-failed-once at 141."
+    },
+    "switch-pending": {
+      "home": "switch-pending",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A new token, and ~/.claude.json names another account than the rows were fetched for, whose first fetch another session is making: no limit rows and no breakdown, only the new account's line, and no warning while that fetch is under way."
+    },
+    "switch-failed": {
+      "home": "switch-failed",
+      "payload": "fresh",
+      "widths": [100, 141],
+      "checks": "The new account's first fetch, made by this render, times out. There are no rows to stand in for it, so the ⚠ row comes at the first failure rather than the second, and says there are no limit rows for the new account yet."
+    },
+    "switch-tried-at-once": {
+      "home": "switch-tried-at-once",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The old account's fetches had failed three times with HTTP 429 and its next retry was 30 s away, but the token is new: it is tried at once, the fetch works, and the new account's rows are drawn, → early on each, with no history yet."
+    },
     "rows-shot": {
       "home": "rows-shot",
       "payload": "fresh",
@@ -432,6 +456,21 @@
       "home": "fetch-signed-out",
       "face": 0,
       "checks": "Nobody signed in: the same key as with no token, which is what being signed out comes to."
+    },
+    "key-token-renewed": {
+      "home": "token-renewed",
+      "face": 0,
+      "checks": "A token renewed for the same account, its fetch under way elsewhere: the rows of the last good fetch in colour, as ever."
+    },
+    "key-switch-pending": {
+      "home": "switch-pending",
+      "face": 0,
+      "checks": "Another account, its first fetch under way: both meters grey, — and ten empty cells, 'new account' in grey under the first, and nothing in red."
+    },
+    "key-switch-failed": {
+      "home": "switch-failed",
+      "face": 0,
+      "checks": "The new account's first fetch timed out: both meters grey and empty, ⚠ timeout in red under the first and 'new account' under the second."
     },
     "key-blank": {
       "home": "only-unknown",

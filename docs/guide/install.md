@@ -207,6 +207,7 @@ build: [the Stream Deck key](stream-deck.md#install) has the steps.
 | boxes instead of the model line's two icons | The terminal's font is not a Nerd Font. |
 | rows cut short at the right edge | Claude Code before 2.1.153 does not pass the terminal's width, so StatusAI assumes 141 columns: update Claude Code, or set `STATUSAI_WIDTH` (step 4). A `STATUSAI_WIDTH` wider than the terminal does the same. Below 121 columns the token grid is cut short whatever the width says. |
 | every limit row reads `→ early` | Nothing is wrong: for the first ten minutes there is no trend yet. |
+| no limit rows right after switching accounts | Nothing is wrong: the account you left is not shown as the new one's, and the new one's rows come with its first fetch, normally in the same render. If that fetch fails, a `⚠` row says why. |
 | `👤 not signed in`, and no limit rows | Claude Code is signed in with an API key rather than a Claude account; the limit rows need the account. |
 
 ## Uninstall

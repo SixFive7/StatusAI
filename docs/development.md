@@ -52,17 +52,18 @@ dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe
 ```
 
-180 renders of 74 cases, about 20 seconds, exit code 0 when every one matches. A failure names the
+188 renders of 81 cases, about 20 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
 
-Thirteen of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
+Sixteen of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
 `statusai --deck-face <face>` runs in a copy of its home and prints the key as SVG, as it is drawn
 that many seconds after the fetch its rows come from, and the bytes are compared with
 `tests/expected/<case>.svg`. They cover the key of the screenshot's rows, the same key a quarter of
 an hour and three and a half hours on, a row at 100%, rows without a trend, without a reset time
-and without a session meter, a fetch that is failing, and no rows at all.
+and without a session meter, a fetch that is failing, no rows at all, a token renewed for the same
+account, and the first fetch for another account, under way and failed.
 
 Nothing live is touched. Every render runs in a fresh copy of its home under `.work/test-renders/`,
 with `STATUSAI_OFFLINE` pointing at it (see
@@ -91,8 +92,9 @@ a run with another version says so first, because it may draw that line differen
 | `tests/expected/<case>.svg` | the exact bytes of the Stream Deck key, for a case with a `face` |
 | `tests/cship.toml` | cship's config for the renders |
 
-The fixtures carry no credentials (`.credentials.json` holds the plan fields and nothing else), and
-every address in them is an `example.com` one.
+The fixtures carry no credentials. `.credentials.json` holds the plan fields, and in the four homes
+about a new token an `accessToken` that is made up, `fixture-token-after`. Every address in them is
+an `example.com` one.
 
 The `showcase` case draws every row at once, with its token grid over a main thread and two
 sub-agents, one of them a nested workflow agent, whose files carry both
@@ -102,9 +104,11 @@ the limit rows through a usage response and through `rows.json` alone, the meter
 breakdown against the width, the on-credit alarm, the order of the `⚠` rows, where the width comes
 from (`COLUMNS`, `STATUSAI_WIDTH` before it, a value that is not a width, `statusLine.padding`), a
 usage fetch that fails once, twice, in another session and before any has worked, then recovers, a
-retry held off while the last attempt is under 50 seconds old and made once it is 50, and the
-payloads: fresh sessions that must stay quiet, and broken ones that must still warn, one of
-them so broken that cship prints nothing. What the tests cannot cover is the live fetch itself, the
+retry held off while the last attempt is under 50 seconds old and made once it is 50, a token
+renewed for the same account, a switch to another account whose first fetch is under way, fails,
+or is made at once while the old account's retries were held off, and the payloads: fresh sessions
+that must stay quiet, and broken ones that must still warn, one of them so broken that cship
+prints nothing. What the tests cannot cover is the live fetch itself, the
 registry cache and the history. A failed fetch is the fixture's word, so the count and its row are
 under test and the network is not. The forecast is an input to a fixture, so the window checks and
 the slope are not under test.
@@ -334,7 +338,8 @@ PowerShell 7 both run it.
 
 It can make a working change to the fetch look broken, and a broken one look fine.
 
-`GetUsage()` returns the cached rows whenever `now - ts < 50`. The cache holds their figures, not
+`GetUsage()` returns the cached rows whenever `now - ts < 50` and the token in `.credentials.json`
+is the one they were fetched with, which it nearly always is. The cache holds their figures, not
 drawn text, so the drawing is always the running binary's own, at its own width. The figures are
 not: the pace and the window checks behind them were computed by whichever binary fetched last. A
 value the *old* binary wrote 20 seconds ago is drawn as it stands by the *new* one, and Claude Code
@@ -438,6 +443,24 @@ makes no attempt, whatever `attempt` says, as a live one would not. A render wit
 its own draws the rows as that fetch measured them, or none if the fixture has none. Whether it
 tries, how the count moves and how the row reads are as in a live render, through the same
 `MayRetry()`, `AfterFetch()` and `FetchWarn()`.
+
+Three more fields stand in for what the shared state keeps of the token (see
+[limits.md](reference/limits.md#when-the-token-changes)): `okTok`, the print of the token the last
+good fetch was made with, the registry's `tok`; `okAcct`, the account that fetch was for, its
+`acct`; and `triedTok`, the print of the token last tried, its `tryTok`. Each is empty if left out.
+The token signed in is the `accessToken` in `<dir>/.claude/.credentials.json`, and the account the
+`accountUuid` in `<dir>/.claude.json`:
+
+```json
+"fetch": { "fails": 0, "attempt": "none", "okAt": "2026-09-23T20:13:20Z",
+           "okTok": "0b9bc8f4", "okAcct": "00000000-0000-0000-0000-000000000000",
+           "triedTok": "6eb6875e", "triedAt": "2026-09-23T20:14:19Z" }
+```
+
+A print is the first 8 hex digits of the token's SHA-256: `0b9bc8f4` is `fixture-token-before`
+and `6eb6875e` is `fixture-token-after`. `MayRetry()` lets a token not tried yet be tried at once,
+whatever the count, and that attempt starts the count again. Rows of another account than
+`<dir>/.claude.json` names are not drawn, through the same `Foreign()` as a live render.
 
 Keep the hours exact when comparing builds. A `usage.json` and a `rows.json` that should draw the
 same rows must agree on the hours to each reset down to the last bit: .NET's `TotalHours` is
@@ -545,11 +568,14 @@ To take it out again, quit the app, delete that folder and remove the key.
 
 ## Trap 4: an account switch looks like a regression
 
-`AccountInfo()` is read fresh from `~/.claude.json` on every render, and a changed `accountUuid`
-clears `hist` outright. Immediately after a switch every row reads `→ early` and the percentages
+`AccountInfo()` is read fresh from `~/.claude.json` on every render. A switch changes the token in
+`.credentials.json` as well, which makes the next render fetch at once and leaves out the old
+account's rows until the new account's first good fetch has come. That fetch sees the changed
+`accountUuid` and clears the whole series: `hist`, `vfS/vfW/vfF` and `rsS/rsW/rsF`. So right after
+a switch the limit rows are gone for a moment, then every row reads `→ early`, and the percentages
 belong to a different account, so they will not match anything observed a minute earlier. That is
-`WindowCheck` and the account guard working, not a fault. Check the account line before
-investigating a sudden change in the numbers.
+the token check, `WindowCheck` and the account guard working, not a fault. Check the account line
+before investigating a sudden change in the numbers.
 
 ## Trap 5: the plugin's copy is never free
 

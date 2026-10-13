@@ -38,6 +38,8 @@ The key leaves out what a row has more: the projection `⇢`, and the third row 
 | `→idle`, in grey | Nothing has fetched for five minutes, which is what happens when Claude is not working. The pace the time to 100% was worked out from has stopped, so the key no longer states one. |
 | a meter at `0%`, grey, with `↻ —` | That limit's window has ended since the last fetch. What was used in it is gone, and the next window's reset time is not known until something fetches. |
 | both meters grey, `⚠` and a reason in red | The usage could not be fetched twice in a row: `timeout`, `offline`, `no token`, `HTTP 429`. The figures are the last good ones, and the line under the second meter says how old they are. It is the status line's own [`⚠` row](reading-the-status-line.md#when-a-row-says-), cut to fit. |
+| both meters grey, `—`, and `new account` under the first | Claude Code has switched to another account. The figures the key had were the old account's, so it shows none until the new account's first fetch: a terminal's status line makes it at its next render, and the key itself once Claude writes something. |
+| both meters grey, `—`, `⚠` and a reason in red, `new account` under the second | That first fetch for the new account failed. There are no figures to stand in for it, so this shows at the first failure, not the second. |
 | `—` where a percentage would be | There is no such figure: nothing has been fetched yet, nobody is signed in, or the server sent no such limit. |
 
 ## What a press does
@@ -135,6 +137,7 @@ it deploys a build; see [development.md](../development.md#deploying).
 | the terminal opens behind the window you are in, its taskbar button flashing | Windows refused every way the key has of bringing it forward. Nothing is logged for this; [development.md](../development.md#the-presses-on-the-live-desktop) has the test that shows which way works on your PC. |
 | both meters grey, `⚠ no token` | Claude Code is not signed in with a Claude account, as with the [status line](install.md#when-something-is-missing). |
 | the figures are old while Claude is working | The key only refreshes while it is visible. Otherwise, look at the log. |
+| `new account` stays after a switch | Nothing has fetched since: no terminal is open, and the key refreshes only while Claude writes. Start working, or press the key, since the new session's status line fetches as it starts. |
 | a press opens a shell and not Claude Code | The key opens Windows Terminal's default profile. Make the profile that runs `claude` the default one, in Windows Terminal's settings under *Startup*. |
 
 ## Uninstall

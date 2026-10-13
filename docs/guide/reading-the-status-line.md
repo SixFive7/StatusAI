@@ -162,14 +162,23 @@ instance; the limit rows need one.
 A figure that could not be read never looks like a real zero. A source that failed is named in a
 **red** `⚠` row at the foot of the block, and the figure itself reads `—`. That covers a payload
 that cannot be read, a missing cost or context figure, a transcript that should exist and does not,
-a usage fetch that is suspended or has failed twice in a row, and cship printing nothing. A
-brand-new session, before its first reply, is not a failure and says nothing.
+a usage fetch that is suspended or has failed twice in a row, or once for an account you have just
+switched to, and cship printing nothing. A brand-new session, before its first reply, is not a
+failure and says nothing.
 
 A usage fetch that fails once (when you're offline, say) is quiet. The limit rows keep showing the
 last good fetch, with its countdowns where they stood then, or are left out if there has been none,
 and the next render tries again. If that fails too, a red row names the reason and says how old the
 rows are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds. While
 the row shows, your open sessions try again at most once every 50 seconds between them.
+
+When you switch to another account, the limit rows of the one you left are not shown as the new
+one's. The next render sees that the token in `.credentials.json` has changed and fetches the new
+account's at once, which normally takes a moment and goes unnoticed. Until that fetch succeeds
+there are no limit rows, only the new account's line. If it fails, the red row comes straight
+away, since there are no rows to stand in for it:
+`⚠ usage — timed out after 3 s; no limit rows for the new account yet`. A token Claude Code renews
+for the same account fetches at once as well, and the rows stay as they were meanwhile.
 
 Two more rows can appear there, and neither is a failure:
 

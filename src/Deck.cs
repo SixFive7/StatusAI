@@ -24,7 +24,8 @@ using Microsoft.Win32.SafeHandles;
 static class Deck {
     // What it takes from Program.cs, whose functions are local to its top-level code.
     public sealed class Host {
-        public required Func<(Cached c, string err, string fetchErr)> Look;   // the rows as they stand, without a fetch
+        public required Func<(Cached c, string err, string fetchErr, bool foreign)> Look;   // the rows as they stand, without a fetch; foreign: withheld
+                                                                                            // as another account's
         public required Func<long> FetchedAt;                                 // unix seconds of the last good fetch, 0 offline
         public required Func<long> TriedAt;                                   // and of the last attempt
         public required Func<RowIn, (int now, int proj, string to100, int tone)> Pace;
@@ -52,7 +53,7 @@ static class Deck {
     const int HoldMs = 500;          // a key held this long is a long press, and acts while still down
     const int MaxWaits = 64;         // how many things Windows lets one wait be for
     const int SlotSeconds = 62;      // while Claude works: one refresh a minute, just behind a terminal's own 60 s
-    const int FreshSeconds = 50;     // GetUsage() fetches nothing while the shared copy is younger than this
+    const int FreshSeconds = 50;     // GetUsage() fetches nothing while the shared copy is younger than this and of the token signed in
     const int IdleSeconds = 300;     // no fetch for this long means nothing has been running: a pace says nothing
     const int SettleMs = 100;        // a fetch writes its values one by one; read them once they have all landed
     const int MaxMessage = 16 * 1024 * 1024;
@@ -491,23 +492,31 @@ static class Deck {
     // The key as SVG. age is the seconds since the fetch the rows come from; below zero, it is
     // worked out here.
     public static string Face(Host h, double age) {
-        var (c, _, warn) = h.Look();
+        var (c, _, warn, foreign) = h.Look();
         if (age < 0) { long ts = h.Offline is null ? h.FetchedAt() : 0; age = ts > 0 ? Math.Max(0, Now() - ts) : 0; }
         var sb = new StringBuilder(2800);
         sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"144\" height=\"144\" viewBox=\"0 0 144 144\" font-family=\"").Append(Sans).Append("\">")
           .Append("<rect width=\"144\" height=\"144\" fill=\"").Append(Ground).Append("\"/>");
         // Two fetches in a row have failed. The rows are still the last good ones, so they are drawn
         // grey, and the small lines say what the status line's ⚠ row says: why, and how old they are.
-        var (why, old) = warn.Length > 0 ? Warn(warn) : ("", "");
-        Meter(sb, h, RowTop, "5h", c.Rows, age, warn.Length > 0, why, alarm: true);
-        Meter(sb, h, RowTop + RowHeight, "7d", c.Rows, age, warn.Length > 0, old, alarm: false);
+        // After a switch to another account there are no rows until its first good fetch, since the
+        // last ones were the old account's (foreign): both meters grey and empty, and "new account"
+        // on the first small line while that fetch is pending; once it has failed, why on the first
+        // line, as above, and "new account" on the second.
+        bool failing = warn.Length > 0;
+        var (why, old) = failing ? Warn(warn) : ("", "");
+        string first = failing ? why : foreign ? "new account" : "";
+        string second = !foreign ? old : failing ? "new account" : "";
+        Meter(sb, h, RowTop, "5h", c.Rows, age, failing || foreign, first, alarm: failing);
+        Meter(sb, h, RowTop + RowHeight, "7d", c.Rows, age, failing || foreign, second, alarm: false);
         return sb.Append("</svg>").ToString();
     }
 
     static void Meter(StringBuilder sb, Host h, double y, string label, List<RowIn> rows, double age, bool failing, string failNote, bool alarm) {
         int i = rows.FindIndex(r => r.Label == label);
         if (i < 0) {
-            // no such row: nothing fetched yet, nobody signed in, or a meter the server did not send
+            // no such row: nothing fetched yet, nobody signed in, a meter the server did not send, or
+            // rows of the account switched away from, which are not drawn
             Text(sb, LabelX, y + TitleY, LabelSize, 600, "start", Dim, label);
             Text(sb, PctX, y + TitleY, PctSize, 700, "end", Dim, "—");
             Cells(sb, h, y + CellsY, 0, grey: true);

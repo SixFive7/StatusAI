@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Limit rows: decisions of 23 and 24 September 2026</title>
+<title>Limit rows: decisions of 23 and 24 September and 13 October 2026</title>
 <style>
 :root{
   --bg:#F1F2F8; --surface:#FFFFFF; --sunken:#E8EAF3;
@@ -177,8 +177,8 @@ details.tv[open] > table{display:table}
 </style></head>
 <body><div class="wrap">
   <div class="band">
-    <div class="band-tag">Decided 23 and 24 Sep 2026, nothing pending</div>
-    <h2>The forecast stays as it is. What changed: a harmless → is drawn in forest green, and only the three known meters get a row, with any other flagged for review.</h2>
+    <div class="band-tag">Decided 23 and 24 Sep and 13 Oct 2026, nothing pending</div>
+    <h2>The forecast stays as it is. What changed: a harmless → is drawn in forest green, and only the three known meters get a row, with any other flagged for review. Since 13 October the rows are tied to the token they were fetched with, so a switch of account never draws the old account's figures as the new one's.</h2>
     <table class="dtab"><tbody>
     <tr class=""><td><a href="#q1">Q1</a></td><td>Switch the weekly rows to c?</td><td><b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code><span class="gl">⇢</span></code>.</td><td>decided 2026-09-23, recorded in rejected-designs.md</td></tr>
     <tr class=""><td><a href="#q2">Q2</a></td><td>What → shows when 100% would come after the row's own reset</td><td><b>e.</b> Keep the time; draw <code>→</code> and the time in forest green <code>#28A428</code>.</td><td>deployed 24 Sep 01:32</td></tr>
@@ -186,6 +186,7 @@ details.tv[open] > table{display:table}
     <tr class=""><td><a href="#q4">Q4</a></td><td>What should → show for a meter the history doesn't track?</td><td><b>e, none of a to d.</b> Draw only the three known meters; name any other in an amber <code>⚠</code> row, pending review.</td><td>deployed 24 Sep 03:34</td></tr>
     <tr class=""><td><a href="#q5">Q5</a></td><td>How should the on-credit warning look?</td><td><b>a.</b> Its own red <code>⚠</code> row, as built.</td><td>no change, 2026-09-24</td></tr>
     <tr class=""><td><a href="#q6">Q6</a></td><td>A maxed meter still shows a projection</td><td><b>e, a variant of a.</b> Keep <code><span class="gl">⇢</span></code>, drawn wholly dim like a disabled control.</td><td>deployed 24 Sep 03:34</td></tr>
+    <tr class=""><td><a href="#q7">Q7</a></td><td>What do the limit rows show right after a switch to another account?</td><td><b>a.</b> Tie the copy to its token: a new token fetches at once, and another account's figures are not drawn until its first good fetch.</td><td>decided 2026-10-13</td></tr>
     </tbody></table>
     <p>Rows labelled with a time are what the binary deployed at that time drew: <b>23 Sep 22:19</b> is the one deployed when
     Q1 to Q3 came up, <b>24 Sep 01:32</b> the one after Q2 and Q3 (superseded in part), and <b>24 Sep 03:34</b> the one after Q4
@@ -194,12 +195,13 @@ details.tv[open] > table{display:table}
   </div>
 
   <header>
-    <div class="eyebrow">Decision record for the limit rows, 23 and 24 Sep 2026</div>
+    <div class="eyebrow">Decision record for the limit rows, 23 and 24 Sep and 13 Oct 2026</div>
     <h1>Limit-row decisions</h1>
     <p class="lede">At 19:57 on 23 September the 7d row said <b>100% in 4h35m</b> and <b>226% at the reset</b>, both from the
     pace of one busy hour. What to do about that, and about the other questions it led to on the same rows, was decided over the next hours.
     This page is the record: what was built, the design that was rejected together with the replay it was judged on, and every
-    option as it was drawn. Nothing on it is pending.</p>
+    option as it was drawn. Nothing on it is pending. Q7 came later, on 13 October, from a switch of account, and is a record in
+    words.</p>
   </header>
   
 <section class="sec gapped" id="asbuilt">
@@ -789,6 +791,58 @@ details.tv[open] > table{display:table}
     <p class="opt-w">Credits off: as c. Credits on: in colour, as the 24 Sep 01:32 build drew the credit fixture. Useful in the one case where use keeps growing; a little more logic.</p></div>
   <p class="recline"><b>Decided: e, a variant of a, built on 2026-09-24.</b> A row at 100% keeps its <code><span class="gl">⇢</span></code> segment,
   greyed; <code>→</code> still reads <code>maxed</code>, or <code>early</code> while there is no trend yet.</p>
+</div>
+  
+<div class="q" id="q7"><h3 class="qh">Q7: What do the limit rows show right after a switch to another account? <span class="tag pick">decided, 2026-10-13</span></h3>
+  <p class="primer">StatusAI keeps one copy of the usage for the machine, not one per account. The claude-swap tool switches
+  Claude Code between accounts by rewriting <code>.credentials.json</code> and then <code>~/.claude.json</code>, and running sessions
+  follow at their next request. The copy noticed a switch only at its next good fetch, by comparing the account in
+  <code>~/.claude.json</code> with the one it had stored, <code>acct</code>. Until then the status line and the Stream Deck key drew
+  the previous account's figures as current: for up to 50 seconds normally, and for as long as the new account's fetches
+  failed, quietly at the first failure and then under a <code>⚠</code> row that gave an age but no account. On 12 October the
+  first good fetch came 5 min 18 s after a switch.</p>
+  <div class="opt rec">
+    <div class="opt-h"><span class="letter">a</span><span class="opt-t">Tie the copy to the token it was fetched with</span><span class="tag pick">chosen</span></div>
+    
+    <p class="opt-w">As decided: "Store a short fingerprint of the token with the cached figures. If the token changes, fetch at once
+    instead of waiting up to 50 s, and grey the meters until that fetch succeeds."</p><p class="opt-w">A good fetch stores <code>tok</code> beside <code>acct</code>: the first 8 hex digits of the access token's
+    SHA-256, never the token. A render or a <code>--refresh</code> whose token is not <code>tok</code> fetches at once, through the lock,
+    and a token not tried yet is tried even while the old one's retries are held off.</p>
+    <p class="opt-w">A token Claude Code renews for the same account, about every 8 hours, keeps the figures drawn while that fetch
+    runs. Another account in <code>~/.claude.json</code>, or one that cannot be read, withholds them on both surfaces until the new
+    account's first good fetch: the status line has no limit rows, and its <code>⚠</code> row comes at the first failure,
+    <code>no limit rows for the new account yet</code>; the key greys both meters with no figures in them and says
+    <code>new account</code>, with <code>⚠ timeout</code> or another reason above it once that fetch has failed. The render that notices
+    the new token normally makes the fetch itself, within its 3 seconds, so none of this is seen.</p>
+    <p class="opt-w">It costs no width: rows are withheld, not added, and the longest new <code>⚠</code> row, 87 columns, is 12 longer
+    than the same reason with an age. The render tests hold it to seven cases: <code>token-renewed</code>, <code>switch-pending</code>,
+    <code>switch-failed</code> and <code>switch-tried-at-once</code>, and the key's <code>key-token-renewed</code>,
+    <code>key-switch-pending</code> and <code>key-switch-failed</code>.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">b</span><span class="opt-t">Keep the history and the reset times per account</span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">Switching back to an account would take up its forecast where it was left. It costs more state in the registry, and an
+    account's first use would still start at <code>→ early</code>. No width: the rows stay as they are.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">c</span><span class="opt-t">Name the account on the key, and in the <code>⚠</code> row</span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">Every switch would show, at the cost of room on the key's face and of the name's length on the <code>⚠</code> row.
+    Without a, the old account's figures could still linger beside the new name. Not chosen: the status line already names the
+    account, and the key does not have to.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">d</span><span class="opt-t">Draw every account on the key, the ones not in use from claude-swap's cache</span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">It would show which account has room before a switch. It would depend on claude-swap's file, whose figures for the
+    accounts not in use are 5 to 10 minutes old, and up to 2 hours old after a <code>429</code>.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">e</span><span class="opt-t">Draw the 5h and 7d rows from the <code>rate_limits</code> Claude Code passes to the status line</span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">Right for every session by construction, since each session passes its own. It only reaches a status line in a terminal,
+    though, and every session on the machine at the time ran in VS Code, so the key would have kept fetching.</p></div>
+  <p class="recline"><b>Decided: a, on 2026-10-13.</b> The previous account's figures are never drawn as the new one's. Built with it,
+  as a fix of its own rather than part of this decision: a switch now also clears the reset times <code>rsS</code>, <code>rsW</code>
+  and <code>rsF</code>, whose leftovers restarted the new account's 5h series a second time, five minutes after a switch on
+  13 October.</p>
 </div>
   </section>
   
