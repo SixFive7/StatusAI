@@ -5,6 +5,18 @@ under *Unreleased*, and the entries before the first release are by date.
 
 ## Unreleased
 
+**Reset times from the older shape of the response**
+
+- A usage response without `limits[]` is drawn from the older top-level `five_hour` and `seven_day`
+  objects, as before, and now from their `resets_at` as well as their `utilization`, read the way a
+  `limits` entry's is. On that path both rows said `↻ —`, with no projection and a grey `→`; they
+  now have their reset time, their projection and the red or forest `→`, as on the `limits` path. A
+  `resets_at` that is `null` or missing is still no reset time, never a reset this instant. The
+  model-scoped weekly row stays absent there, since the older objects have no such meter. No
+  response captured has lacked `limits[]`. See [response shape](docs/reference/limits.md#response-shape).
+- Six renders are recorded again, the `legacy-shape` case at its five widths and the `key-legacy`
+  key; the other 213 of the 219 are unchanged. The exe is the same size.
+
 **A switch seen with Claude idle, and smaller fixes**
 
 - The Stream Deck key sees a token that nothing has fetched with, after a switch of account or a

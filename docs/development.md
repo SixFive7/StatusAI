@@ -62,7 +62,8 @@ Twenty of the cases are the Stream Deck key. A case with a `face` gets no payloa
 that many seconds after the fetch its rows come from, and the bytes are compared with
 `tests/expected/<case>.svg`. They cover the key of the screenshot's rows, the same key a quarter of
 an hour and three and a half hours on, a row at 100%, rows without a trend, without a reset time
-and without a session meter, a fetch that is failing, no rows at all, a first run whose first fetch
+and without a session meter, the older shape of the response with its reset times, a fetch that is
+failing, no rows at all, a first run whose first fetch
 failed, a token renewed for the same account, the first fetch for another account, under way and
 failed, a 429 that holds the fetch off, for the same account and for a new one, and claude-swap's
 figure drawn at a switch.
@@ -117,7 +118,8 @@ The `showcase` case draws every row at once, with its token grid over a main thr
 sub-agents, one of them a nested workflow agent, whose files carry both
 [duplication traps](reference/accounting.md#the-two-duplication-traps); the scripts under
 [verifying the accounting](#verifying-the-accounting) agree with its totals. The other cases cover
-the limit rows through a usage response and through `rows.json` alone, the meters notice, the
+the limit rows through a usage response, in its older shape without `limits[]` too, and through
+`rows.json` alone, the meters notice, the
 breakdown against the width, the on-credit alarm, the order of the `⚠` rows, where the width comes
 from (`COLUMNS`, `STATUSAI_WIDTH` before it, a value that is not a width, `statusLine.padding`), a
 usage fetch that fails once, twice, in another session and before any has worked, then recovers, a

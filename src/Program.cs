@@ -1663,33 +1663,45 @@ static Usage ParseUsage(JsonElement root, DateTimeOffset utc) {
         foreach (var lim in limits.EnumerateArray()) {
             string kind = lim.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
             int pct = lim.TryGetProperty("percent", out var pc) ? (int)pc.GetDouble() : 0;
-            // resets_at is a time on every kind in the 2026-08-15 and 2026-09-23 responses,
-            // weekly_scoped included, but on 2026-08-18 weekly_scoped at 0% sent null in three
-            // samples in a row. So "no reset time" is a state a payload can report (the
-            // fallback below reads none), and it is carried as a flag rather than as an hrs
-            // of 0, which reads as "resets right now"
-            double hrs = 0; long rsu = 0; bool hasReset = false;
-            if (lim.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
-                && DateTimeOffset.TryParse(ra.GetString(), out var rdt)) {
-                hrs = Math.Max(0, (rdt - utc).TotalHours); rsu = rdt.ToUnixTimeSeconds();
-                hasReset = true;
-            }
+            var (hrs, rsu, hasReset) = ResetsAt(lim, utc);
             string sev = lim.TryGetProperty("severity", out var sv) ? sv.GetString() ?? "" : "";
             var (label, scope) = MeterLabel(kind, lim);
             u.Meters.Add(new Meter(kind, label, scope, new Lim(pct, hrs, hasReset, rsu, sev)));
         }
     } else {
-        // the older top-level objects: they carry a resets_at as well, as in the 2026-08-15
-        // and 2026-09-23 responses, but only utilization is read here, so both resets are
-        // unknown on this path, not zero minutes away
-        u.Meters.Add(new Meter("session", "5h", "",
-            new Lim((int)root.GetProperty("five_hour").GetProperty("utilization").GetDouble(), 0, false, 0, "")));
-        u.Meters.Add(new Meter("weekly_all", "7d", "",
-            new Lim((int)root.GetProperty("seven_day").GetProperty("utilization").GetDouble(), 0, false, 0, "")));
+        // the older top-level objects, each read for its utilization and, through the same
+        // ResetsAt as a limits entry, its resets_at. They carry no severity, and nothing for
+        // the model-scoped weekly meter: the two named for a model, seven_day_opus and
+        // seven_day_sonnet, were null in the 2026-08-15 and 2026-09-23 responses, and in the
+        // second none of the others held Fable's 47%. So this path has the 5h and 7d meters only
+        u.Meters.Add(new Meter("session", "5h", "", OlderLim(root.GetProperty("five_hour"), utc)));
+        u.Meters.Add(new Meter("weekly_all", "7d", "", OlderLim(root.GetProperty("seven_day"), utc)));
     }
     u.Bd = Breakdown(root);
     u.Cr = Credit(root, u.Meters);
     return u;
+}
+
+// When a meter resets, measured against utc: the hours to it, never below 0, and the time in
+// unix seconds. resets_at is a time on every kind in the 2026-08-15 and 2026-09-23 responses,
+// weekly_scoped included, and in their older five_hour and seven_day objects, but on
+// 2026-08-18 weekly_scoped at 0% sent null in three samples in a row. So "no reset time" is a
+// state a payload can report: a resets_at that is null, missing or not a time is carried as
+// hasReset false, not as an hrs of 0, which reads as "resets right now".
+static (double hrs, long rsu, bool hasReset) ResetsAt(JsonElement o, DateTimeOffset utc) {
+    if (o.TryGetProperty("resets_at", out var ra) && ra.ValueKind == JsonValueKind.String
+        && DateTimeOffset.TryParse(ra.GetString(), out var rdt))
+        return (Math.Max(0, (rdt - utc).TotalHours), rdt.ToUnixTimeSeconds(), true);
+    return (0, 0, false);
+}
+
+// five_hour or seven_day, the older objects ParseUsage falls back to: the utilization, which
+// has to be there (a meter that cannot be read throws), and the reset as ResetsAt reads it.
+// No severity.
+static Lim OlderLim(JsonElement o, DateTimeOffset utc) {
+    int pct = (int)o.GetProperty("utilization").GetDouble();
+    var (hrs, rsu, hasReset) = ResetsAt(o, utc);
+    return new Lim(pct, hrs, hasReset, rsu, "");
 }
 
 // 5h and 7d for the two rows there have always been, and the scope's name for the rest
@@ -2128,10 +2140,10 @@ sealed class TokState {
 }
 
 // HasReset is carried explicitly rather than inferred from Hours or ResetsUnix being 0.
-// The fallback to the older five_hour/seven_day objects reads no reset time, and on 2026-08-18
-// the API sent resets_at: null for weekly_scoped at 0% (on 2026-09-23, at 47%, it sent a
-// time there). Both used to arrive as Hours 0, which the rows drew as "↻ 0m", a claim that
-// the window resets this instant.
+// On 2026-08-18 the API sent resets_at: null for weekly_scoped at 0% (on 2026-09-23, at 47%,
+// it sent a time there), and until 2026-10-14 the fallback to the older five_hour/seven_day
+// objects read no reset time at all. Both used to arrive as Hours 0, which the rows drew as
+// "↻ 0m", a claim that the window resets this instant.
 record struct Lim(int Pct, double Hours, bool HasReset, long ResetsUnix, string Sev);
 
 // One meter as the server sent it: its kind, the label it is drawn or named under, what its

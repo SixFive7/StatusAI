@@ -296,11 +296,24 @@ is no host line to insert it into. See [layout.md](layout.md#when-there-is-no-ho
 ## Response shape
 
 Two shapes ship in the same payload. `ParseUsage()` prefers the `limits` array and falls back to
-the older top-level `five_hour` / `seven_day` objects. Those carry `utilization` and a `resets_at`
-as well: every response captured has both, from the 2026-08-15 sample below to the live response
-of 2026-09-23 in `tests/fixtures/homes/live/usage.json`. The fallback reads only `utilization`,
-though, so on that path every row shows a reset of `—` and no projection is possible. The live
-fetch and the offline render both parse through it, so a fixture exercises the same code.
+the older top-level `five_hour` / `seven_day` objects. The live fetch and the offline render both
+parse through it, so a fixture exercises the same code.
+
+The older objects carry `utilization` and a `resets_at` as well: every response captured has both,
+from the 2026-08-15 sample below to the live response of 2026-09-23 in
+`tests/fixtures/homes/live/usage.json`. The fallback reads both, `resets_at` through the same
+`ResetsAt()` as a `limits` entry, so on that path too a row has its reset time, its projection and
+the colour of its `→`. A `resets_at` that is `null` or missing is no reset time there as well, not
+a reset this instant; see [the projection](#the-projection). Until 14 October the fallback read only
+`utilization`, and both its rows showed `↻ —` and no projection.
+
+The model-scoped weekly row is still absent on that path, because the older objects have no such
+meter. The two named for a model, `seven_day_opus` and `seven_day_sonnet`, are `null` in the
+2026-08-15 and 2026-09-23 responses, and in the second none of the others holds Fable's 47%. Nor do
+they carry a severity, so the labels keep their plain colour. The fallback draws two rows, `5h` and
+`7d`. No response captured has lacked `limits[]`, so it has only run in the
+[render tests](../development.md#the-render-tests): `legacy-shape` and `key-legacy` draw the
+2026-09-23 response without it.
 
 ```jsonc
 {
@@ -456,9 +469,10 @@ label  bar(now)  now%  ↻ reset  → eta  ⇢ bar(projected)  projected%
   dim, as do `early`, `maxed` and `never`. The same rule holds on every row: 5h, 7d, scoped.
 - No reset time is its own state, carried as `Lim.HasReset`. On 2026-08-18 `weekly_scoped` at 0%
   returned `resets_at: null`, three samples running (the 08-15 and 09-23 responses carry a time
-  there), and the fallback to the older `five_hour` / `seven_day` objects reads none. Both used to
-  arrive as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets this instant. They
-  now render `↻ —`, and while a row is in that state its projection is suppressed and its `→` is
+  there), and until 14 October the fallback to the older `five_hour` / `seven_day` objects read
+  none. Both used to arrive as an `hrs` of 0 and render `↻ 0m`, an assertion that the window resets
+  this instant. A `resets_at` that is `null` or missing, in `limits[]` or in the older objects, now
+  renders `↻ —`, and while a row is in that state its projection is suppressed and its `→` is
   neither red nor forest, since there is no deadline to test against.
 - A row at 100% is blocked until its window resets, so where it is heading does not apply for now.
   `→` reads `maxed` (or `early` if there is no trend yet), and the `⇢` segment is kept but drawn
@@ -524,10 +538,6 @@ whole series was foreign and was thrown away. That is correct behaviour, not a b
   redraw, within a minute while it shows, with the new account's figures once the switch is 15
   seconds old (see [when the token changes](#when-the-token-changes)). Until then each shows what
   it drew last.
-- The fallback to the older `five_hour` / `seven_day` objects reads only `utilization`, though every
-  response captured carries a `resets_at` in them as well (see [response shape](#response-shape)), so
-  a response without `limits[]`, which no captured response has been, draws no reset time and no
-  projection.
 - Only a token that changes is compared. A copy fetched with the token signed in now is drawn as
   that token's account's even if `~/.claude.json` names another, which a switch could only cause
   in the moment between its two writes.

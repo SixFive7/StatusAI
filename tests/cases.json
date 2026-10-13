@@ -42,7 +42,7 @@
       "home": "legacy-shape",
       "payload": "fresh",
       "widths": [100, 120, 137, 141, 160],
-      "checks": "The legacy five_hour / seven_day shape, without limits[]: two rows, ↻ —, no projection."
+      "checks": "The legacy five_hour / seven_day shape, without limits[]: two rows, their resets_at read, ↻ 3h36m and 4d10h, → red and ⇢ 133% and 300% as live draws them, and no Fable row."
     },
     "no-session": {
       "home": "no-session",
@@ -570,7 +570,7 @@
     "key-legacy": {
       "home": "legacy-shape",
       "face": 0,
-      "checks": "The legacy shape, whose reset times are not read: ↻ — on both rows."
+      "checks": "The legacy shape, its reset times read: ↻ 3h36m and 4d10h, and → 2h28m and 6h52m in red, since 100% comes before each reset."
     },
     "key-no-session": {
       "home": "no-session",
