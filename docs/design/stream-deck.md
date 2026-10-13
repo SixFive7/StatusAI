@@ -503,3 +503,51 @@ draws: `3h23m 7h29m` at 30 px measures 139,5 and 162,9 px there, against Qt's 14
 
 What the faces look like on the device itself has not been seen: none of them has been shown on a
 Stream Deck yet.
+
+## The counts, held against a control
+
+13 October 2026. Three of the plugin's tests failed on a build that changed nothing they cover, and
+the build deployed on 3 October, which had passed them, failed them the same way. A plugin started
+offline by the test held 204 handles where it had held 172, and 40 libraries where it had held 27.
+Its first press cost it 15 handles, where the test allowed 6, and so did a hold that could not start
+Windows Terminal. And the plugin that was offline in the case about the home folder had
+`shell32.dll` loaded.
+
+None of it was the plugin's. A tool installed on this PC since then loads its own libraries into
+every process, and one of them links libraries of Windows' own, `shell32.dll` among them, which the
+loader brings in with it before any of the plugin's code runs: fourteen libraries and 35 handles in
+all. Started with the Windows mitigation that lets a process load only Microsoft's libraries, both
+builds held 169 handles and 26 libraries, no shell library, and 2 handles more after the first
+press, as on 3 October, and passed every case. The 15 were those 2, which Windows takes for the
+first program a process starts, and 13 that the tool's library took. As the process it is in starts
+a program, that library turns a security descriptor from text, which looks up a privilege, and the
+first such look-up in a process starts Windows' RPC in it: a connection to the security authority's
+port, a handle to the calling thread, two events, three event providers, and RPC's thread pool with
+its completion port, two timers and their wait packets. They are the 13 that .NET's `HasExited` cost
+the build of 3 October (see [what a press still left in the plugin](#what-a-press-still-left-in-the-plugin)).
+The plugin as deployed carries the tool's libraries too: 219 handles and 40 libraries, 16,4 to
+17,1 MB of memory in use and 4,4 to 5,0 MB of it private, where it held 171 to 173, 26, 11,0 and 3,6
+on 3 October.
+
+**Decided:** where a case counts what the plugin holds, it holds it against a control measured in
+the same run on the same machine, not against a fixed number. The decision was the user's, made
+beforehand for a cause outside StatusAI. The first press, and the first hold that cannot start
+Windows Terminal, may cost the plugin at most 4 handles over what a control plugin's first program,
+a refresh, cost it: 2 where nothing but Windows is loaded, which makes the 6 of before, and 15 on
+this PC. The plugin that is not offline may have no shell library that the one offline has not, and
+the one offline may have one only beside a library from outside Windows, so where there is none it
+is held as strictly as before. A case whose control has libraries from outside Windows in it names
+them in its output.
+
+**What the control cannot see.** On a machine where a library loaded into every process starts
+Windows' RPC already, the 13 handles of a leak like `HasExited` are in the control as well, and the
+case cannot see the plugin take them on again. The build of 3 October with `HasExited` put back
+passed the case on this PC, and failed it with the tool kept out: 169 handles before its first press
+and 184 after. On such a machine that leak costs the plugin nothing it would not pay anyway; on one
+without the tool the case still finds it. A press that asks the shell is still found here: a build
+that asks the shell for `%LOCALAPPDATA%` at every hold held 204 handles before its first failed hold
+and 243 after it, with `windows.storage.dll` and `shlwapi.dll` loaded, against a control of 15.
+
+Run that way under PowerShell 7 and Windows PowerShell 5.1, all but one of the cases pass, and the
+offline half of the case about the home folder passes. Its other half, whose plugin watches the
+live registry key, and the live cases have not been run with the control.

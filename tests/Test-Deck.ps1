@@ -24,6 +24,13 @@
     touches outside that home is a watch on HKCU\Software\StatusAI. No terminal is ever opened
     by these tests, and nothing on the desktop is touched.
 
+    Where a case counts what the plugin holds, it holds the plugin against a control taken on the
+    same machine in the same run, not against a fixed number. A tool that loads its own libraries
+    into every process brings handles and libraries the plugin never asked for, and they are in
+    the control as well: what the first program a plugin starts costs it is taken from a control
+    plugin, and the plugin that is not offline is held against the one that is. A case whose
+    control has libraries from outside Windows in it names them.
+
     -Live adds the four cases that cannot be had that way, because they are about the desktop.
     The first is the control: with Windows Terminal running, a new window asked of it with
     nothing done for it has to stay behind the window in front, as the plugin's did before it
@@ -128,6 +135,7 @@ public static class HandedDown {
 
 # ------------------------------------------------------------------ the plugin under test
 $script:Open = New-Object System.Collections.ArrayList   # every session a case opened, for the clean-up
+$script:FirstProgram = $null                             # what a first program costs a plugin, once taken
 $script:RunRoot = $null
 $script:ExePath = $null
 $script:HomeNo = 0
@@ -361,6 +369,37 @@ function Show-Key($s, [string] $context, [string] $payload = '{"settings":{},"co
     Expect-Event $s 'setImage' 3000 $context
 }
 
+# The libraries in a process that are neither Windows' own nor the plugin: what a tool that loads
+# its own libraries into every process has put there.
+function Get-Foreign($proc) {
+    @($proc.Modules | Where-Object { $_.FileName -notlike "$env:SystemRoot\*" -and $_.FileName -ne $script:ExePath } | ForEach-Object { $_.ModuleName })
+}
+
+# The control for what a press may cost: what the first program a plugin starts costs it on this
+# machine, taken from a control plugin whose first program is a refresh, started as a press is.
+# Where nothing but Windows is in the process that is 2 handles, a registry key and an event
+# provider, which CreateProcess takes once in a process to look up what it knows about the
+# program. A tool that loads its own libraries into every process can add to it. One such library,
+# as the process it is in starts a program, turns a security descriptor from text, which looks up a
+# privilege, and the first time that starts Windows' RPC in the process: 13 handles more. Taken
+# once in a run.
+function Get-FirstProgramCost {
+    if ($null -eq $script:FirstProgram) {
+        $s = Open-Plugin
+        [void] (Show-Key $s 'C0')
+        $s.Run.Proc.Refresh(); $fresh = $s.Run.Proc.HandleCount
+        [System.IO.File]::AppendAllText((Join-Path $s.HomeDir '.claude\projects\p\session.jsonl'), "{}`n")
+        [void] (Expect-Log $s '^offline: ran --refresh$' 3000)
+        Start-Sleep -Milliseconds 200
+        $s.Run.Proc.Refresh()
+        $script:FirstProgram = $s.Run.Proc.HandleCount - $fresh
+        $foreign = @(Get-Foreign $s.Run.Proc)
+        $from = ''; if ($foreign.Count -gt 0) { $from = ", with from outside Windows: $($foreign -join ', ')" }
+        Write-Host "      a control plugin's first program, a refresh, cost it $script:FirstProgram handles$from"
+    }
+    $script:FirstProgram
+}
+
 function Pad([int] $n) { New-Object string ('x', $n) }
 
 function Close-Sessions {
@@ -484,6 +523,7 @@ $Cases['a short press on release, a long press after 500 ms'] = {
 }
 
 $Cases['forty presses, and as many handles as before'] = {
+    $first = Get-FirstProgramCost
     $s = Open-Plugin
     [void] (Show-Key $s 'N1')
     $said = { param([object[]] $all, [string] $pattern) @($all | Where-Object { $_.json.event -eq 'logMessage' -and $_.json.payload.message -match $pattern }).Count }
@@ -496,14 +536,16 @@ $Cases['forty presses, and as many handles as before'] = {
             [void] (Expect-Log $s '^offline: --deck-press tab ended with 0$' 5000)
         }
     }
-    # The first program a process starts costs it two handles, which is Windows looking up what
-    # it knows about the program. What .NET's own way of asking whether a process has ended costs
-    # is 13 more, once, and they stay: that is what this plugin was found with after its first
-    # press, and what it must not take on again.
+    # The first program a process starts costs it what a control plugin's first program cost it
+    # (Get-FirstProgramCost), 2 handles where nothing but Windows is in it. What .NET's own way of
+    # asking whether a process has ended costs is 13 more, once, and they stay: that is what this
+    # plugin was found with after its first press, and what it must not take on again. They are
+    # Windows' RPC starting in the process, so on a machine where a library loaded into every
+    # process starts that RPC already, they are in the control as well and this cannot see them.
     $s.Run.Proc.Refresh(); $fresh = $s.Run.Proc.HandleCount
     & $press 2
     $s.Run.Proc.Refresh(); $before = $s.Run.Proc.HandleCount
-    Need ($before - $fresh -le 6) "the plugin held $fresh handles before its first press and $before after it"
+    Need ($before - $fresh -le $first + 4) "the plugin held $fresh handles before its first press and $before after it, where a control plugin's first program cost it $first"
     & $press 30
     # and ten at once, so that the plugin waits for several of them together
     for ($i = 0; $i -lt 10; $i++) { Send-Event $s 'keyDown' 'N1'; Send-Event $s 'keyUp' 'N1' }
@@ -520,6 +562,7 @@ $Cases['no Windows Terminal: an alert on the key, why in the log, and as many ha
     # A %LOCALAPPDATA% with no wt.exe in it, and something for a tab to run, which makes the
     # press a real one: --deck-press tries to start the terminal. It is a hold each time, which
     # asks for a new window, so no window that is open is looked for.
+    $first = Get-FirstProgramCost
     $local = Join-Path $script:RunRoot 'no-terminal'
     New-Item -ItemType Directory -Path (Join-Path $local 'Microsoft\WindowsApps') -Force | Out-Null
     $s = Open-Plugin @{ STATUSAI_DECK_TAB = 'cmd /c exit'; LOCALAPPDATA = $local }
@@ -531,12 +574,12 @@ $Cases['no Windows Terminal: an alert on the key, why in the log, and as many ha
         Send-Event $s 'keyUp' 'X1'
         Expect-Nothing $s 300 'after the release'
     }
-    # the first costs what the first program a process starts costs, and no more: naming the
-    # path in the log by asking the shell for it would load the shell into the plugin, 38 handles
+    # the first costs what a control plugin's first program cost it, and no more: naming the path
+    # in the log by asking the shell for it would load the shell into the plugin, 38 handles
     $s.Run.Proc.Refresh(); $fresh = $s.Run.Proc.HandleCount
     & $hold
     $s.Run.Proc.Refresh(); $before = $s.Run.Proc.HandleCount
-    Need ($before - $fresh -le 6) "the plugin held $fresh handles before its first press and $before after it"
+    Need ($before - $fresh -le $first + 4) "the plugin held $fresh handles before its first press and $before after it, where a control plugin's first program cost it $first"
     foreach ($i in 1..3) { & $hold }
     $s.Run.Proc.Refresh(); $after = $s.Run.Proc.HandleCount
     Need ([Math]::Abs($after - $before) -le 3) "the plugin held $before handles before three presses that failed and $after after them"
@@ -621,11 +664,15 @@ $Cases['the deck goes and comes back: the key is drawn again, in whichever order
 }
 
 $Cases['not offline, the home folder is found without the shell'] = {
-    # The plugin as the app runs it, not offline, beside one that is. Its home folder is its
-    # USERPROFILE, here a copy of the test home, and no key shows, so it draws, reads, fetches and
-    # writes nothing. Found by asking the shell, as a render finds it, the folder would cost the
-    # plugin five of the shell's libraries and 35 handles, for good.
+    # The plugin as the app runs it, not offline, beside one that is: the control. Its home folder
+    # is its USERPROFILE, here a copy of the test home, and no key shows, so it draws, reads,
+    # fetches and writes nothing. Found by asking the shell, as a render finds it, the folder would
+    # cost the plugin five of the shell's libraries and 35 handles, for good. So it may have none
+    # of the shell's libraries that the control has not. The control may have them only where a
+    # library from outside Windows is loaded into it as well: a tool that loads its own libraries
+    # into every process can bring shell32 with one of them.
     $handles = @{}
+    $shell = @{}
     foreach ($offline in $true, $false) {
         $more = @{}
         if (-not $offline) { $more = @{ STATUSAI_OFFLINE = '' } }
@@ -638,9 +685,15 @@ $Cases['not offline, the home folder is found without the shell'] = {
         Start-Sleep -Milliseconds 500
         $s.Run.Proc.Refresh()
         $handles[$offline] = $s.Run.Proc.HandleCount
-        $shell = @($s.Run.Proc.Modules | ForEach-Object { $_.ModuleName.ToLowerInvariant() } | Where-Object { $_ -in 'shell32.dll', 'windows.storage.dll' })
-        Need ($shell.Count -eq 0) "the plugin, $(if ($offline) { 'offline' } else { 'not offline' }), has the shell loaded: $($shell -join ', ')"
+        $shell[$offline] = @($s.Run.Proc.Modules | ForEach-Object { $_.ModuleName.ToLowerInvariant() } | Where-Object { $_ -in 'shell32.dll', 'windows.storage.dll' })
+        if ($offline -and $shell[$true].Count -gt 0) {
+            $foreign = @(Get-Foreign $s.Run.Proc)
+            Need ($foreign.Count -gt 0) "the plugin, offline, has the shell loaded, and no library from outside Windows that could have loaded it: $($shell[$true] -join ', ')"
+            Write-Host "      the control, offline, has $($shell[$true] -join ', ') loaded, with from outside Windows: $($foreign -join ', ')"
+        }
     }
+    $extra = @($shell[$false] | Where-Object { $shell[$true] -notcontains $_ })
+    Need ($extra.Count -eq 0) "the plugin, not offline, has the shell loaded where the one offline has not: $($extra -join ', ')"
     # the one is watching the registry key and the other is not: a handle or three, and not 35 more
     Need ($handles[$false] - $handles[$true] -le 10) "the plugin held $($handles[$false]) handles not offline and $($handles[$true]) offline"
 }
@@ -977,6 +1030,7 @@ public static class Desk {
     function Invoke-BothPresses([string] $context, [bool] $withBase, [bool] $minimised, [string] $others = 'skip') {
         $script:Others = $others
         Assert-Free $others
+        $first = Get-FirstProgramCost
         $was = [Desk]::GetForegroundWindow()
         $base = [IntPtr]::Zero
         if ($withBase) { $base = Open-Base 22 $was }
@@ -993,10 +1047,10 @@ public static class Desk {
             }
             # Starting a Store app loads Windows' app model into the process that does it, 63 handles
             # that never go: the press is a process of its own so that the plugin is not that process.
-            # Two handles are what Windows takes for the first program a process starts.
+            # The first program a process starts costs it what it cost a control plugin.
             $s.Run.Proc.Refresh(); $after = $s.Run.Proc.HandleCount
             Write-Host "      the plugin: $handles handles before the two presses, $after after them"
-            Need ($after - $handles -le 6) "the plugin held $handles handles before the two presses and $after after them"
+            Need ($after - $handles -le $first + 4) "the plugin held $handles handles before the two presses and $after after them, where a control plugin's first program cost it $first"
             if ($script:Guarded -eq $true) { Write-Host '      the control stayed behind: these presses came from where Windows guards the foreground' }
             elseif ($script:Guarded -eq $false) { Write-Host '      the control came to the front by itself: these presses say nothing about a plugin' }
         } finally {

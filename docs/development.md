@@ -169,12 +169,12 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | a message in fragments, with a ping between them | three fragments put together, and the ping between two of them answered straight away |
 | a ping is answered, a pong is ignored | a pong that carries what the ping did, at 0, 3 and 125 bytes |
 | a short press on release, a long press after 500 ms | nothing while the key is down and the tab when it comes up; the window 500 ms into a hold, and nothing at its release; each press a `--deck-press` that ends with 0 |
-| forty presses, and as many handles as before | two presses, then thirty one after the other and ten at once, each a `--deck-press` that is started, waited for and read; the plugin's handle count at most 6 up after the first two, which is what Windows takes for the first program a process starts, and where it was after the forty |
-| no Windows Terminal: an alert on the key, why in the log | with `%LOCALAPPDATA%` a folder that has no `wt.exe`, each of four holds shows the alert and logs `could not start ...\wt.exe: Windows error 2`, and the handle count stays where the first left it |
+| forty presses, and as many handles as before | two presses, then thirty one after the other and ten at once, each a `--deck-press` that is started, waited for and read; the plugin's handle count after the first two at most 4 up on what a control plugin's first program cost it in the same run, 2 where nothing but Windows is loaded, and where it was after the forty |
+| no Windows Terminal: an alert on the key, why in the log | with `%LOCALAPPDATA%` a folder that has no `wt.exe`, each of four holds shows the alert and logs `could not start ...\wt.exe: Windows error 2`; the first costs the plugin at most 4 handles over what a control plugin's first program cost it, and the handle count stays where the first left it |
 | a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
 | a new token while nothing is written: one refresh once it is 15 s old, and none while a 429 holds it | with no write at all, a token the shared copy was not fetched with gets one refresh, `offline: ran --refresh for a new token`: not at the first redraw, when it is 8 seconds old, but at the moment it turns 15, which the plugin sets a timer for; none at the next redraw; and with a 429 holding that token off for 3 seconds, none until the hold lifts and one at the first redraw after |
 | the deck goes and comes back | nothing drawn or fetched for a key that does not show; the key drawn again, and the refresh that was waiting made once, whether the app names the key before the deck or the deck before the key; the picture sent again when a deck or the system comes back with nothing said about the key |
-| not offline, the home folder is found without the shell | a plugin that is not offline, with a copy of the test home as its `USERPROFILE` and no key showing, has neither `shell32.dll` nor `windows.storage.dll` loaded, and no more than 10 handles over one that is offline |
+| not offline, the home folder is found without the shell | a plugin that is not offline, with a copy of the test home as its `USERPROFILE` and no key showing, has neither `shell32.dll` nor `windows.storage.dll` loaded where one that is offline, its control, has not, and no more than 10 handles over it; the control may have them only beside a library from outside Windows |
 | a hundred refreshes, and as many handles as before | with a slot of no length, a hundred writes are a hundred `--refresh` processes, and the plugin's handle count after them is what it was before |
 | the app closes | a close in answer, and exit code 0 |
 | a frame the protocol forbids | a masked frame, a reserved bit, a ping in fragments, a continuation of nothing, a message inside another and an opcode that does not exist: each a close with status 1002 and exit code 1; a frame announced at 17 MiB: 1009 |
@@ -199,6 +199,16 @@ the plugin by hand without either. Two things more are offline only. A `sendToPl
 app is answered with its own payload, which is how a case makes the plugin send a frame of any
 length. And `STATUSAI_DECK_SLOT` is taken for the seconds between refreshes, 62 without it,
 which is how a case fits a hundred of them in a few seconds.
+
+Where a case counts what the plugin holds, it holds the plugin against a control taken on the same
+machine in the same run, not against a fixed number. A tool that loads its own libraries into
+every process puts them into the plugin as well, with handles of their own, and may make the first
+program a process starts cost it more. So the cases about presses take what the first program costs
+from a control plugin, whose first program is a refresh: 2 handles where nothing but Windows is
+loaded. The case about the home folder holds the plugin that is not offline against the one that
+is. A case whose control has libraries from outside Windows in it names them in its output. What
+such a library has already cost the control, the cases cannot see the plugin take on again; see
+[the design record](design/stream-deck.md#the-counts-held-against-a-control).
 
 What these tests cannot cover is the app: that it starts the exe, shows the picture and sends the
 events the stand-in sends. That takes a Stream Deck; see
