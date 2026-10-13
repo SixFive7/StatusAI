@@ -108,18 +108,17 @@ breakdown against the width, the on-credit alarm, the order of the `⚠` rows, w
 from (`COLUMNS`, `STATUSAI_WIDTH` before it, a value that is not a width, `statusLine.padding`), a
 usage fetch that fails once, twice, in another session and before any has worked, then recovers, a
 retry held off while the last attempt is under 50 seconds old and made once it is 50, a token
-renewed for the same account, a switch to another account whose first fetch is under way, fails,
-or is made at once while the old account's retries were held off, a 429 that holds the fetch off,
-its `Retry-After` read as seconds and as a date, a day of it held to the hour, one that cannot be
-read and holds nothing, the hold before and after it lifts and on a new account's first fetch,
+renewed for the same account, a switch to another account whose first fetch is under way, fails, or
+is made at once while the old account's retries were held off, a 429 that holds the fetch off, its
+`Retry-After` read as seconds and as a date, a day of it held to the hour, one that cannot be read
+and holds nothing, the hold before and after it lifts and on a new account's first fetch,
 claude-swap's figure drawn at a switch, and the render's own fetch where that figure is missing,
-over a minute old, from before the switch, for another account, of another schema or unreadable,
-or where the token was only renewed, and the payloads: fresh sessions
-that must stay quiet, and broken ones that must still warn, one of them so broken that cship
-prints nothing. What the tests cannot cover is the live fetch itself, the
-registry cache and the history. A failed fetch is the fixture's word, so the count and its row are
-under test and the network is not. The forecast is an input to a fixture, so the window checks and
-the slope are not under test.
+over a minute old, from before the switch, for another account, of another schema or unreadable, or
+where the token was only renewed, and the payloads: fresh sessions that must stay quiet, and broken
+ones that must still warn, one of them so broken that cship prints nothing. What the tests cannot
+cover is the live fetch itself, the registry cache and the history. A failed fetch is the fixture's
+word, so the count and its row are under test and the network is not. The forecast is an input to a
+fixture, so the window checks and the slope are not under test.
 
 A deliberate change of output is recorded with `-Update`, which rewrites `tests/expected` and
 removes any render no case produces; read the diff before committing it. To add a case, add a home
@@ -572,6 +571,13 @@ does. `Face()` keeps to plain shapes and text with attributes for that reason, a
 showing a new face right does not settle it: `QSvgRenderer` from PySide6, in the version of the
 `Qt6Svg.dll` in the app's folder, draws it with the engine the app has.
 
+One difference has bitten already: QtSvg reads a `font-family` as one name, never a list. A list,
+`'Bahnschrift Condensed', 'Segoe UI'`, is a family it does not have, and it draws that text in
+Tahoma, its default, with Bahnschrift installed or not; so every text of the face names one family.
+The other way round, Edge, which draws the figures, reads `Bahnschrift Condensed` as Bahnschrift's
+semi-condensed face, so `figures.gen.js` gives it the font file at the widths QtSvg draws (see
+[the design record](design/stream-deck.md#the-key-readable)).
+
 ### The key on a live machine
 
 The app is the one part no test stands in for. To look at a build on a Stream Deck without
@@ -598,14 +604,13 @@ To take it out again, quit the app, delete that folder and remove the key.
 ## Trap 4: an account switch looks like a regression
 
 `AccountInfo()` is read fresh from `~/.claude.json` on every render. A switch changes the token in
-`.credentials.json` as well, which makes the next render fetch at once, or take claude-swap's
-figure where it has a fresh one, and leaves out the old account's rows until the new account's
-first good fetch has come. That fetch sees the changed
-`accountUuid` and clears the whole series: `hist`, `vfS/vfW/vfF` and `rsS/rsW/rsF`. So right after
-a switch the limit rows are gone for a moment, then every row reads `→ early`, and the percentages
-belong to a different account, so they will not match anything observed a minute earlier. That is
-the token check, `WindowCheck` and the account guard working, not a fault. Check the account line
-before investigating a sudden change in the numbers.
+`.credentials.json` as well, which makes the next render fetch at once, or take claude-swap's figure
+where it has a fresh one, and leaves out the old account's rows until the new account's first good
+fetch has come. That fetch sees the changed `accountUuid` and clears the whole series: `hist`,
+`vfS/vfW/vfF` and `rsS/rsW/rsF`. So right after a switch the limit rows are gone for a moment, then
+every row reads `→ early`, and the percentages belong to a different account, so they will not match
+anything observed a minute earlier. That is the token check, `WindowCheck` and the account guard
+working, not a fault. Check the account line before investigating a sudden change in the numbers.
 
 ## Trap 5: the plugin's copy is never free
 

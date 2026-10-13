@@ -22,7 +22,8 @@
 // The Stream Deck key is drawn the same way: its figures place tests/expected/<case>.svg, the SVG
 // the binary draws for a fixture, as it is. A full run also writes the pictures the plugin folder
 // carries (streamdeck/com.sixfive7.statusai.sdPlugin/imgs) from the same files: the plugin's icon
-// and the picture of a key that has not been drawn yet.
+// and the picture of a key that has not been drawn yet. Only the fonts are Edge's own business:
+// the key's Bahnschrift is given to it at the widths the Stream Deck app draws (keyFonts).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -379,7 +380,24 @@ body{font-family:"Segoe UI",system-ui,sans-serif}
   font:600 17px/22px "Segoe UI",system-ui,sans-serif; letter-spacing:.01em; box-shadow:0 1px 2px rgba(10,12,20,.18),0 4px 10px rgba(10,12,20,.16)}
 `;
 const page = (body, title) =>
-  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}${body.includes('Bahnschrift') ? keyFonts() : ''}</style></head><body>${body}</body></html>`;
+// The key's faces name Bahnschrift's two narrower widths by the family names the Stream Deck app's
+// QtSvg knows them by, "Bahnschrift Condensed" and "Bahnschrift SemiCondensed", and Qt draws both at
+// the weight of 600 or 700 as the bold of that width. Edge reads both names as one face, Bahnschrift's
+// semi-condensed one, which would draw the small line a sixth wider than the device does. So a page
+// with a key gives Edge the font file under those two names, at the width and the weight Qt draws:
+// measured on '3h23m 7h29m' at 30 px, 139,5 and 162,9 px wide here against Qt's 141,0 and 164,0.
+let KEY_FONTS = null;
+function keyFonts() {
+  if (KEY_FONTS === null) {
+    const file = path.join(process.env.SystemRoot || 'C:\\Windows', 'Fonts', 'bahnschrift.ttf');
+    if (!fs.existsSync(file)) throw new Error(`the key's faces are drawn in Bahnschrift, and ${file} is not there`);
+    const src = `url(data:font/ttf;base64,${fs.readFileSync(file).toString('base64')})`;
+    KEY_FONTS = `@font-face{font-family:"Bahnschrift Condensed"; src:${src}; font-stretch:75%; font-weight:700}`
+              + `@font-face{font-family:"Bahnschrift SemiCondensed"; src:${src}; font-stretch:87.5%; font-weight:700}`;
+  }
+  return KEY_FONTS;
+}
 
 // ---- Edge, headless, over the DevTools protocol
 // One browser with its own profile in .work, on a port the OS picks, so it never meets your own Edge
@@ -458,15 +476,23 @@ async function launch() {
   return { tab, close, exe };
 }
 // The first thing each run checks: the terminal font is JetBrains Mono's Nerd Font (cship's model
-// line draws two of its icons) and the emoji come from Segoe UI Emoji, as in Windows Terminal.
+// line draws two of its icons) and the emoji come from Segoe UI Emoji, as in Windows Terminal. And
+// the key's two widths of Bahnschrift are drawn from the font file keyFonts() gives Edge, the
+// condensed one narrower than the semi-condensed one.
 async function checkFonts(tab) {
   const f = path.join(WORK, 'probe.html');
-  fs.writeFileSync(f, page(`<div class="term" style="--cols:20"><span id="t">5h 7d \uF2DB \uF1C0</span><span id="e">🪵🌿🌳</span></div>`, 'probe'));
+  const key = ['Bahnschrift Condensed', 'Bahnschrift SemiCondensed'].map((fam, i) =>
+    `<text id="k${i}" x="0" y="40" font-size="30" font-weight="600" font-family="${fam}">3h23m 7h29m</text>`).join('');
+  fs.writeFileSync(f, page(`<div class="term" style="--cols:20"><span id="t">5h 7d \uF2DB \uF1C0</span><span id="e">🪵🌿🌳</span></div>`
+                         + `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60">${key}</svg>`, 'probe'));
   await tab.open(pathToFileURL(f).href);
-  const t = await tab.fonts('#t'), e = await tab.fonts('#e');
+  const t = await tab.fonts('#t'), e = await tab.fonts('#e'), k = [...await tab.fonts('#k0'), ...await tab.fonts('#k1')];
   if (!t.length || !t.every(n => /JetBrains/i.test(n))) throw new Error('the terminal text is not drawn in JetBrainsMono Nerd Font (install it): ' + t.join(', '));
   if (!e.includes('Segoe UI Emoji')) throw new Error('the emoji are not drawn in Segoe UI Emoji: ' + e.join(', '));
-  return [...new Set([...t, ...e])];
+  const w0 = await tab.eval(`document.getElementById('k0').getComputedTextLength()`);
+  const w1 = await tab.eval(`document.getElementById('k1').getComputedTextLength()`);
+  if (!k.every(n => n === 'Bahnschrift') || !(w0 < w1 * 0.9)) throw new Error(`the key's Bahnschrift is not drawn at its two widths: ${k.join(', ')}, ${w0} and ${w1} px`);
+  return [...new Set([...t, ...e, ...k])];
 }
 // every label inside its device and clear of the others on its strip row; the figure on whole pixels
 const LAYOUT = `(() => {
@@ -619,8 +645,9 @@ node docs/assets/figures.gen.js
 \`\`\`
 
 With \`--check\` it draws them into \`.work/figures/check\` instead and compares them with these, byte
-for byte. It needs Node, Edge and JetBrainsMono Nerd Font, and refuses to run on a colour outside the
-palette, a glyph whose width it does not know, or a callout that does not land.
+for byte. It needs Node, Edge, JetBrainsMono Nerd Font and Windows' own Bahnschrift, and refuses to
+run on a colour outside the palette, a glyph whose width it does not know, or a callout that does
+not land.
 
 A render is named \`<case>.w<width>\`: the case in [tests/cases.json](../../tests/cases.json), drawn
 at that many columns. Sizes are CSS pixels; each PNG has twice as many.
@@ -630,8 +657,9 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 ${rows.join('\n')}
 
 A key face is named after its case as well: \`tests/expected/<case>.svg\` is the SVG the binary draws
-for the Stream Deck key, and the figures place it as it is. A full run also writes the pictures the
-plugin folder carries, in
+for the Stream Deck key, and the figures place it as it is. Edge draws its text from Bahnschrift's
+font file, which the generator gives it at the widths the Stream Deck app draws. A full run also
+writes the pictures the plugin folder carries, in
 [streamdeck/com.sixfive7.statusai.sdPlugin/imgs](../../streamdeck/com.sixfive7.statusai.sdPlugin/imgs),
 from the same files: \`plugin.png\` and \`plugin@2x.png\`, the key of the \`shot\` fixture at 256 and
 512 px, and \`key.svg\`, the blank key a key shows before it has been drawn, a copy of

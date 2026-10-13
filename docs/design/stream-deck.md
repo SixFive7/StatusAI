@@ -7,8 +7,9 @@ cannot do, the four ways of building the key with what each was measured to cost
 decides when to fetch. And of the day after, when it had been on the device for a night: how a
 press gets its terminal to the front, what a press left in the plugin, and what a locked session
 did to the key. And of the night after that: what a press still left in the plugin, where the tests
-of the foreground had stood, and the first deploy over a running plugin. What the key does now is
-in [stream-deck.md](../guide/stream-deck.md) and
+of the foreground had stood, and the first deploy over a running plugin. And of 13 October, when the
+face was made readable: what was too small, the six faces drawn to fix it, and the one chosen. What
+the key does now is in [stream-deck.md](../guide/stream-deck.md) and
 [architecture.md](../reference/architecture.md#the-stream-deck-key). Like the other pages in this
 folder it is a record: add to it, and leave what was decided as it stands.
 
@@ -411,3 +412,75 @@ window showed, the key was at 7,2, and the status line rendered all 180 renders 
 binary. The plugin then held 171 handles and 26 libraries, 173 from its first refresh on, with
 11,0 MB of memory in use and 3,6 MB of it private and none of the shell's libraries loaded, where
 the build before had held 206 and 208, 31 libraries, 12,7 to 13,1 MB and 3,8 to 3,9 MB.
+
+## The key, readable
+
+13 October 2026, decided by the user. Some of what the key said was too small to read: the user
+said so, and a study measured what, by how much, and five ways of fixing it, each drawn in all
+thirteen states the render tests then had. The faces were drawn with QtSvg 6.11.1, the version in
+the app's folder, at the 96 by 96 pixels of a key on a Stream Deck XL, where one unit of the
+144 by 144 canvas is two thirds of a pixel.
+
+**What was too small.** Three lines were drawn to measure against, as cap heights on the key's
+pixels: 7 px, below which 3 and 8 or 5 and 6 differ only in shades of grey; 11,5 px, twice the
+5 arcmin letter of 20/20 vision at 60 cm, the glance floor; and 18,5 px, the minimum ISO 9241-303
+gives for text on a desktop display, as secondary sources give it. The label and the percentage sat
+at the glance floor, with capitals of 10,7 and 11,7 px. The small line under each meter did not:
+the reset time, the time to 100% and the failure notes had capitals of 6,3 px, under the pixel
+floor, and `↻` came out as 5 by 5 pixels of ink that read as a "u". The faintest of those times,
+the forest one and the grey `idle`, reached 3,0:1 and 2,4:1 against the black once their strokes,
+under a pixel wide, were measured as drawn.
+
+**The faces that were drawn.** Each figure is the smallest over all thirteen states, set against the
+face then in use:
+
+| | A, lean line | B, condensed | B′, condensed, marks kept | C, stacked, no cells | D, two faces in turn | E, one limit a key |
+|---|---|---|---|---|---|---|
+| the times, cap height | 6,3 → 8,4 px | 6,3 → 12,1 px | 6,3 → 9,2 px | 6,3 → 9,8 px | 6,3 → 11,2 px, on face 2 | 6,3 → 12,6 px |
+| the percentage | 11,7 → 12,6 | 11,7 → 14,9 | 11,7 → 14,9 | 11,7 → 13,3 | 11,7 → 19,6, on face 1 | 11,7 → 22,4 |
+| the label | 10,7 → 11,2 | 10,7 → 13,5 | 10,7 → 13,5 | 10,7 → 11,2 | 10,7 → 11,2, and 8,4 on face 2 | 10,7 → 12,6 |
+| failure notes | 6,3 → 8,4 | 6,3 → 10,7 | 6,3 → 9,2 | 6,3 → 9,8 | 6,3 → 9,8 | 6,3 → 9,8 |
+| `↻` and `→` | left out | left out | kept; `↻` drawn, 9 x 10 px | kept; `↻` drawn, 9 x 11 px | kept; `↻` 11 x 13 px | kept; `↻` 12 x 14 px |
+| the cells | 6,9 → 6,0 px | 6,9 → 5,6 px | 5,6 px | gone | on face 1 only | 6,9 px |
+| the faintest times, forest and grey, as drawn | 5,8 and 4,1:1 | 6,4 and 4,5:1 | 6,0 and 4,1:1 | 6,1 and 4,3:1 | 6,4 and 4,3:1 | 6,4 and 4,5:1 |
+| smallest margin to the edge, and gap between parts | 4 and 4 px | 2 and 3 px | 3 and 3 px | 2 and 2 px | 2 and 2 px | 3 and 2 px |
+| what it costs | the two marks | the two marks, and a typeface of its own | a typeface of its own | the bar | half the key at a time, and a draw every few seconds | a second key, on a page with none free |
+
+- **A** kept Segoe UI and made the small line a third larger and semibold, which only fit without
+  `↻` and `→`.
+- **B** set everything in Bahnschrift, the DIN face Windows ships for signage, in two of its narrower
+  widths: the label and the percentage semi-condensed, the times condensed. The times reached the
+  glance floor, at the cost of the marks.
+- **B′** is B with `↻` drawn as a path and `→` taken from Segoe UI; with the marks, the longest pair
+  of times only fits at 19,5 on the canvas, 13 px on the key.
+- **C** left out the cells and gave each time a line of its own, with its mark.
+- **D** drew two faces that take turns every few seconds, the percentages large on one and the times
+  on the other: never everything at once, and 720 draws an hour at a flip every 5 seconds.
+- **E** gave each limit a key of its own, the most legible by far, on a page whose 32 keys were all
+  in use.
+
+**Decided: B′.** The study had recommended B, the largest gain on one key; the user chose B′, which
+keeps the status line's `↻` and `→` at 9,2-pixel capitals rather than 12,1. It is the key's only
+face. Built, the thirteen faces of the study's states are byte for byte the prototype's, and the six
+states added since, the switch of account, a 429 that holds the fetch off and claude-swap's figure,
+are drawn in the same type. Measured over all nineteen with QtSvg 6.11.1 at 96 px, the smallest
+margin to the edge is 3 px and the smallest gap between two parts 3 px, and no two parts overlap.
+The key of the `shot` fixture is 2.990 bytes of SVG where it was 2.498, and the message that
+sends it to the app about 4,9 kB where it was 4,3.
+
+**One family to a text, and no fallback in the SVG.** A fallback was asked for in the SVG's
+`font-family`, in case Bahnschrift is missing. QtSvg takes a `font-family` as one name, in an
+attribute, a style or a style sheet alike: `'Bahnschrift Condensed', 'Segoe UI'` is a family it does
+not have, and on this PC, which has Bahnschrift, it drew that text in its own default, Tahoma,
+wider than the key has room for. A `<switch>` on `requiredFonts` skips its branch whatever the fonts are,
+and `font-stretch` is ignored. So each text names one family and none falls back. Bahnschrift has
+come with Windows since Windows 10 1709. Without it the app draws the key in its default typeface,
+in which the two times of a line run into each other.
+
+**The figures.** `figures.gen.js` draws the key's faces in Edge, which reads both family names as
+Bahnschrift's semi-condensed face and so drew the small line a sixth wider than QtSvg does. A page
+with a key now gives Edge the font file under those two names, at the widths and the weight Qt
+draws: `3h23m 7h29m` at 30 px measures 139,5 and 162,9 px there, against Qt's 141,0 and 164,0.
+
+What the faces look like on the device itself has not been seen: none of them has been shown on a
+Stream Deck yet.

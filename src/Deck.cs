@@ -473,34 +473,49 @@ static class Deck {
     // ---------------------------------------------------------------- the key face
     //
     // Two meters, 5h above 7d, each the same three lines: the label and the percentage; the bar,
-    // ten cells as on the status line; and a small line with the time to the reset on the left and
-    // the time to 100% on the right. Everything is placed by the numbers below, on a canvas of 144
-    // by 144 that the app scales to the key (96 by 96 on an XL), so moving or resizing a part is a
-    // change to one of them.
-    const double RowTop = 4, RowHeight = 72;                  // the two meters: where the first starts, how far apart
-    const double TitleY = 22;                                 // the baseline of the label and the percentage
-    const double LabelX = 8, LabelSize = 23;                  // the label, from the left
-    const double PctX = 137, PctSize = 25;                    // the percentage, ending at the right
-    const double CellsY = 36, CellsX = 13, CellsStep = 13.1;  // the bar: the centre of its first cell, and the pitch
-    const double CellR = 5.2, RingR = 4.4, RingStroke = 1.6;  // a lit cell, and an empty one
-    const double NoteY = 59, NoteSize = 13.5;                 // the small line
-    const double NoteLeft = 6, NoteText = 21, NoteRight = 139;
+    // ten cells as on the status line; and a small line with ↻ and the time to the reset on the left
+    // and → and the time to 100% on the right. Everything is placed by the numbers below, on a canvas
+    // of 144 by 144 that the app scales to the key (96 by 96 on an XL, two thirds of a pixel to a
+    // unit), so moving or resizing a part is a change to one of them.
+    //
+    // The text is Bahnschrift, the DIN face Windows has shipped since Windows 10 1709, in two of its
+    // narrower widths, which let every text be larger than Segoe UI could be on the same key: the
+    // label and the percentage in its semi-condensed width, the small line in its condensed one. On
+    // the key their capitals are 13,5, 14,9 and 9,2 px high, where Segoe UI's were 10,7, 11,7 and
+    // 6,3. ↻ is drawn as a path, since the font's glyph at that size is five pixels of ink and reads
+    // as a "u", and → is Segoe UI's, which is shorter and heavier than Bahnschrift's. Why this face,
+    // and the other five that were drawn, is in docs/design/stream-deck.md.
+    //
+    // Each text names one family and no list. The app draws the SVG with QtSvg, which takes a
+    // font-family as one name: "Bahnschrift Condensed, Segoe UI" is a name it does not have, so it
+    // would draw that text in its own default, Tahoma, with Bahnschrift installed or not.
+    const double RowTop = 0, RowHeight = 72;                        // the two meters: where the first starts, how far apart
+    const double TitleY = 27;                                       // the baseline of the label and the percentage
+    const double LabelX = 6, LabelSize = 28.5;                      // the label, from the left
+    const double PctX = 139.5, PctSize = 31.5;                      // the percentage, ending at the right
+    const double CellsY = 36, CellsX = 13, CellsStep = 13.1;        // the bar: the centre of its first cell, and the pitch
+    const double CellR = 4.2, RingR = 3.6, RingStroke = 1.2;        // a lit cell, and an empty one
+    const double NoteY = 61.5, NoteSize = 19.5;                     // the small line: its baseline, and its size
+    const double NoteLeft = 6, NoteText = 22.5, NoteRight = 139.5;  // ↻ or ⚠ or a grey note, the reset after ↻, the end of the time to 100%
+    const double WarnText = NoteLeft + NoteSize * 1.08;             // the reason after ⚠
 
     // The colours the limit rows use (docs/reference/layout.md, the palette) that no function of
     // Program.cs hands over; the cells, the percentage and the label come through the Host.
     const string Ground = "#000000", Dim = "#6E738D", Plain = "#A9B1D6", Green = "#A6E3A1", LightGreen = "#C6F6C1", Red = "#F7768E";
     const string Sans = "Segoe UI", Symbols = "Segoe UI Symbol";
+    const string TitleFont = "Bahnschrift SemiCondensed", NoteFont = "Bahnschrift Condensed";
 
     // The key as SVG. age is the seconds since the fetch the rows come from; below zero, it is
     // worked out here.
     public static string Face(Host h, double age) {
         var (c, _, warn, foreign) = h.Look();
         if (age < 0) { long ts = h.Offline is null ? h.FetchedAt() : 0; age = ts > 0 ? Math.Max(0, Now() - ts) : 0; }
-        var sb = new StringBuilder(2800);
+        var sb = new StringBuilder(3200);
         sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"144\" height=\"144\" viewBox=\"0 0 144 144\" font-family=\"").Append(Sans).Append("\">")
           .Append("<rect width=\"144\" height=\"144\" fill=\"").Append(Ground).Append("\"/>");
-        // Two fetches in a row have failed. The rows are still the last good ones, so they are drawn
-        // grey, and the small lines say what the status line's ⚠ row says: why, and how old they are.
+        // Two fetches in a row have failed, or a 429 holds the fetch off. The rows are still the last
+        // good ones, so they are drawn grey, and the small lines say what the status line's ⚠ row
+        // says: why, and how old they are.
         // After a switch to another account there are no rows until its first good fetch, since the
         // last ones were the old account's (foreign): both meters grey and empty, and "new account"
         // on the first small line while that fetch is pending; once it has failed, why on the first
@@ -519,8 +534,8 @@ static class Deck {
         if (i < 0) {
             // no such row: nothing fetched yet, nobody signed in, a meter the server did not send, or
             // rows of the account switched away from, which are not drawn
-            Text(sb, LabelX, y + TitleY, LabelSize, 600, "start", Dim, label);
-            Text(sb, PctX, y + TitleY, PctSize, 700, "end", Dim, "—");
+            Text(sb, LabelX, y + TitleY, LabelSize, 600, "start", Dim, label, TitleFont);
+            Text(sb, PctX, y + TitleY, PctSize, 700, "end", Dim, "—", TitleFont);
             Cells(sb, h, y + CellsY, 0, grey: true);
         } else {
             RowIn r = rows[i];
@@ -530,28 +545,29 @@ static class Deck {
             bool over = r.HasReset && left <= 0;
             int pct = over ? 0 : Math.Clamp(r.Pct, 0, 100);
             bool grey = failing || over;
-            Text(sb, LabelX, y + TitleY, LabelSize, 600, "start", grey ? Dim : Hex(h.SevColor(r.Sev), Plain), label);
-            Text(sb, PctX, y + TitleY, PctSize, 700, "end", grey ? Dim : Hex(h.PctColor(pct), Plain), pct.ToString(CultureInfo.InvariantCulture) + "%");
+            Text(sb, LabelX, y + TitleY, LabelSize, 600, "start", grey ? Dim : Hex(h.SevColor(r.Sev), Plain), label, TitleFont);
+            Text(sb, PctX, y + TitleY, PctSize, 700, "end", grey ? Dim : Hex(h.PctColor(pct), Plain),
+                 pct.ToString(CultureInfo.InvariantCulture) + "%", TitleFont);
             Cells(sb, h, y + CellsY, pct, grey);
             if (!failing) {
                 bool known = r.HasReset && !over;
-                Text(sb, NoteLeft, y + NoteY, NoteSize, 400, "start", over ? Dim : Green, "↻", Symbols);
-                Text(sb, NoteText, y + NoteY, NoteSize, 400, "start", over ? Dim : LightGreen, known ? h.Hm(left) : "—");
+                Turn(sb, NoteLeft, y + NoteY, NoteSize, over ? Dim : Green);
+                Text(sb, NoteText, y + NoteY, NoteSize, 600, "start", over ? Dim : LightGreen, known ? h.Hm(left) : "—", NoteFont);
                 if (!over) {
                     // The pace is the one of the fetch. After five minutes without one nothing has been
                     // running, and a time to 100% would be a statement about a pace that has stopped.
                     var p = h.Pace(r with { Hrs = Math.Max(0, left) });
                     bool idle = age > IdleSeconds;
                     string tone = idle || p.tone == 0 ? Dim : p.tone == 1 ? Red : Hex(h.Forest, Green);
-                    Text(sb, NoteRight, y + NoteY, NoteSize, 400, "end", tone, "→" + (idle ? "idle" : p.to100));
+                    Arrow(sb, NoteRight, y + NoteY, NoteSize, tone, idle ? "idle" : p.to100);
                 }
             }
         }
         if (failing && failNote.Length > 0) {
             if (alarm) {
                 Text(sb, NoteLeft, y + NoteY, NoteSize, 400, "start", Red, "⚠", Symbols);
-                Text(sb, NoteText, y + NoteY, NoteSize, 400, "start", Red, failNote);
-            } else Text(sb, NoteLeft, y + NoteY, NoteSize, 400, "start", Dim, failNote);
+                Text(sb, WarnText, y + NoteY, NoteSize, 600, "start", Red, failNote, NoteFont);
+            } else Text(sb, NoteLeft, y + NoteY, NoteSize, 600, "start", Dim, failNote, NoteFont);
         }
     }
 
@@ -566,13 +582,42 @@ static class Deck {
         }
     }
 
+    // ↻, drawn: an open circle with a head, its stroke an eighth of the size, standing on the
+    // baseline at y and as tall as a digit. It runs clockwise from the upper right round to the top,
+    // where the head points on along the circle, as the glyph has it.
+    static void Turn(StringBuilder sb, double x, double y, double size, string fill) {
+        double r = size * 0.27, w = size * 0.12, cx = x + r + w / 2, cy = y - size * 0.35;
+        double a0 = -25 * Math.PI / 180, a1 = 270 * Math.PI / 180;
+        double x0 = cx + r * Math.Cos(a0), y0 = cy + r * Math.Sin(a0);
+        double x1 = cx + r * Math.Cos(a1), y1 = cy + r * Math.Sin(a1);
+        sb.Append("<path d=\"M").Append(F(x0)).Append(' ').Append(F(y0)).Append(" A").Append(F(r)).Append(' ').Append(F(r))
+          .Append(" 0 1 1 ").Append(F(x1)).Append(' ').Append(F(y1)).Append("\" fill=\"none\" stroke=\"").Append(fill)
+          .Append("\" stroke-width=\"").Append(F(w)).Append("\"/>");
+        // the head: a triangle whose tip lies ahead of the arc's end, along the circle's direction there
+        double tx = -Math.Sin(a1), ty = Math.Cos(a1), nx = -ty, ny = tx;
+        double len = size * 0.30, half = size * 0.19;
+        double bx = x1 - tx * len * 0.2, by = y1 - ty * len * 0.2;
+        sb.Append("<path d=\"M").Append(F(x1 + tx * len * 0.8)).Append(' ').Append(F(y1 + ty * len * 0.8))
+          .Append(" L").Append(F(bx + nx * half)).Append(' ').Append(F(by + ny * half))
+          .Append(" L").Append(F(bx - nx * half)).Append(' ').Append(F(by - ny * half)).Append(" Z\" fill=\"").Append(fill).Append("\"/>");
+    }
+
+    // → and the time to 100%, ending at x: the time in the small line's font, → in Segoe UI's.
+    static void Arrow(StringBuilder sb, double x, double y, double size, string fill, string text) {
+        sb.Append("<text x=\"").Append(F(x)).Append("\" y=\"").Append(F(y)).Append("\" font-size=\"").Append(F(size))
+          .Append("\" font-weight=\"600\" text-anchor=\"end\" fill=\"").Append(fill).Append("\" font-family=\"").Append(NoteFont)
+          .Append("\"><tspan font-family=\"").Append(Sans).Append("\">→</tspan>").Append(Escape(text)).Append("</text>");
+    }
+
     static void Text(StringBuilder sb, double x, double y, double size, int weight, string anchor, string fill, string text, string? family = null) {
         sb.Append("<text x=\"").Append(F(x)).Append("\" y=\"").Append(F(y)).Append("\" font-size=\"").Append(F(size))
           .Append("\" font-weight=\"").Append(weight.ToString(CultureInfo.InvariantCulture)).Append("\" text-anchor=\"").Append(anchor)
           .Append("\" fill=\"").Append(fill).Append('"');
         if (family is not null) sb.Append(" font-family=\"").Append(family).Append('"');
-        sb.Append('>').Append(text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")).Append("</text>");
+        sb.Append('>').Append(Escape(text)).Append("</text>");
     }
+
+    static string Escape(string text) => text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
     static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
 

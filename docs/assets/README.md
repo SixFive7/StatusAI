@@ -13,8 +13,9 @@ node docs/assets/figures.gen.js
 ```
 
 With `--check` it draws them into `.work/figures/check` instead and compares them with these, byte
-for byte. It needs Node, Edge and JetBrainsMono Nerd Font, and refuses to run on a colour outside the
-palette, a glyph whose width it does not know, or a callout that does not land.
+for byte. It needs Node, Edge, JetBrainsMono Nerd Font and Windows' own Bahnschrift, and refuses to
+run on a colour outside the palette, a glyph whose width it does not know, or a callout that does
+not land.
 
 A render is named `<case>.w<width>`: the case in [tests/cases.json](../../tests/cases.json), drawn
 at that many columns. Sizes are CSS pixels; each PNG has twice as many.
@@ -41,8 +42,9 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 | [decisions-week.png](decisions-week.png) | The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03. | [limits-decisions.html](../design/limits-decisions.html) | 998 x 467 |
 
 A key face is named after its case as well: `tests/expected/<case>.svg` is the SVG the binary draws
-for the Stream Deck key, and the figures place it as it is. A full run also writes the pictures the
-plugin folder carries, in
+for the Stream Deck key, and the figures place it as it is. Edge draws its text from Bahnschrift's
+font file, which the generator gives it at the widths the Stream Deck app draws. A full run also
+writes the pictures the plugin folder carries, in
 [streamdeck/com.sixfive7.statusai.sdPlugin/imgs](../../streamdeck/com.sixfive7.statusai.sdPlugin/imgs),
 from the same files: `plugin.png` and `plugin@2x.png`, the key of the `shot` fixture at 256 and
 512 px, and `key.svg`, the blank key a key shows before it has been drawn, a copy of

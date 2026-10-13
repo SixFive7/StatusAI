@@ -31,6 +31,15 @@ that fit on a key:
 
 The key leaves out what a row has more: the projection `⇢`, and the third row for one model.
 
+The text is Bahnschrift, the DIN typeface Windows comes with, in two of its narrow widths, which
+let it be larger on a key of 96 pixels than Segoe UI could be: the label and the percentage in the
+semi-condensed width, the small lines under the cells in the condensed one. On a Stream Deck XL
+the capitals of the percentage are 14,9 pixels high, those of the label 13,5 and those of the
+small lines 9,2. `↻` is drawn as a shape, which the font's glyph at that size was too small for,
+and `→` comes from Segoe UI.
+[The design record](../design/stream-deck.md#the-key-readable) has the six faces this one was
+chosen from.
+
 <img src="../assets/deck-states.png" width="712" alt="Four keys. While Claude works: both meters in colour with their countdowns and times to 100%. Fifteen minutes after the last fetch: the same, with 'idle' in grey where the time to 100% was. Once the 5h window has ended: the 5h meter grey at 0% with a dash for its reset. When fetching fails: both meters grey, a red warning sign with 'timeout' under the first and '2m old' under the second.">
 
 | the key | means |
@@ -94,7 +103,7 @@ hour of Claude working in the VS Code extension with no terminal open:
 | the process that stays up | 11,0 MB of memory in use, 3,6 MB of it private; 3 threads |
 | its processor time | 0,22 s in 33 minutes, a hundredth of a percent of one core |
 | one refresh, every 62 seconds | a second `statusai.exe` that lives for as long as the fetch takes, 0,3 to 0,6 s: 0,05 s of processor time, and 19 MB of memory for that long |
-| one redraw | well under a millisecond, and one message of about 4 kB to the app |
+| one redraw | well under a millisecond, and one message of about 5 kB to the app |
 | one press | a second `statusai.exe` for the second or so it takes to open the terminal and bring it to the front; nothing of it stays in the process that stays up |
 | on disk | the plugin's folder holds its own copy of `statusai.exe`, 4,9 MiB |
 
@@ -134,6 +143,7 @@ it deploys a build; see [development.md](../development.md#deploying).
 
 | what you see | what to do |
 |---|---|
+| the text runs together, in a plain wide typeface | Windows has no Bahnschrift, which every Windows 10 from 1709 on and every Windows 11 has. The app then draws the key in its own default typeface, which is too wide for it. |
 | the key shows the plugin's blank picture, `—` on both meters, and stays that way | The plugin is not running, or has nothing to draw yet. `%APPDATA%\Elgato\StreamDeck\logs\com.sixfive7.statusai0.log` holds one line for every start, `statusai 1.0.0 of <date> started as the Stream Deck plugin`, and one for anything that stopped it. No line at all means the app did not start it: quit Stream Deck and start it again. |
 | a yellow warning sign flashes on the key when you press it | Windows Terminal could not be started. The same log has Windows' error number for why: 2 is "not found", which is Windows Terminal not being installed. |
 | the terminal opens behind the window you are in, its taskbar button flashing | Windows refused every way the key has of bringing it forward. Nothing is logged for this; [development.md](../development.md#the-presses-on-the-live-desktop) has the test that shows which way works on your PC. |

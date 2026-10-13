@@ -5,6 +5,20 @@ under *Unreleased*, and the entries before the first release are by date.
 
 ## Unreleased
 
+**A key that can be read**
+
+- The Stream Deck key is drawn in Bahnschrift, the DIN typeface Windows comes with: the label and
+  the percentage in its semi-condensed width, the small lines in its condensed one. On a key of 96
+  pixels the capitals of the small lines grow from 6,3 to 9,2 pixels, those of the percentage from
+  11,7 to 14,9 and those of the label from 10,7 to 13,5. `↻`, whose glyph read as a "u" at that
+  size, is drawn as a shape, and `→` stays. It is the face chosen from six drawn on 13 October; see
+  [the key, readable](docs/design/stream-deck.md#the-key-readable).
+- Every text names one font family. The app's QtSvg reads a `font-family` list as one name that it
+  does not have, and draws that text in Tahoma, so a fallback list would have undone Bahnschrift.
+- All 19 key faces are recorded again; the status line's 190 renders are unchanged. The figure
+  generator gives Edge Bahnschrift at the widths the app draws, and the key's figures and the
+  plugin's pictures are drawn again. The exe is 4.608 bytes larger.
+
 **Fewer requests after a refusal and at a switch**
 
 - A 429 whose `Retry-After` says how long it holds now holds the fetch off until then: no render and
