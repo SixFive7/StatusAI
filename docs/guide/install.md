@@ -184,6 +184,15 @@ With an Elgato Stream Deck, `statusai.exe` can also draw your 5h and 7d limits o
 Claude Code terminal when you press it. It is not in the release zip yet and is installed from a
 build: [the Stream Deck key](stream-deck.md#install) has the steps.
 
+## claude-swap (optional, never required)
+
+If you switch Claude Code between accounts with claude-swap, StatusAI uses the figure claude-swap
+fetches as it switches, in place of a request of its own at that moment, so that the switch sets
+off one request fewer ([limits.md](../reference/limits.md#claude-swaps-figure-at-a-switch)). There is
+nothing to set up for it, and nothing needs it: without claude-swap, or with a figure of its that
+cannot be read or is too old, StatusAI fetches as it always does. Installing, updating or removing
+claude-swap changes nothing here.
+
 ## What to expect at first
 
 <img src="../assets/first-run.png" width="930" alt="A session seconds old, before its first reply: the model line at 0% context, 0 minutes and $0,00, then the 5h, 7d and Fable limit rows beside the account, every one reading '→ early'. No token rows and no warning row.">
@@ -208,6 +217,7 @@ build: [the Stream Deck key](stream-deck.md#install) has the steps.
 | rows cut short at the right edge | Claude Code before 2.1.153 does not pass the terminal's width, so StatusAI assumes 141 columns: update Claude Code, or set `STATUSAI_WIDTH` (step 4). A `STATUSAI_WIDTH` wider than the terminal does the same. Below 121 columns the token grid is cut short whatever the width says. |
 | every limit row reads `→ early` | Nothing is wrong: for the first ten minutes there is no trend yet. |
 | no limit rows right after switching accounts | Nothing is wrong: the account you left is not shown as the new one's, and the new one's rows come with its first fetch, normally in the same render. If that fetch fails, a `⚠` row says why. |
+| `⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50` | Anthropic is refusing usage requests for this account until that time, most often right after a switch, when several programs ask at once. Nothing is wrong with the install, and nothing asks again before then; the rows catch up at the first fetch after it. |
 | `👤 not signed in`, and no limit rows | Claude Code is signed in with an API key rather than a Claude account; the limit rows need the account. |
 
 ## Uninstall

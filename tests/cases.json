@@ -271,6 +271,102 @@
       "widths": [141],
       "checks": "The old account's fetches had failed three times with HTTP 429 and its next retry was 30 s away, but the token is new: it is tried at once, the fetch works, and the new account's rows are drawn, → early on each, with no history yet."
     },
+    "fetch-held": {
+      "home": "fetch-held",
+      "payload": "fresh",
+      "widths": [100, 141],
+      "checks": "Another render's attempt drew a 429 whose Retry-After holds the fetch off until 22:19:20: this render makes no attempt, though it would have worked, and the ⚠ row comes at that first failure and names the time: until 22:19:20, in the offset the fixture's clock is written with."
+    },
+    "fetch-held-now": {
+      "home": "fetch-held-now",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "This render's own attempt draws a 429 with Retry-After: 300: the same bytes as fetch-held at 141, the hold read as a number of seconds."
+    },
+    "fetch-held-date": {
+      "home": "fetch-held-date",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The same 429 with its Retry-After as an HTTP date, Wed, 23 Sep 2026 20:19:20 GMT: the same bytes as fetch-held at 141."
+    },
+    "fetch-held-capped": {
+      "home": "fetch-held-capped",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A Retry-After of a day, 86400: held for the hour MaxHold allows, until 23:14:20."
+    },
+    "fetch-held-unreadable": {
+      "home": "fetch-held-unreadable",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A 429 whose Retry-After cannot be read holds nothing off, and a single failure is quiet as ever: the same bytes as fetch-failed-once at 141."
+    },
+    "fetch-held-over": {
+      "home": "fetch-held-over",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The hold lifted 10 s ago: this render tries at once, the fetch works and the row goes, the same bytes as live at 141."
+    },
+    "fetch-held-over-elsewhere": {
+      "home": "fetch-held-over-elsewhere",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The hold lifted 10 s ago and another session is making the attempt: the ⚠ row stays until a fetch succeeds, and no longer names a time."
+    },
+    "switch-held": {
+      "home": "switch-held",
+      "payload": "fresh",
+      "widths": [100, 141],
+      "checks": "The new account's first fetch, with no claude-swap to stand in for it, draws a 429 that holds 300 s: no limit rows, and the longest ⚠ row there is, 95 columns, whole at 141 and cut with … at 100."
+    },
+    "swap-used": {
+      "home": "swap-used",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A switch, and claude-swap fetched the new account 14 s ago, a second after the switch: its figure is drawn in place of this render's fetch, 5h 3%, 7d 12%, Fable 5%, → early, with no breakdown, which claude-swap does not carry, and the old account's row in the same file left alone."
+    },
+    "swap-missing": {
+      "home": "swap-missing",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "The same switch with no claude-swap at all: this render fetches, the same bytes as switch-tried-at-once at 141."
+    },
+    "swap-stale": {
+      "home": "swap-stale",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "claude-swap's figure for the new account is from after the switch but 69 s old: this render fetches, the same bytes as switch-tried-at-once at 141."
+    },
+    "swap-before-switch": {
+      "home": "swap-before-switch",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "claude-swap's figure for the new account is from 5 s before the switch: this render fetches, the same bytes as switch-tried-at-once at 141."
+    },
+    "swap-other-account": {
+      "home": "swap-other-account",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "claude-swap's file has fresh figures, but none for the account switched to: this render fetches, the same bytes as switch-tried-at-once at 141."
+    },
+    "swap-bad-schema": {
+      "home": "swap-bad-schema",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "claude-swap's file is of another schema, 3: this render fetches, the same bytes as switch-tried-at-once at 141."
+    },
+    "swap-unreadable": {
+      "home": "swap-unreadable",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "claude-swap's file ends half way through: this render fetches, the same bytes as switch-tried-at-once at 141."
+    },
+    "swap-token-renewed": {
+      "home": "swap-token-renewed",
+      "payload": "fresh",
+      "widths": [141],
+      "checks": "A token renewed for the same account is no switch: claude-swap's fresh figure for it is not used and this render fetches, the same bytes as live at 141."
+    },
     "rows-shot": {
       "home": "rows-shot",
       "payload": "fresh",
@@ -471,6 +567,21 @@
       "home": "switch-failed",
       "face": 0,
       "checks": "The new account's first fetch timed out: both meters grey and empty, ⚠ timeout in red under the first and 'new account' under the second."
+    },
+    "key-held": {
+      "home": "fetch-held",
+      "face": 0,
+      "checks": "A 429 holds the fetch off until 22:19:20: the rows of the last good fetch in grey, '⚠ 429 until 22:20' in red under the first, to the minute and rounded up, and their age under the second."
+    },
+    "key-switch-held": {
+      "home": "switch-held",
+      "face": 0,
+      "checks": "The new account's first fetch drew a 429 that holds until 22:19:20: both meters grey and empty, '⚠ 429 until 22:20' under the first and 'new account' under the second."
+    },
+    "key-swap-used": {
+      "home": "swap-used",
+      "face": 0,
+      "checks": "claude-swap's figure for the new account, drawn in place of a fetch: 5h at 3% and 7d at 12% in colour, → early on both."
     },
     "key-blank": {
       "home": "only-unknown",

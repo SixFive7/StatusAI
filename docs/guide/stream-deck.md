@@ -38,7 +38,8 @@ The key leaves out what a row has more: the projection `⇢`, and the third row 
 | `→idle`, in grey | Nothing has fetched for five minutes, which is what happens when Claude is not working. The pace the time to 100% was worked out from has stopped, so the key no longer states one. |
 | a meter at `0%`, grey, with `↻ —` | That limit's window has ended since the last fetch. What was used in it is gone, and the next window's reset time is not known until something fetches. |
 | both meters grey, `⚠` and a reason in red | The usage could not be fetched twice in a row: `timeout`, `offline`, `no token`, `HTTP 429`. The figures are the last good ones, and the line under the second meter says how old they are. It is the status line's own [`⚠` row](reading-the-status-line.md#when-a-row-says-), cut to fit. |
-| both meters grey, `—`, and `new account` under the first | Claude Code has switched to another account. The figures the key had were the old account's, so it shows none until the new account's first fetch: a terminal's status line makes it at its next render, and the key itself once Claude writes something. |
+| both meters grey, `⚠ 429 until 12:50` in red | The server refused the usage request and said when it would take it again: the time, to the minute and rounded up. Nothing asks before then, not the key and not a status line, so this shows at the first refusal. The line under the second meter says how old the figures are. After that time the next fetch tries again. |
+| both meters grey, `—`, and `new account` under the first | Claude Code has switched to another account. The figures the key had were the old account's, so it shows none until the new account's first fetch, or claude-swap's figure for it if claude-swap made the switch a moment before: a terminal's status line makes it at its next render, and the key itself once Claude writes something. |
 | both meters grey, `—`, `⚠` and a reason in red, `new account` under the second | That first fetch for the new account failed. There are no figures to stand in for it, so this shows at the first failure, not the second. |
 | `—` where a percentage would be | There is no such figure: nothing has been fetched yet, nobody is signed in, or the server sent no such limit. |
 
@@ -70,7 +71,8 @@ and is told the moment they change.
   key waits on that folder, and while something is being written there it starts
   `statusai --refresh` once every 62 seconds, which fetches the way a render does. The first write
   after a quiet spell refreshes at once, and the last one is followed by one more refresh a minute
-  later.
+  later. After a refusal that says how long it lasts, an `HTTP 429`, the next refresh waits for
+  that time.
 - **Nothing is happening.** Then nothing is fetched. The key keeps counting its countdowns down
   and shows `→idle` after five minutes.
 

@@ -178,7 +178,7 @@ details.tv[open] > table{display:table}
 <body><div class="wrap">
   <div class="band">
     <div class="band-tag">Decided 23 and 24 Sep and 13 Oct 2026, nothing pending</div>
-    <h2>The forecast stays as it is. What changed: a harmless → is drawn in forest green, and only the three known meters get a row, with any other flagged for review. Since 13 October the rows are tied to the token they were fetched with, so a switch of account never draws the old account's figures as the new one's.</h2>
+    <h2>The forecast stays as it is. What changed: a harmless → is drawn in forest green, and only the three known meters get a row, with any other flagged for review. Since 13 October the rows are tied to the token they were fetched with, so a switch of account never draws the old account's figures as the new one's, and a 429 that says how long holds every fetch off until then.</h2>
     <table class="dtab"><tbody>
     <tr class=""><td><a href="#q1">Q1</a></td><td>Switch the weekly rows to c?</td><td><b>Rejected.</b> Keep the 60-minute pace for <code>→</code> and <code><span class="gl">⇢</span></code>.</td><td>decided 2026-09-23, recorded in rejected-designs.md</td></tr>
     <tr class=""><td><a href="#q2">Q2</a></td><td>What → shows when 100% would come after the row's own reset</td><td><b>e.</b> Keep the time; draw <code>→</code> and the time in forest green <code>#28A428</code>.</td><td>deployed 24 Sep 01:32</td></tr>
@@ -187,6 +187,7 @@ details.tv[open] > table{display:table}
     <tr class=""><td><a href="#q5">Q5</a></td><td>How should the on-credit warning look?</td><td><b>a.</b> Its own red <code>⚠</code> row, as built.</td><td>no change, 2026-09-24</td></tr>
     <tr class=""><td><a href="#q6">Q6</a></td><td>A maxed meter still shows a projection</td><td><b>e, a variant of a.</b> Keep <code><span class="gl">⇢</span></code>, drawn wholly dim like a disabled control.</td><td>deployed 24 Sep 03:34</td></tr>
     <tr class=""><td><a href="#q7">Q7</a></td><td>What do the limit rows show right after a switch to another account?</td><td><b>a.</b> Tie the copy to its token: a new token fetches at once, and another account's figures are not drawn until its first good fetch.</td><td>decided 2026-10-13</td></tr>
+    <tr class=""><td><a href="#q8">Q8</a></td><td>Where do the limit rows come from, after a 429 and at a switch?</td><td><b>a.</b> Our own fetch, smarter: wait as long as a <code>429</code> says and name the time in the <code>⚠</code> row; at a switch, claude-swap's figure where it is installed, never needed.</td><td>decided 2026-10-13</td></tr>
     </tbody></table>
     <p>Rows labelled with a time are what the binary deployed at that time drew: <b>23 Sep 22:19</b> is the one deployed when
     Q1 to Q3 came up, <b>24 Sep 01:32</b> the one after Q2 and Q3 (superseded in part), and <b>24 Sep 03:34</b> the one after Q4
@@ -200,8 +201,8 @@ details.tv[open] > table{display:table}
     <p class="lede">At 19:57 on 23 September the 7d row said <b>100% in 4h35m</b> and <b>226% at the reset</b>, both from the
     pace of one busy hour. What to do about that, and about the other questions it led to on the same rows, was decided over the next hours.
     This page is the record: what was built, the design that was rejected together with the replay it was judged on, and every
-    option as it was drawn. Nothing on it is pending. Q7 came later, on 13 October, from a switch of account, and is a record in
-    words.</p>
+    option as it was drawn. Nothing on it is pending. Q7 and Q8 came later, on 13 October, from a switch of account, and are
+    records in words.</p>
   </header>
   
 <section class="sec gapped" id="asbuilt">
@@ -843,6 +844,63 @@ details.tv[open] > table{display:table}
   as a fix of its own rather than part of this decision: a switch now also clears the reset times <code>rsS</code>, <code>rsW</code>
   and <code>rsF</code>, whose leftovers restarted the new account's 5h series a second time, five minutes after a switch on
   13 October.</p>
+</div>
+  
+<div class="q" id="q8"><h3 class="qh">Q8: Where do the limit rows come from, after a 429 and at a switch? <span class="tag pick">decided, 2026-10-13</span></h3>
+  <p class="primer">At the switch of account at 12:44:42 on 13 October, six requests for the new account reached the usage endpoint
+  within 7 seconds: four from Claude Code, one for each VS Code window, one from claude-swap and one from StatusAI. The sixth got a
+  <code>429</code> that held every caller with that token off for 300 seconds. StatusAI read no <code>Retry-After</code>, so it asked
+  four more times inside the block, and it said nothing of the block until its second failure; claude-swap, asking near the end,
+  was told <code>Retry-After: 4</code>, the rest of the 300 seconds. In normal running none of StatusAI's 58 fetches an hour was refused. So
+  the question was where the rows should come from, and how often StatusAI should ask, with the lag, the requests an hour and what
+  each way loses as measured that day.</p>
+  <div class="opt rec">
+    <div class="opt-h"><span class="letter">a</span><span class="opt-t">Our own fetch, smarter: wait as long as a <code>429</code> says, show when it lifts, and use claude-swap's figure at a switch</span><span class="tag pick">chosen</span></div>
+    
+    <p class="opt-w">As decided: "1 a - but allow for installation without claude-swap installed. I do not want a hard dependency." The lag
+    stays as it is, about 32 seconds on average, and the 5-minute freeze after a switch gets a label; 58 requests an hour; nothing
+    lost.</p><p class="opt-w">The <code>Retry-After</code> of a <code>429</code>, a number of seconds or a date, sets <code>holdTs</code> in the
+    shared state: no render and no <code>--refresh</code> tries the token that drew it before that time, and the key starts no
+    refresh. The hold is an hour at most, where Claude Code caps the same header (3.600.000 ms in the 2.1.296 bundle). A
+    <code>429</code> without the header is retried as before.</p>
+    <p class="opt-w">The <code>⚠</code> row comes at the first such <code>429</code>, since no retry comes before the time it names, and
+    names it: <code>⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; the limit rows are 5m old</code>. That is 15 columns
+    more; the longest row, for a new account, is 95 columns where the longest had been 87. The key says <code>⚠ 429 until 12:50</code>,
+    to the minute and rounded up.</p>
+    <p class="opt-w">At a switch to another account, claude-swap's figure for it, in <code>%USERPROFILE%\.claude-swap-backup\cache\usage.json</code>,
+    stands in for StatusAI's fetch when the file has schema 2, a row names the account's address and organisation, holds its 5h and
+    7d meters, and was fetched after the token changed and under a minute ago. It is saved as the new account's first good fetch,
+    history and all; the next regular fetch adds the severity, the breakdown, the credit alarm and the meters notice. In every
+    other case StatusAI fetches as before, claude-swap not installed included, and a file that cannot be read is passed over
+    without a word.</p>
+    <p class="opt-w">The render tests hold it to 19 cases: <code>fetch-held</code>, <code>-now</code>, <code>-date</code>,
+    <code>-capped</code>, <code>-unreadable</code>, <code>-over</code> and <code>-over-elsewhere</code>, <code>switch-held</code>,
+    <code>swap-used</code>, <code>-missing</code>, <code>-stale</code>, <code>-before-switch</code>, <code>-other-account</code>,
+    <code>-bad-schema</code>, <code>-unreadable</code> and <code>-token-renewed</code>, and the key's <code>key-held</code>,
+    <code>key-switch-held</code> and <code>key-swap-used</code>.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">b</span><span class="opt-t">Through claude-swap</span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">Draw claude-swap's figures and fetch nothing: 0 requests an hour. Its figure was 0,7 to 25,5 minutes old at StatusAI's
+    fetches, 11,4 on average, and 0 to 10 points below StatusAI's. It carries no warning level, no product breakdown and no spend,
+    and it would make claude-swap a requirement.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">c</span><span class="opt-t">Fetch every 5 minutes, and estimate from the tokens in the transcripts in between</span><span class="tag no">recommended, not chosen</span></div>
+    
+    <p class="opt-w">About 1 second of lag and 12 requests an hour. Replayed on the day's samples, the estimate was off by 0,4 to 0,5 points
+    on average and 1,7 at worst; it loses exactness between fetches, and the scoped row has no calibration of its own. It was the
+    one recommended.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">d</span><span class="opt-t">The <code>rate_limits</code> Claude Code passes to a terminal's status line</span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">Instant in a terminal, from the headers of Claude Code's own responses, and 6 to 58 requests an hour. Nothing changes on
+    the key, and nothing for sessions in VS Code, which run no status line.</p></div>
+  <div class="opt">
+    <div class="opt-h"><span class="letter">e</span><span class="opt-t">The usage Claude Code saves in <code>~/.claude.json</code></span><span class="tag no">not chosen</span></div>
+    
+    <p class="opt-w">0 requests an hour. Its figure was 36 to 75 minutes old at StatusAI's fetches: it loses freshness.</p></div>
+  <p class="recline"><b>Decided: a, on 2026-10-13</b>, on the condition that StatusAI installs and runs without claude-swap. c had
+  been recommended. claude-swap's figure is used where it is there and holds, and is never needed.</p>
 </div>
   </section>
   

@@ -33,6 +33,11 @@ Every fetch goes through `GetUsage()`, whoever asks for it:
   that has fetched two seconds ahead of it for good, and not at all while the shared copy is under
   50 seconds old.
 
+Neither asks while a 429 holds the token off; see
+[a 429 that says how long](#a-429-that-says-how-long). And at a switch to another account neither
+asks if claude-swap fetched the new account's usage a moment before: its figure stands in for the
+fetch; see [claude-swap's figure at a switch](#claude-swaps-figure-at-a-switch).
+
 A session with no terminal, in the VS Code extension for instance, runs no status line and so
 fetched nothing before there was a key: on 2026-10-01 the shared copy went 40 minutes without a
 fetch while seven such sessions were open and the 5h row went from 10% to 16%. With the key, the
@@ -96,7 +101,50 @@ as neither, so in a busy session a timeout can go uncounted until a quiet moment
 is written as an attempt starts, so even one cut short holds the next attempt off once the row
 shows. Beside it, `tryTok` is the print of the token the attempt was made with (see below). The
 count is of failures in a row with one token: the first attempt with a token not tried before
-starts it again, so the row says what the new token's own fetches came to.
+starts it again, so the row says what the new token's own fetches came to. `holdTs` is when a
+429's hold lifts, 0 for none; see below.
+
+### A 429 that says how long
+
+A 429 is the endpoint refusing a token for a while, and it says for how long in `Retry-After`. On
+13 October, six requests within 7 seconds of a switch of account, four from Claude Code's VS Code
+windows, one from claude-swap and one from StatusAI, drew a 429 that held every caller with that
+token off for 300 seconds. StatusAI did not read the header then, and asked four more times inside
+the block; claude-swap, asking near its end, was told `Retry-After: 4`.
+
+The `Retry-After` of a 429 now sets `holdTs`, when the block lifts: a number of seconds from the
+response or an HTTP date, as HttpClient reads the header, rounded up to the second so that an
+attempt on the dot is never early. Until then no render and no `--refresh` tries the token that
+drew it, whatever the count says (`MayRetry()`), and the key starts no `--refresh` at all. The hold
+is the token's, like the count: a token not tried yet, after a switch or a renewal, is tried at
+once, and its first attempt drops the hold. A good fetch clears it. Once the time has passed,
+fetching goes on as before: the next render to find the copy stale tries again.
+
+The hold is at most an hour, `MaxHold`, whatever the header asks. An hour is what Claude Code caps
+the same endpoint's `Retry-After` at (3.600.000 ms in the 2.1.296 bundle, which waits 300.000 ms
+when there is no header), and no block longer than that has been seen. A longer ask is more likely
+a broken header than a block, and an hour without a fetch is long already for rows that say where
+the limits stand; past it, being wrong costs one request an hour. A hold more than an hour ahead of
+the clock, as when the clock has been set back, holds nothing off. Nor does a 429 without a
+`Retry-After`, or with one that cannot be read: it is retried like any other failure, the first
+time at the next render and from the second failure in a row once every 50 seconds.
+
+A held 429 raises the `⚠` row at its first failure, since no retry comes before the time it names,
+and the row names that time, in the machine's time zone:
+
+```
+⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; the limit rows are 5m old
+⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; no limit rows for the new account yet
+```
+
+Once the time has passed the row loses its `until` and stays, like any other, until a fetch
+succeeds. The [key](../guide/stream-deck.md#what-it-shows) says it on its first small line as
+`⚠ 429 until 12:50`: to the minute, like every time on the key, and rounded up, so that it never
+says the block ends before it does.
+
+The time costs 15 columns, ` until 12:49:50`. The longest row it makes, the second above, is 95
+columns where the longest had been 87: it fits whole in a terminal of 101 columns or more without
+`statusLine.padding`, and is shortened with `…` in a narrower one, like any other reason.
 
 ### When the token changes
 
@@ -145,6 +193,44 @@ it read, and so withhold them for once, but never draw old rows under a new toke
 Neither surface is woken by the switch itself: the status line draws it at its next render, which
 Claude Code runs every 60 seconds and at every message, and the key at its next redraw, which is
 once a minute while it shows. See [known gaps](#known-gaps).
+
+### claude-swap's figure at a switch
+
+A switch sets off a burst of requests for the new account. claude-swap fetches its usage the moment
+it has switched, and every Claude Code session that follows the switch fetches its own, one per VS
+Code window. On 13 October six requests came within 7 seconds, one of them the fetch of the render
+that noticed the new token, and the sixth drew the 429 [above](#a-429-that-says-how-long).
+
+So at a switch to another account, the render or `--refresh` that would fetch looks first for
+claude-swap's figure for that account, in `%USERPROFILE%\.claude-swap-backup\cache\usage.json`, the
+table claude-swap keeps of every account's usage, and takes it in place of its own request when
+every one of these holds:
+
+- the file has `schemaVersion` 2;
+- a row's `email` and `organizationUuid` are those of `oauthAccount` in `~/.claude.json`;
+- its `lastGood` has `five_hour` and `seven_day`, each with a `pct` and, while that window is
+  open, a `resets_at`, and its `scoped` rows, the model-scoped weekly meters, have a `name` and the
+  same;
+- its `fetchedAt` is after `.credentials.json` was last written, which is when the token changed,
+  and at most 60 seconds ago.
+
+The figure is then saved as the new account's first good fetch, at the time claude-swap made it:
+the account and the token's print, the reset times, and the first sample of the new account's
+history at that time, so the rows read `→ early` as after any switch. It has the meters'
+percentages and reset times and nothing else: no severity, so the labels are in their plain
+colour, no product breakdown, no on-credit alarm and no meters notice. StatusAI's next regular
+fetch fills those in: the first render 50 seconds or more after claude-swap's fetch, or the key's
+refresh 62 seconds after it while Claude is working.
+
+In every other case the render fetches, as it always has: the file missing, as it is wherever
+claude-swap is not installed, locked, unreadable or of another schema, no row for the account, or a
+figure from before the switch or over a minute old. Nothing in StatusAI needs claude-swap, and a
+failure to read its file is silent. The file is opened with sharing that lets claude-swap replace it
+meanwhile, which it does by renaming a new file over it, retrying for about 0,75 seconds when that
+is refused. Only a switch to another account looks at the file: a token renewed for the same
+account fetches as ever.
+
+It costs no width: the rows are the ones a fetch draws, without the breakdown for that minute.
 
 ### None of it comes from stdin
 
@@ -362,9 +448,19 @@ whole series was foreign and was thrown away. That is correct behaviour, not a b
 - A failed fetch keeps the last good rows, their countdowns stopped where that fetch measured them;
   from the second failure in a row a `⚠` row gives their age (see
   [when a fetch fails](#when-a-fetch-fails)). After a switch to another account there are no rows
-  at all until the new account's first good fetch. Claude Code's payload has since gained
-  `rate_limits.five_hour` and `rate_limits.seven_day`, a used percentage and a reset time each,
-  which could stand in for them and which nothing here reads.
+  at all until the new account's first good fetch, or claude-swap's figure in its place. Claude
+  Code's payload has since gained `rate_limits.five_hour` and `rate_limits.seven_day`, a used
+  percentage and a reset time each, which could stand in for them and which nothing here reads.
+- A 429's hold is kept per token, as Claude Code keeps it. Whether the endpoint holds off a token
+  or an account is not known, so a token renewed in the middle of a block is tried once, and is
+  held again if the block is the account's. A hold given as a date is measured against this
+  machine's clock.
+- For the minute after a switch that claude-swap's figure stands in for a fetch, the rows have no
+  severity, breakdown, credit or meters notice (see
+  [claude-swap's figure at a switch](#claude-swaps-figure-at-a-switch)). Nor does the figure say a
+  scoped meter's kind or surface: claude-swap lists every meter scoped to a model, so one scoped to
+  a model and a surface, which StatusAI flags, would be drawn as the scoped row until that next
+  fetch. None has been seen.
 - Nothing watches `.credentials.json`, so a switch is not drawn the moment it happens. The status
   line shows it at its next render, within 60 seconds and at the next message; the key at its next
   redraw, within a minute while it shows, and until then each shows what it drew last. The key

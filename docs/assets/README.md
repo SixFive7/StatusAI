@@ -38,7 +38,7 @@ at that many columns. Sizes are CSS pixels; each PNG has twice as many.
 | [deck-key.png](deck-key.png) | The Stream Deck key for the `shot` fixture, three times the size of a key on a Stream Deck XL, with what each part says. | [key.svg](../../tests/expected/key.svg) | 724 x 368 |
 | [deck-states.png](deck-states.png) | The Stream Deck key in four states, each one and a half times the size of a key: while Claude works; a quarter of an hour after the last fetch; once the 5h window has ended; and when fetching fails. | [key.svg](../../tests/expected/key.svg), [key-idle.svg](../../tests/expected/key-idle.svg), [key-window-over.svg](../../tests/expected/key-window-over.svg), [key-failing.svg](../../tests/expected/key-failing.svg) | 712 x 261 |
 | [download.png](download.png) | A button: Download for Windows. | the palette: cyan on the terminal ground | 300 x 71 |
-| [decisions-week.png](decisions-week.png) | The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03. | [limits-decisions.html](../design/limits-decisions.html) | 998 x 468 |
+| [decisions-week.png](decisions-week.png) | The week chart from the decisions page: the 7d meter and three ways of forecasting it, minute by minute, from Saturday 05:00 to Wednesday 20:03. | [limits-decisions.html](../design/limits-decisions.html) | 998 x 467 |
 
 A key face is named after its case as well: `tests/expected/<case>.svg` is the SVG the binary draws
 for the Stream Deck key, and the figures place it as it is. A full run also writes the pictures the

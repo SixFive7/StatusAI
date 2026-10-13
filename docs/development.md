@@ -52,18 +52,19 @@ dotnet publish src/StatusAI.csproj -c Release -r win-x64 -o .work/publish
 ./tests/Test-Renders.ps1 -Exe .work/publish/statusai.exe
 ```
 
-188 renders of 81 cases, about 20 seconds, exit code 0 when every one matches. A failure names the
+209 renders of 100 cases, about 25 seconds, exit code 0 when every one matches. A failure names the
 case and what it checks, and prints the lines that differ with their colours stripped, or says that
 only the colours differ. The render it got is left in `.work/test-renders/actual/`, and the home it
 ran in under `.work/test-renders/run/`. Windows PowerShell 5.1 and PowerShell 7 both run it.
 
-Sixteen of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
+Nineteen of the cases are the Stream Deck key. A case with a `face` gets no payload and no width:
 `statusai --deck-face <face>` runs in a copy of its home and prints the key as SVG, as it is drawn
 that many seconds after the fetch its rows come from, and the bytes are compared with
 `tests/expected/<case>.svg`. They cover the key of the screenshot's rows, the same key a quarter of
 an hour and three and a half hours on, a row at 100%, rows without a trend, without a reset time
 and without a session meter, a fetch that is failing, no rows at all, a token renewed for the same
-account, and the first fetch for another account, under way and failed.
+account, the first fetch for another account, under way and failed, a 429 that holds the fetch off,
+for the same account and for a new one, and claude-swap's figure drawn at a switch.
 
 Nothing live is touched. Every render runs in a fresh copy of its home under `.work/test-renders/`,
 with `STATUSAI_OFFLINE` pointing at it (see
@@ -92,9 +93,11 @@ a run with another version says so first, because it may draw that line differen
 | `tests/expected/<case>.svg` | the exact bytes of the Stream Deck key, for a case with a `face` |
 | `tests/cship.toml` | cship's config for the renders |
 
-The fixtures carry no credentials. `.credentials.json` holds the plan fields, and in the four homes
+The fixtures carry no credentials. `.credentials.json` holds the plan fields, and in the 13 homes
 about a new token an `accessToken` that is made up, `fixture-token-after`. Every address in them is
-an `example.com` one.
+an `example.com` one, and every UUID a placeholder. Seven of the eight homes about claude-swap carry
+its table, `.claude-swap-backup/cache/usage.json`, in the shape claude-swap writes, with made-up
+figures; the eighth is a machine without claude-swap.
 
 The `showcase` case draws every row at once, with its token grid over a main thread and two
 sub-agents, one of them a nested workflow agent, whose files carry both
@@ -106,7 +109,12 @@ from (`COLUMNS`, `STATUSAI_WIDTH` before it, a value that is not a width, `statu
 usage fetch that fails once, twice, in another session and before any has worked, then recovers, a
 retry held off while the last attempt is under 50 seconds old and made once it is 50, a token
 renewed for the same account, a switch to another account whose first fetch is under way, fails,
-or is made at once while the old account's retries were held off, and the payloads: fresh sessions
+or is made at once while the old account's retries were held off, a 429 that holds the fetch off,
+its `Retry-After` read as seconds and as a date, a day of it held to the hour, one that cannot be
+read and holds nothing, the hold before and after it lifts and on a new account's first fetch,
+claude-swap's figure drawn at a switch, and the render's own fetch where that figure is missing,
+over a minute old, from before the switch, for another account, of another schema or unreadable,
+or where the token was only renewed, and the payloads: fresh sessions
 that must stay quiet, and broken ones that must still warn, one of them so broken that cship
 prints nothing. What the tests cannot cover is the live fetch itself, the
 registry cache and the history. A failed fetch is the fixture's word, so the count and its row are
@@ -359,7 +367,9 @@ Set-ItemProperty -Path "HKCU:\Software\StatusAI" -Name "ts" -Value "0"
 
 Then run it straight away. A live Claude Code window is racing you for the same mutex, and if it
 wins, you get its figures instead. While the usage `⚠` row shows, a render also leaves the fetch
-alone until the last attempt is 50 seconds old, so set `tryTs` to `0` the same way.
+alone until the last attempt is 50 seconds old, so set `tryTs` to `0` the same way. A 429 with a
+`Retry-After` holds it off until the time in `holdTs` as well; that time is the server's, and
+clearing it only spends a request on the block.
 
 That is a write to state every running session shares, and the test run that follows fetches and
 pushes a sample into the shared prediction history. When what is under test is the drawing rather
@@ -461,6 +471,25 @@ A print is the first 8 hex digits of the token's SHA-256: `0b9bc8f4` is `fixture
 and `6eb6875e` is `fixture-token-after`. `MayRetry()` lets a token not tried yet be tried at once,
 whatever the count, and that attempt starts the count again. Rows of another account than
 `<dir>/.claude.json` names are not drawn, through the same `Foreign()` as a live render.
+
+Two fields stand in for a 429's hold (see [limits.md](reference/limits.md#a-429-that-says-how-long)):
+`heldUntil`, when the hold of the last 429 lifts, the registry's `holdTs`, none if left out; and
+`retryAfter`, the `Retry-After` of this render's attempt when that is `http 429`, which goes through
+the same `HoldUntil()` as a live response's header, the hour's cap included. A time of day in the
+`⚠` row is drawn in the offset `now` is written with, so `"now": "2026-09-23T22:14:20+02:00"` draws
+`until 22:19:20` on any machine:
+
+```json
+"fetch": { "fails": 1, "why": "http 429", "attempt": "ok", "okAt": "2026-09-23T22:13:20+02:00",
+           "triedAt": "2026-09-23T22:14:15+02:00", "heldUntil": "2026-09-23T22:19:20+02:00" }
+```
+
+And `tokenAt` stands in for the time `.credentials.json` was written, for claude-swap's figure at a
+switch (see [limits.md](reference/limits.md#claude-swaps-figure-at-a-switch)). Where the token is new
+and `<dir>/.claude.json` names another account, a render that would fetch first reads
+`<dir>/.claude-swap-backup/cache/usage.json` through the same `SwapFigure()` as a live render, and
+draws the figure in place of its own fetch where it holds. `.claude.json` names the account by its
+`organizationUuid` as well as its address there, as claude-swap does.
 
 Keep the hours exact when comparing builds. A `usage.json` and a `rows.json` that should draw the
 same rows must agree on the hours to each reset down to the last bit: .NET's `TotalHours` is
@@ -569,8 +598,9 @@ To take it out again, quit the app, delete that folder and remove the key.
 ## Trap 4: an account switch looks like a regression
 
 `AccountInfo()` is read fresh from `~/.claude.json` on every render. A switch changes the token in
-`.credentials.json` as well, which makes the next render fetch at once and leaves out the old
-account's rows until the new account's first good fetch has come. That fetch sees the changed
+`.credentials.json` as well, which makes the next render fetch at once, or take claude-swap's
+figure where it has a fresh one, and leaves out the old account's rows until the new account's
+first good fetch has come. That fetch sees the changed
 `accountUuid` and clears the whole series: `hist`, `vfS/vfW/vfF` and `rsS/rsW/rsF`. So right after
 a switch the limit rows are gone for a moment, then every row reads `→ early`, and the percentages
 belong to a different account, so they will not match anything observed a minute earlier. That is

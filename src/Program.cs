@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
@@ -26,6 +27,17 @@ const string Forest = "\x1b[38;2;40;164;40m";
 // The registry key under HKCU that holds what every session shares: the limit rows' cache, the
 // count of failed fetches, the prediction history and the euro rate.
 const string RegKey = @"Software\StatusAI";
+
+// The longest a 429 holds the fetch off, in seconds, whatever its Retry-After asks: an hour. It is
+// what Claude Code caps the same endpoint's Retry-After at (3.600.000 ms, read in the 2.1.296
+// bundle), and the longest block anyone on this machine has been told of. A longer ask is more
+// likely a broken header than a real block, and an hour without a fetch is already a long time for
+// rows that say where the limits stand; past it, one request an hour is spent to find out.
+const long MaxHold = 3600;
+
+// The oldest claude-swap's figure may be, in seconds, to stand in for a fetch at a switch of
+// account (SwapFigure): a minute, about one status-line render.
+const double SwapMaxAge = 60;
 
 // Four ways in that are not a render, and none of them reads stdin. Stream Deck starts a plugin
 // with -port, -pluginUUID, -registerEvent and -info: this process is then the plugin, which stays
@@ -190,6 +202,9 @@ static Deck.Host DeckHost() => new() {
     Look = () => Offline() is string dir ? OfflineRows(dir) : Saved(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), DeckHome()),
     FetchedAt = () => Offline() is null ? RegLong("ts") : 0,
     TriedAt = () => Offline() is null ? RegLong("tryTs") : 0,
+    // a 429's hold on the token signed in now, while it stands, which MayRetry keeps every fetch away from
+    HeldUntil = () => Offline() is null && !NewToken(TokenPrint(Token(DeckHome())), RegStr("tryTok"))
+                      && RegLong("holdTs") is long held && Held(held, DateTimeOffset.UtcNow.ToUnixTimeSeconds()) ? held : 0,
     Pace = Pace, Hm = Hm, BarFill = BarFill, ZoneColor = ZoneColor, PctColor = PctColor, SevColor = SevColor,
     Forest = Forest, Offline = Offline(), ProjectsDir = Path.Combine(DeckHome(), ".claude", "projects") };
 
@@ -357,12 +372,19 @@ static string RunCship(string input) {
 // token is tried at once even while the old one's retries are being spaced out. A render that
 // does not fetch meanwhile draws the copy as before if it is the same account's, and no rows at
 // all if it is another's (Saved, Foreign).
+//
+// A 429 that says in Retry-After how long it holds puts the fetch off until then (holdTs): no
+// render and no --refresh tries the token that drew it before that time (MayRetry), and the ⚠
+// row names it. And at a switch to another account, claude-swap's figure for that account, if it
+// fetched one a moment ago, stands in for the fetch, so that StatusAI's request does not join the
+// burst a switch sets off (FromSwap). Without claude-swap, or with nothing of its to use, the
+// fetch goes ahead.
 static (Cached c, string err, string fetchErr, bool foreign) GetUsage() {
     if (Offline() is string dir) return OfflineRows(dir);
     long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     string home = Home(), tk = TokenPrint(Token(home));
     if (FreshVal(now, tk) is Cached fresh) return (fresh, "", "", false);
-    if (!MayRetry(RegInt("fail"), RegLong("tryTs"), now, tk, RegStr("tryTok"))) return Saved(now, home);
+    if (!MayRetry(RegInt("fail"), RegLong("tryTs"), now, tk, RegStr("tryTok"), RegLong("holdTs"))) return Saved(now, home);
     Mutex? mx = null; bool owned = false;
     try {
         mx = new Mutex(false, LockName());
@@ -377,8 +399,12 @@ static (Cached c, string err, string fetchErr, bool foreign) GetUsage() {
         if (owned) {
             now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             if (FreshVal(now, tk) is Cached fresh2) return (fresh2, "", "", false);
-            if (MayRetry(RegInt("fail"), RegLong("tryTs"), now, tk, RegStr("tryTok")) && FetchAndSave(now) is Cached got)
-                return (got, "", "", false);
+            if (MayRetry(RegInt("fail"), RegLong("tryTs"), now, tk, RegStr("tryTok"), RegLong("holdTs"))) {
+                // a switch to another account: claude-swap's figure first, if it has a fresh one
+                if (Foreign(tk, RegStr("tok"), RegStr("acct"), home) && FromSwap(home, tk) is Cached took)
+                    return (took, "", "", false);
+                if (FetchAndSave(now) is Cached got) return (got, "", "", false);
+            }
         }
         // another session holds the lock or has just tried, or this fetch failed
         return Saved(now, home);
@@ -396,14 +422,16 @@ static (Cached c, string err, string fetchErr, bool foreign) GetUsage() {
 // The copy's token and account are read before its rows, and Save writes them after the rows, so
 // a fetch landing in between can only make the rows newer than the token says, never older.
 static (Cached c, string err, string fetchErr, bool foreign) Saved(long now, string home) {
-    string tk = TokenPrint(Token(home)), okTok = RegStr("tok"), okAcct = RegStr("acct");
+    string tk = TokenPrint(Token(home)), okTok = RegStr("tok"), okAcct = RegStr("acct"), triedTok = RegStr("tryTok");
     var last = AnyVal();
     bool foreign = last is not null && Foreign(tk, okTok, okAcct, home);
     int fails = RegInt("fail");
     // the count belongs to the token last tried; one not tried yet has no failures to show
-    if (foreign && RegStr("tryTok") != tk) fails = 0;
+    if (foreign && triedTok != tk) fails = 0;
+    // and so does a 429's hold: a token not tried yet is held by nothing
+    long heldUntil = NewToken(tk, triedTok) ? 0 : RegLong("holdTs");
     return (foreign ? Cached.None : last ?? Cached.None, "",
-            FetchWarn(fails, RegStr("why"), last is null || foreign ? 0 : RegLong("ts"), now, foreign), foreign);
+            FetchWarn(fails, RegStr("why"), last is null || foreign ? 0 : RegLong("ts"), now, foreign, heldUntil, null), foreign);
 }
 
 // Whether a render may try the fetch: always until it has failed twice in a row, and from then
@@ -412,8 +440,39 @@ static (Cached c, string err, string fetchErr, bool foreign) Saved(long now, str
 // after now, as when the clock has been set back, holds nothing off. Nor does a token that has
 // not been tried yet (tk against the last attempt's, tryTok): after a switch the new account's
 // token is tried at once, whatever came of the old one's attempts.
-static bool MayRetry(int fails, long triedAt, long now, string tk, string triedTok) =>
-    fails < 2 || now - triedAt >= 50 || triedAt > now || NewToken(tk, triedTok);
+//
+// A 429 with a Retry-After holds the token that drew it off until the time it names (heldUntil,
+// the registry's holdTs), whatever the count, so that no render and no --refresh asks again while
+// the server has said it will refuse. Once that time has passed, the rules above apply as before.
+static bool MayRetry(int fails, long triedAt, long now, string tk, string triedTok, long heldUntil) {
+    if (NewToken(tk, triedTok)) return true;
+    if (triedAt <= now && Held(heldUntil, now)) return false;
+    return fails < 2 || now - triedAt >= 50 || triedAt > now;
+}
+
+// Whether a 429's hold, to heldUntil, still stands. One more than MaxHold away cannot have been set
+// by this clock, as when the clock has been set back, and holds nothing off.
+static bool Held(long heldUntil, long now) => heldUntil > now && heldUntil - now <= MaxHold;
+
+// When a 429 lifts, in unix seconds, from its Retry-After, as HttpClient reads the header: a
+// number of seconds from the response (at), or a date (RFC 9110, section 10.2.3). It is rounded
+// up to the second, so an attempt on the dot is never early, and is at most MaxHold away. 0 when
+// there is no Retry-After, or it names a time that has come already.
+static long HoldUntil(RetryConditionHeaderValue? ra, DateTimeOffset at) {
+    double now = at.ToUnixTimeMilliseconds() / 1000.0, until;
+    if (ra?.Delta is TimeSpan d) until = now + d.TotalSeconds;
+    else if (ra?.Date is DateTimeOffset t) until = t.ToUnixTimeSeconds();
+    else return 0;
+    if (!(until > now)) return 0;
+    return (long)Math.Ceiling(Math.Min(until, now + MaxHold));
+}
+
+// A time of day for the ⚠ row, HH:mm:ss: in the time zone of the machine, or offline in the offset
+// the fixture's now is written with (zone), so that a render test draws the same on any machine.
+static string Clock(long unix, TimeSpan? zone) {
+    var t = DateTimeOffset.FromUnixTimeSeconds(unix);
+    return (zone is TimeSpan z ? t.ToOffset(z) : t.ToLocalTime()).ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+}
 
 // The OAuth token Claude Code signs in with, from .credentials.json under home, or "" when there
 // is none to read.
@@ -442,6 +501,96 @@ static bool Foreign(string tk, string okTok, string okAcct, string home) {
     if (!NewToken(tk, okTok)) return false;
     string acct = AccountInfo(home).uuid;
     return acct.Length == 0 || okAcct.Length == 0 || acct != okAcct;
+}
+
+// At a switch to another account, claude-swap's figure for it in place of a fetch: saved as the
+// new account's first good fetch, at the time claude-swap made it, history and all (Record). Null
+// when there is none to use (SwapFigure), and the render fetches as it would have. tk is the print
+// of the token the switch brought, and the time it came is when .credentials.json was written.
+static Cached? FromSwap(string home, string tk) {
+    try {
+        var who = AccountInfo(home);
+        if (who.uuid.Length == 0) return null;
+        var written = File.GetLastWriteTimeUtc(Path.Combine(home, ".claude", ".credentials.json"));
+        double changed = new DateTimeOffset(written, TimeSpan.Zero).ToUnixTimeMilliseconds() / 1000.0;
+        if (SwapFigure(home, who.email, who.org, changed, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0)
+            is not (Usage u, long at)) return null;
+        return Record(u, at, tk, who.uuid);
+    } catch { return null; }
+}
+
+// claude-swap's last good figure for the account signed in now, from the table of every account's
+// usage it keeps in %USERPROFILE%\.claude-swap-backup\cache\usage.json, with the time it was fetched.
+// claude-swap fetches an account's usage the moment it switches to it, and so do the Claude Code
+// sessions that follow the switch: a request of StatusAI's at that moment adds to a burst that drew
+// a 429 on 13 October, 300 seconds long, for every caller with the token. So at a switch this
+// figure stands in for StatusAI's own fetch, but only when every one of these holds:
+//
+//   - the file has schemaVersion 2, the table as claude-swap 0.26 writes it;
+//   - a row's email and organizationUuid are the account's in ~/.claude.json (email, org);
+//   - its lastGood has five_hour and seven_day, each with a pct and, while that window is open, a
+//     resets_at, and any scoped rows, the model-scoped weekly meters, with a name and the same;
+//   - its fetchedAt is after the token changed (changedAt, when .credentials.json was written), so
+//     it is the new account's figure since the switch and not one from before it, and at most
+//     SwapMaxAge seconds before now.
+//
+// Anything else is null, and so is every failure to read it: the file missing, as it is without
+// claude-swap, locked, unreadable or of another schema, no row for the account, or a row from
+// before the switch or over a minute old. Nothing of StatusAI needs claude-swap. The file is opened
+// so as to let claude-swap replace it meanwhile, which it does by renaming a new file over it and
+// retries for about 0,75 s when that is refused.
+//
+// The figure has the meters' percentages and reset times and nothing else: no severity, no product
+// breakdown, no credit and no meter the code does not know. Those come with StatusAI's next fetch,
+// at the first render 50 s or more after claude-swap's, since the copy is dated by its fetchedAt.
+static (Usage u, long at)? SwapFigure(string home, string email, string org, double changedAt, double now) {
+    if (email.Length == 0) return null;
+    try {
+        using var fs = new FileStream(Path.Combine(home, ".claude-swap-backup", "cache", "usage.json"), FileMode.Open,
+                                      FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var d = JsonDocument.Parse(fs);
+        var root = d.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("schemaVersion", out var sv)
+            || sv.ValueKind != JsonValueKind.Number || !sv.TryGetInt32(out int version) || version != 2
+            || !root.TryGetProperty("accounts", out var rows) || rows.ValueKind != JsonValueKind.Object) return null;
+        foreach (var slot in rows.EnumerateObject()) {
+            var row = slot.Value;
+            if (row.ValueKind != JsonValueKind.Object || Str(row, "email") != email || Str(row, "organizationUuid") != org) continue;
+            if (!row.TryGetProperty("fetchedAt", out var fa) || fa.ValueKind != JsonValueKind.Number) continue;
+            double at = fa.GetDouble();
+            if (!(at > changedAt) || now - at > SwapMaxAge || at - now > 1) continue;
+            if (!row.TryGetProperty("lastGood", out var good) || good.ValueKind != JsonValueKind.Object) continue;
+            var t0 = DateTimeOffset.FromUnixTimeMilliseconds((long)(at * 1000));
+            if (!good.TryGetProperty("five_hour", out var h5) || SwapLim(h5, t0) is not Lim s
+                || !good.TryGetProperty("seven_day", out var d7) || SwapLim(d7, t0) is not Lim w) continue;
+            var u = new Usage();
+            u.Meters.Add(new Meter("session", "5h", "", s));
+            u.Meters.Add(new Meter("weekly_all", "7d", "", w));
+            bool whole = true;
+            if (good.TryGetProperty("scoped", out var scoped) && scoped.ValueKind != JsonValueKind.Null) {
+                if (scoped.ValueKind != JsonValueKind.Array) continue;
+                foreach (var m in scoped.EnumerateArray()) {
+                    string name = m.ValueKind == JsonValueKind.Object ? Clean(Str(m, "name")) : "";
+                    if (name.Length == 0 || SwapLim(m, t0) is not Lim f) { whole = false; break; }
+                    u.Meters.Add(new Meter("weekly_scoped", name, "model", f));
+                }
+            }
+            if (whole) return (u, (long)Math.Floor(at));
+        }
+    } catch { }
+    return null;
+}
+
+// One meter of claude-swap's figure: its pct, and its resets_at, which a window that is not open
+// has none of, measured against t0, when claude-swap fetched it. Null for any other shape.
+static Lim? SwapLim(JsonElement m, DateTimeOffset t0) {
+    if (m.ValueKind != JsonValueKind.Object || !m.TryGetProperty("pct", out var p) || p.ValueKind != JsonValueKind.Number) return null;
+    double hrs = 0; long rsu = 0; bool hasReset = false;
+    if (m.TryGetProperty("resets_at", out var ra) && ra.ValueKind != JsonValueKind.Null) {
+        if (ra.ValueKind != JsonValueKind.String || !DateTimeOffset.TryParse(ra.GetString(), out var r)) return null;
+        hrs = Math.Max(0, (r - t0).TotalHours); rsu = r.ToUnixTimeSeconds(); hasReset = true;
+    }
+    return new Lim((int)p.GetDouble(), hrs, hasReset, rsu, "");
 }
 
 // What GetUsage returns, read from files instead of the machine. Two fixture shapes.
@@ -482,6 +631,16 @@ static bool Foreign(string tk, string okTok, string okAcct, string home) {
 // attempt has tried that token, and with a token not tried before the count starts again, as
 // SaveTry has it; rows of another account are not drawn, as in Saved.
 //
+// Two stand in for a 429's hold: "heldUntil", when the hold the last 429 put on the token last
+// tried lifts, the registry's holdTs, none when not given; and "retryAfter", the Retry-After of
+// this render's attempt when it fails with "http 429", which HoldUntil reads as it reads a live
+// response's. A time of day in the ⚠ row is drawn in the offset "now" is written with.
+//
+// And one stands in for the switch claude-swap makes: "tokenAt", when .credentials.json was
+// written, which a live render reads from the file. At a switch to another account the render
+// looks for claude-swap's figure in the directory's .claude-swap-backup/cache/usage.json, through
+// the same SwapFigure as a live render, and draws it in place of its own fetch where it holds.
+//
 // Either way the forecast is an input, not computed from a history. This path is here to
 // test the parsing, the drawing and the count of failed fetches: whether a render tries is
 // the live code's MayRetry, the count moves by its AfterFetch and the reason is its
@@ -492,15 +651,26 @@ static (Cached c, string err, string fetchErr, bool foreign) OfflineRows(string 
         using var d = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "rows.json")));
         var root = d.RootElement;
         var now = Time(root, "now") ?? DateTimeOffset.UtcNow;
+        long nowS = now.ToUnixTimeSeconds();
         bool sim = root.TryGetProperty("fetch", out var fe) && fe.ValueKind == JsonValueKind.Object;
         int fails = sim && fe.TryGetProperty("fails", out var fl) && fl.ValueKind == JsonValueKind.Number ? fl.GetInt32() : 0;
         string why = sim ? Str(fe, "why") : "", attempt = sim ? Str(fe, "attempt") : "";
         if (attempt.Length == 0) attempt = "ok";
         var okAt = (sim ? Time(fe, "okAt") : null) ?? now;
         long triedAt = (sim ? Time(fe, "triedAt") : null)?.ToUnixTimeSeconds() ?? 0;
+        long heldUntil = (sim ? Time(fe, "heldUntil") : null)?.ToUnixTimeSeconds() ?? 0;
         string tk = TokenPrint(Token(dir));
         string okTok = sim ? Str(fe, "okTok") : "", okAcct = sim ? Str(fe, "okAcct") : "", triedTok = sim ? Str(fe, "triedTok") : "";
-        if (!MayRetry(fails, triedAt, now.ToUnixTimeSeconds(), tk, triedTok)) attempt = "none";
+        if (!MayRetry(fails, triedAt, nowS, tk, triedTok, heldUntil)) attempt = "none";
+
+        // as GetUsage: at a switch to another account, claude-swap's figure in place of this fetch
+        if (attempt != "none" && Foreign(tk, okTok, okAcct, dir)) {
+            var who = AccountInfo(dir);
+            double changed = ((sim ? Time(fe, "tokenAt") : null)?.ToUnixTimeMilliseconds() ?? 0) / 1000.0;
+            if (who.uuid.Length > 0
+                && SwapFigure(dir, who.email, who.org, changed, now.ToUnixTimeMilliseconds() / 1000.0) is (Usage su, long _))
+                return (OfflineCached(su, root), "", "", false);
+        }
         bool ok = attempt == "ok";
 
         Cached? c = null;
@@ -509,19 +679,7 @@ static (Cached c, string err, string fetchErr, bool foreign) OfflineRows(string 
             using var ud = JsonDocument.Parse(File.ReadAllText(usagePath));
             var u = ParseUsage(ud.RootElement, ok ? now : okAt);
             if (u.Meters.Count == 0) return (Cached.None, "offline — usage.json has no meters", "", false);
-            var (iS, iW, iF, ignored) = Known(u.Meters, Str(root, "sn"));
-            var fc = root.TryGetProperty("forecast", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
-            var rows = new List<RowIn>();
-            foreach (var i in new[] { iS, iW, iF }) {
-                if (i < 0) continue;
-                var m = u.Meters[i];
-                double rate = 0; bool gated = true;
-                if (fc.ValueKind == JsonValueKind.Object && fc.TryGetProperty(m.Label, out var e)) {
-                    rate = e.GetProperty("rate").GetDouble(); gated = e.GetProperty("gated").GetBoolean();
-                }
-                rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, m.Lim.Sev));
-            }
-            c = new Cached(rows, u.Bd, u.Cr, string.Join("\n", ignored));
+            c = OfflineCached(u, root);
         } else if (root.TryGetProperty("rows", out var rs)) {
             var list = new List<RowIn>();
             foreach (var r in rs.EnumerateArray())
@@ -531,25 +689,48 @@ static (Cached c, string err, string fetchErr, bool foreign) OfflineRows(string 
                                    r.GetProperty("sev").GetString() ?? ""));
             if (list.Count == 0) return (Cached.None, "offline — rows.json lists no rows", "", false);
             c = new Cached(list, "", "", "");
+            c = c with { Rows = RowsIn(RowsOut(c.Rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote") };
         } else if (ok) return (Cached.None, "offline — no usage.json and no rows in rows.json", "", false);
 
-        if (c is not null)
-            c = c with { Rows = RowsIn(RowsOut(c.Rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote") };
         if (attempt != "none") {
             if (triedTok != tk) (fails, why) = (0, "");   // SaveTry: a token not tried before starts the count again
             triedTok = tk;
+            // SaveFailure keeps the hold this attempt's 429 named, if any, and a good fetch clears it (Save)
+            heldUntil = attempt == "http 429" && RetryConditionHeaderValue.TryParse(Str(fe, "retryAfter"), out var ra)
+                      ? HoldUntil(ra, now) : 0;
         }
         (fails, why) = AfterFetch(fails, why, attempt);
-        // as Saved: rows another account's fetch drew are not drawn, and the count is the new token's
+        // as Saved: rows another account's fetch drew are not drawn, and the count and the hold are the new token's
         bool foreign = !ok && c is not null && Foreign(tk, okTok, okAcct, dir);
         if (foreign && triedTok != tk) fails = 0;
+        if (NewToken(tk, triedTok)) heldUntil = 0;
         return (foreign ? Cached.None : c ?? Cached.None, "",
-                FetchWarn(fails, why, c is null || foreign ? 0 : okAt.ToUnixTimeSeconds(), now.ToUnixTimeSeconds(), foreign),
+                FetchWarn(fails, why, c is null || foreign ? 0 : okAt.ToUnixTimeSeconds(), nowS, foreign, heldUntil, now.Offset),
                 foreign);
     } catch (Exception ex) {
         // a broken fixture is loud, like every other failed source
         return (Cached.None, "offline — fixture unreadable: " + ex.GetType().Name + " " + Short(ex.Message), "", false);
     }
+}
+
+// The rows a usage response or claude-swap's figure draws offline: the meters Known() picks, with
+// "sn" from rows.json as the scoped meter already followed, and their forecast from its "forecast"
+// by label, a meter it leaves out gated. They pass through the string the registry keeps them in.
+static Cached OfflineCached(Usage u, JsonElement root) {
+    var (iS, iW, iF, ignored) = Known(u.Meters, Str(root, "sn"));
+    var fc = root.TryGetProperty("forecast", out var f) && f.ValueKind == JsonValueKind.Object ? f : default;
+    var rows = new List<RowIn>();
+    foreach (var i in new[] { iS, iW, iF }) {
+        if (i < 0) continue;
+        var m = u.Meters[i];
+        double rate = 0; bool gated = true;
+        if (fc.ValueKind == JsonValueKind.Object && fc.TryGetProperty(m.Label, out var e)) {
+            rate = e.GetProperty("rate").GetDouble(); gated = e.GetProperty("gated").GetBoolean();
+        }
+        rows.Add(new RowIn(m.Label, m.Lim.Pct, m.Lim.Hours, m.Lim.HasReset, rate, gated, m.Lim.Sev));
+    }
+    return new Cached(RowsIn(RowsOut(rows)) ?? throw new FormatException("RowsIn refused what RowsOut wrote"),
+                      u.Bd, u.Cr, string.Join("\n", ignored));
 }
 
 static DateTimeOffset? Time(JsonElement o, string name) =>
@@ -696,15 +877,22 @@ static List<RowIn>? RowsIn(string s) {
 static Cached? FetchAndSave(long now) {
     string token = Token(Home()), tk = TokenPrint(token);
     SaveTry(now, tk);
-    var (u, why) = Fetch(token);
-    if (u is null) { SaveFailure(why); return null; }
+    var (u, why, hold) = Fetch(token);
+    if (u is null) { SaveFailure(why, hold); return null; }
     // A switch that overtook the request: .credentials.json holds another token than the one the
     // request was made with, so the response may be the account switched away from. It is dropped
     // as an attempt that came to nothing, the count left as it was, and the next render tries the
     // new token at once. The account is read after the request, since a switch writes
     // .credentials.json first and ~/.claude.json a moment later.
     if (TokenPrint(Token(Home())) != tk) return null;
-    string acct = AccountInfo().uuid;
+    return Record(u, now, tk, AccountInfo().uuid);
+}
+
+// A good fetch, made at now with the token tk is the print of, for the account acct: the history,
+// the window checks, the pace of each row, and all of it saved for every session (Save). A fetch
+// of StatusAI's own comes here, and so does claude-swap's figure at a switch (FromSwap), at the
+// time claude-swap fetched it.
+static Cached Record(Usage u, long now, string tk, string acct) {
     var hist = LoadHist();
     string oldAcct = RegStr("acct"), oldName = RegStr("sn");
     long vfS = RegLong("vfS"), vfW = RegLong("vfW"), vfF = RegLong("vfF");
@@ -760,9 +948,14 @@ static (int fails, string why) AfterFetch(int fails, string why, string attempt)
 // okAt, the time of the last good fetch; 0 means there are no rows to draw. A single failure
 // is quiet while the last good rows stand in for it. Rows of another account (foreign) are not
 // drawn, so after a switch there are none to stand in, and the first failure is shown.
-static string FetchWarn(int fails, string why, long okAt, long now, bool foreign) {
-    if (fails < (foreign ? 1 : 2)) return "";
-    return "usage — " + FetchWhy(why) + "; "
+//
+// So is a 429 that holds the fetch off (heldUntil, 0 for none), since no retry comes before the
+// time it names: the reason names that time, in zone (Clock), while it is still to come, as
+// "HTTP 429 from api.anthropic.com until 12:49:50", and once it has passed the row stays as any
+// other until a fetch succeeds.
+static string FetchWarn(int fails, string why, long okAt, long now, bool foreign, long heldUntil, TimeSpan? zone) {
+    if (fails < (foreign || heldUntil > 0 ? 1 : 2)) return "";
+    return "usage — " + FetchWhy(why) + (Held(heldUntil, now) ? " until " + Clock(heldUntil, zone) : "") + "; "
          + (foreign ? "no limit rows for the new account yet"
             : okAt > 0 ? "the limit rows are " + Hm((now - okAt) / 3600.0) + " old" : "no limit rows yet");
 }
@@ -779,11 +972,13 @@ static string FetchWhy(string why) => why switch {
 };
 
 // A failed fetch leaves the cache as it was, stale, so the next render to take the lock tries
-// again. Only the count of failures in a row and the latest reason are written.
-static void SaveFailure(string why) {
+// again. Only the count of failures in a row, the latest reason and the hold its 429 named, if it
+// was one with a Retry-After (holdTs, 0 for none), are written.
+static void SaveFailure(string why, long hold) {
     try {
         var (fails, w) = AfterFetch(RegInt("fail"), RegStr("why"), why);
         using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
+        rk.SetValue("holdTs", hold.ToString(CultureInfo.InvariantCulture));
         rk.SetValue("fail", fails.ToString(CultureInfo.InvariantCulture));
         rk.SetValue("why", w);
     } catch { }
@@ -791,12 +986,13 @@ static void SaveFailure(string why) {
 
 // When the fetch was last tried, which MayRetry measures from, and the print of the token it was
 // tried with (tryTok). Written before the attempt, so one that Claude Code cuts short still
-// counts. The count of failures in a row is a token's: the first attempt with a token not tried
-// before starts it again, so the new account's ⚠ row says what its own fetch came to.
+// counts. The count of failures in a row is a token's, and so is a 429's hold: the first attempt
+// with a token not tried before starts the count again and drops the hold, so the new account's
+// ⚠ row says what its own fetch came to.
 static void SaveTry(long now, string tk) {
     try {
         using var rk = Registry.CurrentUser.CreateSubKey(RegKey);
-        if ((rk.GetValue("tryTok") as string ?? "") != tk) { rk.SetValue("fail", "0"); rk.SetValue("why", ""); }
+        if ((rk.GetValue("tryTok") as string ?? "") != tk) { rk.SetValue("fail", "0"); rk.SetValue("why", ""); rk.SetValue("holdTs", "0"); }
         rk.SetValue("tryTok", tk);
         rk.SetValue("tryTs", now.ToString());
     } catch { }
@@ -840,9 +1036,9 @@ static void WindowCheck(Lim lim, ref long storedRs, ref long vf, int lastPct, lo
 }
 
 // read fresh every render (never cached) so an account switch shows immediately; in home, or in
-// Home() when none is given
-static (string uuid, string email) AccountInfo(string? home = null) {
-    string uuid = "", email = "";
+// Home() when none is given. org is the organisation, which claude-swap names an account by.
+static (string uuid, string email, string org) AccountInfo(string? home = null) {
+    string uuid = "", email = "", org = "";
     try {
         string p = Path.Combine(home ?? Home(), ".claude.json");
         using var fs = File.OpenRead(p);
@@ -850,9 +1046,10 @@ static (string uuid, string email) AccountInfo(string? home = null) {
         if (d.RootElement.TryGetProperty("oauthAccount", out var a) && a.ValueKind == JsonValueKind.Object) {
             if (a.TryGetProperty("accountUuid", out var u)) uuid = u.GetString() ?? "";
             if (a.TryGetProperty("emailAddress", out var e)) email = e.GetString() ?? "";
+            org = Str(a, "organizationUuid");
         }
     } catch { }
-    return (uuid, email);
+    return (uuid, email, org);
 }
 
 // "max" + rateLimitTier "default_claude_max_20x" -> "Max 20"
@@ -939,8 +1136,9 @@ static void Save(string acct, string tk, string scopedName, long rsS, long rsW, 
         rk.SetValue("ig", c.Ig);
         rk.SetValue("acct", acct);
         rk.SetValue("tok", tk);
-        rk.SetValue("fail", "0");   // a good fetch clears the count, as AfterFetch has it
+        rk.SetValue("fail", "0");   // a good fetch clears the count, as AfterFetch has it, and any hold
         rk.SetValue("why", "");
+        rk.SetValue("holdTs", "0");
         rk.SetValue("ts", now.ToString());   // freshness gate: must be the last write
     } catch { }
 }
@@ -1230,9 +1428,10 @@ static string Hm(double hours) {
 
 // One call to the usage API, with the token from .credentials.json (Token). On a failure the
 // usage is null and why says what went wrong, as a kind FetchWhy has words for where there is
-// one: no token, timeout, offline, http <status>.
-static (Usage? u, string why) Fetch(string token) {
-    if (token.Length == 0) return (null, "no token");
+// one: no token, timeout, offline, http <status>. A 429 also says when the server will take the
+// token again, if its Retry-After does (hold, HoldUntil; 0 for no hold).
+static (Usage? u, string why, long hold) Fetch(string token) {
+    if (token.Length == 0) return (null, "no token", 0);
     string body;
     try {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
@@ -1241,15 +1440,17 @@ static (Usage? u, string why) Fetch(string token) {
         req.Headers.Add("anthropic-beta", "oauth-2025-04-20");
         req.Headers.Add("User-Agent", "claude-code/2.1.90");
         using var resp = http.Send(req);
-        if (!resp.IsSuccessStatusCode) return (null, "http " + (int)resp.StatusCode);
+        if (!resp.IsSuccessStatusCode)
+            return (null, "http " + (int)resp.StatusCode,
+                    (int)resp.StatusCode == 429 ? HoldUntil(resp.Headers.RetryAfter, DateTimeOffset.UtcNow) : 0);
         using (var rs = resp.Content.ReadAsStream())
         using (var sr = new StreamReader(rs, Encoding.UTF8)) body = sr.ReadToEnd();
-    } catch (Exception ex) { return (null, FailKind(ex)); }
+    } catch (Exception ex) { return (null, FailKind(ex), 0); }
     try {
         using var doc = JsonDocument.Parse(body);
         var u = ParseUsage(doc.RootElement, DateTimeOffset.UtcNow);
-        return u.Meters.Count > 0 ? (u, "") : (null, "the response has no meters");
-    } catch (Exception ex) { return (null, "unreadable response, " + ex.GetType().Name); }
+        return u.Meters.Count > 0 ? (u, "", 0) : (null, "the response has no meters", 0);
+    } catch (Exception ex) { return (null, "unreadable response, " + ex.GetType().Name, 0); }
 }
 
 // What a failed request comes down to: "timeout" for HttpClient's own 3 s limit, "offline"

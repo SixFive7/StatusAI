@@ -28,6 +28,7 @@ static class Deck {
                                                                                             // as another account's
         public required Func<long> FetchedAt;                                 // unix seconds of the last good fetch, 0 offline
         public required Func<long> TriedAt;                                   // and of the last attempt
+        public required Func<long> HeldUntil;                                 // and when a 429's hold on the token lifts, 0 for none
         public required Func<RowIn, (int now, int proj, string to100, int tone)> Pace;
         public required Func<double, string> Hm;
         public required Func<int, int> BarFill;
@@ -232,9 +233,10 @@ static class Deck {
     }
 
     // When the usage may next be brought up to date: at once after a quiet spell, and otherwise a
-    // slot after the last fetch or attempt by anyone, this process included.
+    // slot after the last fetch or attempt by anyone, this process included; and never while a
+    // 429 holds the token off, since --refresh would find the fetch held and do nothing.
     static long RefreshDue(Host h, long activeSince, long refreshedAt, int slot) =>
-        Math.Max(activeSince, Math.Max(refreshedAt, Math.Max(h.FetchedAt(), h.TriedAt())) + slot);
+        Math.Max(Math.Max(activeSince, Math.Max(refreshedAt, Math.Max(h.FetchedAt(), h.TriedAt())) + slot), h.HeldUntil());
 
     static long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -585,17 +587,36 @@ static class Deck {
 
     // The status line's ⚠ row for a failing fetch, cut to what a key has room for:
     // "usage — timed out after 3 s; the limit rows are 2m old" becomes "timeout" and "2m old".
+    // A 429 that holds the fetch off names when it lifts, which the key gives to the minute, as it
+    // gives every time, and rounded up, so that it never says the hold ends before it does:
+    // "HTTP 429 from api.anthropic.com until 12:49:50" becomes "429 until 12:50".
     // The wording taken apart here is FetchWhy()'s and FetchWarn()'s in Program.cs.
     static (string why, string old) Warn(string fetchErr) {
         int a = fetchErr.IndexOf("— ", StringComparison.Ordinal), b = fetchErr.IndexOf(';');
         string reason = a >= 0 && b > a ? fetchErr.Substring(a + 2, b - a - 2) : "";
+        int u = reason.IndexOf(" until ", StringComparison.Ordinal);
+        string until = u >= 0 ? UpToMinute(reason.Substring(u + 7)) : "";
+        if (u >= 0) reason = reason.Substring(0, u);
         string why = reason.StartsWith("timed out", StringComparison.Ordinal) ? "timeout"
                    : reason.StartsWith("offline", StringComparison.Ordinal) ? "offline"
                    : reason.StartsWith("no OAuth token", StringComparison.Ordinal) ? "no token"
-                   : reason.StartsWith("HTTP ", StringComparison.Ordinal) ? reason.Substring(0, Math.Min(reason.Length, 8)).TrimEnd()
+                   : reason.StartsWith("HTTP ", StringComparison.Ordinal)
+                     ? (until.Length > 0 ? reason.Substring(5, Math.Min(reason.Length - 5, 3)) + " until " + until
+                                         : reason.Substring(0, Math.Min(reason.Length, 8)).TrimEnd())
                    : "fetch failed";
         int c = fetchErr.IndexOf(" are ", StringComparison.Ordinal);
         return (why, c >= 0 ? fetchErr.Substring(c + 5) : "no rows yet");
+    }
+
+    // "12:49:50" to "12:50", and "12:49:00" to "12:49": a time of day to the minute, rounded up. ""
+    // for anything that is not a time.
+    static string UpToMinute(string hms) {
+        if (hms.Length != 8 || hms[2] != ':' || hms[5] != ':'
+            || !int.TryParse(hms.AsSpan(0, 2), NumberStyles.None, CultureInfo.InvariantCulture, out int h)
+            || !int.TryParse(hms.AsSpan(3, 2), NumberStyles.None, CultureInfo.InvariantCulture, out int m)
+            || !int.TryParse(hms.AsSpan(6, 2), NumberStyles.None, CultureInfo.InvariantCulture, out int s)) return "";
+        int minutes = (h * 60 + m + (s > 0 ? 1 : 0)) % (24 * 60);
+        return (minutes / 60).ToString("00", CultureInfo.InvariantCulture) + ":" + (minutes % 60).ToString("00", CultureInfo.InvariantCulture);
     }
 
     // ---------------------------------------------------------------- the websocket

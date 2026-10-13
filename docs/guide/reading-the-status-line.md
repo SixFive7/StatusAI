@@ -163,14 +163,19 @@ A figure that could not be read never looks like a real zero. A source that fail
 **red** `⚠` row at the foot of the block, and the figure itself reads `—`. That covers a payload
 that cannot be read, a missing cost or context figure, a transcript that should exist and does not,
 a usage fetch that is suspended or has failed twice in a row, or once for an account you have just
-switched to, and cship printing nothing. A brand-new session, before its first reply, is not a
-failure and says nothing.
+switched to or with a refusal that says how long it lasts, and cship printing nothing. A brand-new
+session, before its first reply, is not a failure and says nothing.
 
 A usage fetch that fails once (when you're offline, say) is quiet. The limit rows keep showing the
 last good fetch, with its countdowns where they stood then, or are left out if there has been none,
 and the next render tries again. If that fails too, a red row names the reason and says how old the
 rows are, `⚠ usage — timed out after 3 s; the limit rows are 2m old`, until a fetch succeeds. While
 the row shows, your open sessions try again at most once every 50 seconds between them.
+
+An `HTTP 429` is the server refusing for a while, and it usually says how long. Then none of your
+sessions asks again before that time, and the red row comes at the first refusal and names the time
+it lifts: `⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; the limit rows are 5m old`.
+Once that time has passed, the next render tries again, and the row stays until a fetch succeeds.
 
 When you switch to another account, the limit rows of the one you left are not shown as the new
 one's. The next render sees that the token in `.credentials.json` has changed and fetches the new
@@ -179,6 +184,11 @@ there are no limit rows, only the new account's line. If it fails, the red row c
 away, since there are no rows to stand in for it:
 `⚠ usage — timed out after 3 s; no limit rows for the new account yet`. A token Claude Code renews
 for the same account fetches at once as well, and the rows stay as they were meanwhile.
+
+If you switch with claude-swap, it fetches the new account's usage as it switches, and that figure
+is drawn in place of a fetch of StatusAI's own, so as not to add to the requests a switch sets off.
+For the minute until the next fetch the rows have no breakdown and their labels no severity
+colour. Without claude-swap nothing changes: StatusAI fetches.
 
 Two more rows can appear there, and neither is a failure:
 

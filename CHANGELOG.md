@@ -5,6 +5,27 @@ under *Unreleased*, and the entries before the first release are by date.
 
 ## Unreleased
 
+**Fewer requests after a refusal and at a switch**
+
+- A 429 whose `Retry-After` says how long it holds now holds the fetch off until then: no render and
+  no `--refresh` tries the token that drew it before that time, and the Stream Deck key starts no
+  refresh. On 13 October a 429 held every caller off for 300 seconds after a switch, and StatusAI
+  asked four more times inside it. The hold is an hour at most, where Claude Code caps it as well;
+  a 429 without the header is retried as before. See
+  [a 429 that says how long](docs/reference/limits.md#a-429-that-says-how-long).
+- The `⚠` row comes at the first such 429 and names when it lifts:
+  `⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; the limit rows are 5m old`, 15 columns
+  more than the same row without it, 95 at the longest. The key says `⚠ 429 until 12:50`, to the
+  minute and rounded up.
+- At a switch to another account, claude-swap's figure for that account, if it fetched one after
+  the switch and under a minute ago, is drawn in place of StatusAI's own fetch, so that it does not
+  join the burst of requests a switch sets off. The next regular fetch adds what claude-swap does
+  not carry: the severity, the breakdown, the on-credit alarm and the meters notice. Nothing needs
+  claude-swap: without it, or with a file that does not hold, StatusAI fetches as before. See
+  [claude-swap's figure at a switch](docs/reference/limits.md#claude-swaps-figure-at-a-switch).
+- Nineteen render cases for it, sixteen of the status line and three of the key: 209 renders of
+  100 cases. The exe is 17.408 bytes larger.
+
 **Switching accounts**
 
 - The shared usage is tied to the token it was fetched with. A good fetch stores the first 8 hex

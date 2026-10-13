@@ -14,6 +14,7 @@ Claude Code  --stdin JSON-->  statusai.exe  --stdin-->  cship.exe  -->  starship
   refreshInterval: 60               |
                                     +--> transcript tree      tokens, tool calls
                                     +--> api.anthropic.com    5h / 7d / scoped limits
+                                    +--> claude-swap's cache  the same, at a switch, where it is installed
                                     +--> ecb.europa.eu        EUR reference rate
                                     +--> .credentials.json    OAuth token, plan tier
 ```
@@ -50,7 +51,7 @@ Four clocks, stacked:
 | layer | interval | trigger |
 |---|---|---|
 | Claude Code running `statusai` | `refreshInterval: 60` | plus every new assistant message, after `/compact`, on permission-mode change; debounced 300 ms |
-| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s**, and for one token | `FreshVal`: `now - t < 50` and the token in `.credentials.json` the one the copy was fetched with, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries; from the second failure in a row, only once the last attempt is 50 s old, unless the token has not been tried yet (`MayRetry`) |
+| OAuth limit bars, product breakdown, on-credit alarm, ignored meters | cached **50 s**, and for one token | `FreshVal`: `now - t < 50` and the token in `.credentials.json` the one the copy was fetched with, else re-fetch behind a named mutex; a failed fetch leaves it stale, so the next render retries; from the second failure in a row, only once the last attempt is 50 s old, and after a 429 with a `Retry-After` not before the time it names, unless the token has not been tried yet (`MayRetry`); at a switch, claude-swap's figure in place of the fetch when it is under a minute old (`SwapFigure`) |
 | EUR rate | cached **24 h** | ECB daily feed |
 | token rows, account line | **every render** | incremental parse of appended bytes only |
 
@@ -69,8 +70,10 @@ the figures, the pace above all. On a machine with a live session that is the tr
 [development.md](../development.md). Until 2026-09-24 the cache held the drawn rows, in `val`, and
 a new build served its predecessor's drawing too. `fail` and `why` count the fetches that have
 failed in a row and keep the latest reason, for the `⚠` row every session draws from them, and
-`tryTs` is when the fetch was last tried, which spaces the retries 50 s apart once that row shows;
-see [limits.md](limits.md#when-a-fetch-fails).
+`tryTs` is when the fetch was last tried, which spaces the retries 50 s apart once that row shows.
+`holdTs` is when the hold of a 429 that said how long, in `Retry-After`, lifts: no render and no
+`--refresh` tries that token before it, an hour away at most; see
+[limits.md](limits.md#a-429-that-says-how-long).
 
 **The cache is tied to the credential it was fetched with.** `tok` is the print of the access token
 of the last good fetch, the first 8 hex digits of its SHA-256, beside `acct`, the account it was
@@ -78,13 +81,17 @@ for; `tryTok` is the print of the token last tried. A render whose token is not 
 copy stale and fetches at once. If `~/.claude.json` then names the same account, the token was
 renewed and the copy is drawn as before; if it names another, or cannot be read, the copy is the
 old account's and is not drawn, on the status line or the key, until the new account's first good
-fetch. See [limits.md](limits.md#when-the-token-changes).
+fetch. See [limits.md](limits.md#when-the-token-changes). That first fetch can be claude-swap's:
+where claude-swap made the switch and fetched the new account a moment before, its figure in
+`%USERPROFILE%\.claude-swap-backup\cache\usage.json` is saved in place of a request, and where it
+is not installed, or its file does not hold, the request is made; see
+[limits.md](limits.md#claude-swaps-figure-at-a-switch).
 
 ## State
 
 | location | contents |
 |---|---|
-| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `tryTok`, `hist`, `acct`, `tok`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`). `tok` and `tryTok` are 8 hex digits of a token's SHA-256, never the token |
+| `HKCU\Software\StatusAI` | limit-bar cache (`ts`, `rows`, `bd`, `cr`, `ig`, `fail`, `why`, `tryTs`, `tryTok`, `holdTs`, `hist`, `acct`, `tok`, `sn`, `rsS/rsW/rsF`, `vfS/vfW/vfF`), FX rate (`fx`, `fxTs`). `tok` and `tryTok` are 8 hex digits of a token's SHA-256, never the token |
 | `%LOCALAPPDATA%\StatusAI\tokens\<sid>.bin` | `CTK2` token cache: offsets, running totals, two dedup sets |
 | named mutex `Global\StatusAI.fetch.<SID>.{adm\|std}` | single-flight on the usage fetch, scoped per user *and* elevation level |
 | `%APPDATA%\Elgato\StreamDeck\Plugins\com.sixfive7.statusai.sdPlugin\` | the Stream Deck plugin, where it is installed: its manifest, its pictures and its own copy of `statusai.exe`. It keeps no state of its own |
@@ -138,9 +145,10 @@ press, and so that the HTTP client stays out of the process that stays up: 13,3 
 3,9 MB private as it is, against 18,3 MB and 5,2 MB with the fetch inside it.
 
 A refresh is due 62 seconds after the last fetch or attempt by anyone, and at once after a quiet
-spell. The 62 keeps it behind a terminal's own 60: once a status line has fetched, its next fetch
-comes two seconds before the key's would, so the key never comes round to one for as long as that
-terminal is open. A key that is ahead of a terminal sitting idle, whose renders then find the
+spell, but never before a 429's hold on the token signed in lifts, since `--refresh` would find the
+fetch held and do nothing. The 62 keeps it behind a terminal's own 60: once a status line has
+fetched, its next fetch comes two seconds before the key's would, so the key never comes round to
+one for as long as that terminal is open. A key that is ahead of a terminal sitting idle, whose renders then find the
 copy fresh, loses those two seconds every minute, and the terminal's render comes first in
 under half an hour. Whichever of the two fetches, it is one fetch a minute, and `--refresh` is
 not even started while the shared copy is under 50 seconds old.

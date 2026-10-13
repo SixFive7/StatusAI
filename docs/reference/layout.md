@@ -335,7 +335,9 @@ bar's configured style for a number, the default foreground otherwise); a suspen
 a usage fetch that has failed twice in a row, with how old the limit rows still drawn are (see
 [limits.md](limits.md#when-a-fetch-fails)), or once for an account just switched to, whose first
 good fetch is still to come, `no limit rows for the new account yet` (see
-[limits.md](limits.md#when-the-token-changes)); any of the four ways the token walk can fail; and
+[limits.md](limits.md#when-the-token-changes)), or once for a 429 that holds the fetch off, with
+the time it lifts, `HTTP 429 from api.anthropic.com until 12:49:50` (see
+[limits.md](limits.md#a-429-that-says-how-long)); any of the four ways the token walk can fail; and
 cship producing no output at all.
 
 Being on credit gets a row of its own, always last and never joined to the others by `·`. It is not

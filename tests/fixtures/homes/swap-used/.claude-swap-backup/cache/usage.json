@@ -1,0 +1,81 @@
+{
+ "schemaVersion": 2,
+ "accounts": {
+  "1": {
+   "email": "someone@example.com",
+   "organizationUuid": "00000000-0000-0000-0000-000000000000",
+   "claimId": null,
+   "claimUntil": 0.0,
+   "authDeadStrikes": 0,
+   "struckFingerprint": null,
+   "consecutiveFailures": 0,
+   "lastError": null,
+   "backoffUntil": null,
+   "lastAttemptAt": 1790194350.5,
+   "lastGood": {
+    "five_hour": {
+     "pct": 29.0,
+     "resets_at": "2026-09-24T01:00:00.000000+00:00",
+     "countdown": "4h45m",
+     "clock": "03:00"
+    },
+    "seven_day": {
+     "pct": 54.0,
+     "resets_at": "2026-09-30T05:00:00.000000+00:00",
+     "countdown": "6d 6h",
+     "clock": "Wed 07:00"
+    },
+    "scoped": [
+     {
+      "name": "Fable",
+      "pct": 47.0,
+      "resets_at": "2026-09-30T05:00:00+00:00",
+      "countdown": "6d 6h",
+      "clock": "Wed 07:00"
+     }
+    ]
+   },
+   "fetchedAt": 1790194350.5,
+   "nextPollAt": 1790194620.5,
+   "pollIntervalS": 270.0
+  },
+  "2": {
+   "email": "someone-else@example.com",
+   "organizationUuid": "00000000-0000-0000-0000-000000000000",
+   "claimId": null,
+   "claimUntil": 0.0,
+   "authDeadStrikes": 0,
+   "struckFingerprint": null,
+   "consecutiveFailures": 0,
+   "lastError": null,
+   "backoffUntil": null,
+   "lastAttemptAt": 1790194446.25,
+   "lastGood": {
+    "five_hour": {
+     "pct": 3.0,
+     "resets_at": "2026-09-24T01:00:00.000000+00:00",
+     "countdown": "4h45m",
+     "clock": "03:00"
+    },
+    "seven_day": {
+     "pct": 12.0,
+     "resets_at": "2026-09-30T05:00:00.000000+00:00",
+     "countdown": "6d 6h",
+     "clock": "Wed 07:00"
+    },
+    "scoped": [
+     {
+      "name": "Fable",
+      "pct": 5.0,
+      "resets_at": "2026-09-30T05:00:00+00:00",
+      "countdown": "6d 6h",
+      "clock": "Wed 07:00"
+     }
+    ]
+   },
+   "fetchedAt": 1790194446.25,
+   "nextPollAt": 1790194716.25,
+   "pollIntervalS": 270.0
+  }
+ }
+}
