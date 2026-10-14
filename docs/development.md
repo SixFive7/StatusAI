@@ -357,10 +357,10 @@ window of the app showed.
 ## Releasing
 
 ```powershell
-./scripts/Package.ps1 -Version 1.0.0
+./scripts/Package.ps1 -Version 1.1.0
 ```
 
-It refuses unless `CHANGELOG.md` has a `## 1.0.0 - <date>` section, and unless the cship a friend
+It refuses unless `CHANGELOG.md` has a `## 1.1.0 - <date>` section, and unless the cship a friend
 is told to download is the one the render tests pin and the [install guide](guide/install.md)
 fetches: cship 1.8.0, by URL and SHA-256. It publishes the build with that version, and refuses
 unless `THIRD-PARTY-NOTICES.txt` names the .NET runtime the build compiled in, which it reads from
@@ -370,9 +370,9 @@ the render tests against the build with that same cship, byte for byte the downl
 
 | file | holds |
 |---|---|
-| `StatusAI-1.0.0-win-x64.zip` | `statusai.exe`, `cship.toml` and `starship.toml` from `config/`, a plain-text `README.txt`, `LICENSE` as `LICENSE.txt`, and `THIRD-PARTY-NOTICES.txt`, at the root of the zip |
-| `StatusAI-1.0.0-win-x64.zip.sha256` | the zip's SHA-256, one line as `sha256sum` writes it |
-| `notes-v1.0.0.md` | the release page's text: the version's CHANGELOG section with its links pointed at the tag, and a footer pointing at the install guide |
+| `StatusAI-1.1.0-win-x64.zip` | `statusai.exe`, `cship.toml` and `starship.toml` from `config/`, a plain-text `README.txt`, `LICENSE` as `LICENSE.txt`, and `THIRD-PARTY-NOTICES.txt`, at the root of the zip |
+| `StatusAI-1.1.0-win-x64.zip.sha256` | the zip's SHA-256, one line as `sha256sum` writes it |
+| `notes-v1.1.0.md` | the release page's text: the version's CHANGELOG section with its links pointed at the tag, and a footer pointing at the install guide |
 
 cship is linked, not bundled: it statically links some 43 crates whose notices a redistributor
 would owe, so the install guide fetches it from cship's own release instead (see
@@ -387,7 +387,7 @@ opened.
 
 The script publishes nothing. Its last line is the `gh release create` command that would, to be
 run from the repository root once the release commit is pushed. The exe records the commit it was
-built at, as `1.0.0+<commit>` in its product version, so package from that commit; the script says
+built at, as `1.1.0+<commit>` in its product version, so package from that commit; the script says
 so when the working tree has uncommitted changes. `-OutDir` writes elsewhere and `-Cship` names the
 cship to test with. Exit code 0 when packaged, 1 when it refused, 2 when the build or the packaging
 failed; a run that does not finish leaves no zip of that version behind. Windows PowerShell 5.1 and

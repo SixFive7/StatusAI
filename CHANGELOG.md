@@ -3,194 +3,113 @@
 What changed, newest first. Releases are headed by their version; what is not in a release yet is
 under *Unreleased*, and the entries before the first release are by date.
 
-## Unreleased
+## 1.1.0 - 2026-10-14
 
-**A Stream Deck case that waited for the wrong redraw**
-
-- The case about a new token failed now and then. Once the 429's hold had lifted it asked for a
-  redraw and waited for the picture first, but where a minute turned in between, the key's own
-  redraw on the minute had started the refresh already, and its line in the log came first. The key
-  was right, with one refresh for the token. The case now takes the picture and the refresh in
-  either order, each once.
-- `Test-Deck.ps1` waits for what a case's plugins started, a `--refresh` or a `--deck-press`, before
-  the next case, and tries the removal of its homes again for five seconds. A `--refresh` started as
-  a case ended still had its plugin's home as its current directory, so that a run of that case on
-  its own could not remove the home and stopped with an error.
-
-**Reset times from the older shape of the response**
-
-- A usage response without `limits[]` is drawn from the older top-level `five_hour` and `seven_day`
-  objects, as before, and now from their `resets_at` as well as their `utilization`, read the way a
-  `limits` entry's is. On that path both rows said `↻ —`, with no projection and a grey `→`; they
-  now have their reset time, their projection and the red or forest `→`, as on the `limits` path. A
-  `resets_at` that is `null` or missing is still no reset time, never a reset this instant. The
-  model-scoped weekly row stays absent there, since the older objects have no such meter. No
-  response captured has lacked `limits[]`. See [response shape](docs/reference/limits.md#response-shape).
-- Six renders are recorded again, the `legacy-shape` case at its five widths and the `key-legacy`
-  key; the other 213 of the 219 are unchanged. The exe is the same size.
-
-**A switch seen with Claude idle, and smaller fixes**
-
-- The Stream Deck key sees a token that nothing has fetched with, after a switch of account or a
-  renewal, at its next redraw, within a minute, Claude working or not. Once the switch is 15
-  seconds old it starts one `--refresh` for it, which takes claude-swap's figure for the new
-  account where it has a fresh one and fetches otherwise. Once a token, whatever comes of it, and
-  not while a 429 holds the token off. The 15 seconds keep the request out of the burst a switch
-  sets off. Before, the key refreshed only while something was being written, so after a switch
-  with Claude idle and no terminal open it said `new account` until the next prompt. Nothing
-  watches `.credentials.json`. See [when the token changes](docs/reference/limits.md#when-the-token-changes).
-- With no figures at all, on a first run or with the registry emptied, the first failed fetch
-  raises the `⚠` row at once, `⚠ usage — timed out after 3 s; no limit rows yet`, where it waited
-  for the second; the key says `⚠ timeout` and `no rows yet`. With nobody signed in the status line
-  stays quiet, as before.
-- `.credentials.json`, `~/.claude.json`, `settings.json`, claude-swap's table and the token cache
-  are read with the sharing that lets another program replace them meanwhile.
-  `.credentials.json` was read with `File.ReadAllText`, which lets others only read, so for the
-  milliseconds StatusAI had it open, Windows refused claude-swap's switch and Claude Code's renewal
-  of the token, which both move a new file over the old one.
-- A `~/.claude.json` that does not parse is read once more, 25 ms later, before the account counts
-  as unreadable. On Windows claude-swap rewrites that file in place, so a read during a switch could
-  find it cut short ([claude-swap#461](https://github.com/realiti4/claude-swap/issues/461)), and the
-  account line then said `not signed in` for a render.
-- A change of the model behind the scoped weekly row clears that row's reset time as well as its
-  series, as a switch of account does, so its series no longer restarts a second time when the new
-  model's meter first had no reset time.
-- The usage request names the installed Claude Code's version, `claude-code/2.1.296` say, where it
-  always said `claude-code/2.1.90`. It is the `version` the status-line payload carries, which a
-  render keeps in the registry for a day, `ccv` and `ccvTs`, so that the key's `--refresh` sends it
-  too; or else, as where Claude Code only runs in VS Code and no status line runs, the newest
-  version named by the VS Code extension's folders or the native installer's, compared as numbers,
-  looked for once a day at most and kept the same way; and `2.1.90` only where there is neither.
-  Nothing is started to find it. `statusai --user-agent` prints what the next request sends. See
-  [the endpoint](docs/reference/limits.md#the-endpoint).
-- `Deploy.ps1` warns, in yellow, when the PC has no Bahnschrift, whenever it installs the Stream
-  Deck plugin or brings it in step: the app then draws the key in Tahoma, and its two times on a
-  line run into each other. The deploy goes on. The key keeps one typeface to a text, since a
-  fallback list is Tahoma on every PC; see [the key, readable](docs/design/stream-deck.md#the-key-readable).
-- [limits.md](docs/reference/limits.md#response-shape) said the older top-level `five_hour` and
-  `seven_day` objects carry no reset time. Every response captured carries a `resets_at` in them;
-  it is the fallback that reads only `utilization`.
-- Nine render cases, four of the status line, one of the key and four of `--user-agent`, which a
-  case with `args` runs: 219 renders of 109 cases, the 209 before unchanged. One Stream Deck case,
-  19 in all. The exe is 16.384 bytes larger.
-
-**A key that can be read**
-
-- The Stream Deck key is drawn in Bahnschrift, the DIN typeface Windows comes with: the label and
-  the percentage in its semi-condensed width, the small lines in its condensed one. On a key of 96
-  pixels the capitals of the small lines grow from 6,3 to 9,2 pixels, those of the percentage from
-  11,7 to 14,9 and those of the label from 10,7 to 13,5. `↻`, whose glyph read as a "u" at that
-  size, is drawn as a shape, and `→` stays. It is the face chosen from six drawn on 13 October; see
-  [the key, readable](docs/design/stream-deck.md#the-key-readable).
-- Every text names one font family. The app's QtSvg reads a `font-family` list as one name that it
-  does not have, and draws that text in Tahoma, so a fallback list would have undone Bahnschrift.
-- All 19 key faces are recorded again; the status line's 190 renders are unchanged. The figure
-  generator gives Edge Bahnschrift at the widths the app draws, and the key's figures and the
-  plugin's pictures are drawn again. The exe is 4.608 bytes larger.
-
-**Fewer requests after a refusal and at a switch**
-
-- A 429 whose `Retry-After` says how long it holds now holds the fetch off until then: no render and
-  no `--refresh` tries the token that drew it before that time, and the Stream Deck key starts no
-  refresh. On 13 October a 429 held every caller off for 300 seconds after a switch, and StatusAI
-  asked four more times inside it. The hold is an hour at most, where Claude Code caps it as well;
-  a 429 without the header is retried as before. See
-  [a 429 that says how long](docs/reference/limits.md#a-429-that-says-how-long).
-- The `⚠` row comes at the first such 429 and names when it lifts:
-  `⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; the limit rows are 5m old`, 15 columns
-  more than the same row without it, 95 at the longest. The key says `⚠ 429 until 12:50`, to the
-  minute and rounded up.
-- At a switch to another account, claude-swap's figure for that account, if it fetched one after
-  the switch and under a minute ago, is drawn in place of StatusAI's own fetch, so that it does not
-  join the burst of requests a switch sets off. The next regular fetch adds what claude-swap does
-  not carry: the severity, the breakdown, the on-credit alarm and the meters notice. Nothing needs
-  claude-swap: without it, or with a file that does not hold, StatusAI fetches as before. See
-  [claude-swap's figure at a switch](docs/reference/limits.md#claude-swaps-figure-at-a-switch).
-- Nineteen render cases for it, sixteen of the status line and three of the key: 209 renders of
-  100 cases. The exe is 17.408 bytes larger.
+The second release, a zip with `statusai.exe` and the configuration it is used with, as the first
+was. The status line follows a switch of account at once and never draws the previous account's
+limits as the new one's, waits out a 429 for as long as the usage endpoint asks, and, where it has
+no limit rows to show, says why at the first failed fetch. The same `statusai.exe` is also the
+plugin behind a key on an Elgato Stream Deck, which for now is installed from a build.
 
 **Switching accounts**
 
-- The shared usage is tied to the token it was fetched with. A good fetch stores the first 8 hex
-  digits of the token's SHA-256 beside the account, never the token. A render or a refresh that
-  finds another token in `.credentials.json` fetches at once, through the lock, instead of drawing
-  a copy up to 50 seconds old, and a token not tried yet is tried at once even while the old one's
-  retries are being held off.
-- The previous account's figures are never drawn as the new one's. Until the new account's first
-  good fetch the status line has no limit rows, and if that fetch fails its `⚠` row comes at once:
-  `no limit rows for the new account yet`. The Stream Deck key greys both meters with no figures
-  in them and says `new account`. A token Claude Code renews for the same account keeps the
-  figures as they were while its fetch runs. See
+- The usage every session shares is tied to the token it was fetched with. A good fetch stores the
+  first 8 hex digits of the token's SHA-256 beside the account, never the token. A render that
+  finds another token in `.credentials.json` fetches at once, still one session at a time, where it
+  used to draw a copy up to 50 seconds old. See
   [when the token changes](docs/reference/limits.md#when-the-token-changes).
-- A response that a switch overtakes, whose token is no longer the one in `.credentials.json`
-  when it arrives, is dropped, and the next render fetches with the new token.
-- An account switch now clears the reset times the window checks compare with, as well as the
-  history. They were kept, so a 5h meter that had no window open at the switch restarted its
-  series a second time once its window opened, five minutes after a switch on 13 October.
-- Seven render cases for it, four of the status line and three of the key: 188 renders of 81
-  cases. The exe is 5.120 bytes larger.
+- The previous account's figures are never drawn as the new one's. Until the new account's first
+  good fetch, normally made by the render that sees the switch, there are no limit rows, and if
+  that fetch fails its `⚠` row comes at once: `no limit rows for the new account yet`. A token
+  Claude Code renews for the same account keeps the rows as they were while its fetch runs.
+- A response that a switch overtakes, whose token is no longer the one in `.credentials.json` when
+  it arrives, is dropped, and the next render fetches with the new token.
+- A switch clears the reset times along with the history the forecast is drawn from, and a change
+  of the model behind the scoped weekly row clears that row's. They were kept, so a row that had no
+  reset time just then threw its new history away a second time once it got one, and read
+  `→ early` again.
+- At a switch made with claude-swap, the figure claude-swap fetched for the new account, if it is
+  from after the switch and under a minute old, is drawn in place of a fetch of StatusAI's own, so
+  that the switch sets off one request fewer. The next regular fetch adds what that figure does not
+  carry: the severity, the breakdown, the on-credit alarm and the meters notice. claude-swap is
+  optional and never required: without it, or where its figure cannot be used, StatusAI fetches as
+  before. See
+  [claude-swap's figure at a switch](docs/reference/limits.md#claude-swaps-figure-at-a-switch).
+- `.credentials.json`, `~/.claude.json` and the rest of the files another program may replace are
+  read with the sharing that lets it replace them meanwhile. `.credentials.json` was read in a way
+  that let others only read it, so for the milliseconds StatusAI had it open, Windows refused
+  claude-swap's switch and Claude Code's renewal of the token.
+- A `~/.claude.json` that does not parse is read once more, 25 ms later. On Windows claude-swap
+  rewrites that file in place, so a read during a switch could find it cut short
+  ([claude-swap#461](https://github.com/realiti4/claude-swap/issues/461)), and the account line
+  then said `not signed in` for a render.
 
-**The Stream Deck key**
+**A 429 that says how long**
 
-- `statusai.exe` is also the plugin behind a key on an Elgato Stream Deck. The key draws the 5h
-  and 7d rows with the status line's own cells and colours, their countdowns to the reset and their
-  times to 100%. A short press opens a new Claude Code tab in the Windows Terminal window used
-  last, and a hold of half a second a new window. See
-  [the Stream Deck key](docs/guide/stream-deck.md).
-- Either press ends with the terminal in front of whatever was there, which Windows does not do
-  for a program in the background: the window is brought up, a minimised one is brought back, and
-  the tab opens in the terminal window that was on top of the others.
-- The key keeps the shared usage up to date while Claude works where no status line runs, in the
-  VS Code extension for instance: once every 62 seconds while a session is writing its transcript,
-  once more a minute after the last write, and not at all while Claude is idle, while the key is
-  not visible, or while a terminal's status line is fetching already. It fetches through
-  `statusai --refresh`, which is a render's own fetch with nothing drawn, so the 50 second cache
-  and the lock are shared and the two never add up.
-- When fetching fails twice in a row the key greys its meters and says why and how old they are,
-  as the status line's `⚠` row does; once a limit's window has ended it reads 0% until the next
-  fetch; and after five minutes without a fetch its times to 100% read `idle`.
-- It costs the status line nothing that could be measured. The exe is 91.648 bytes larger and a
-  render takes as long as it did. The process that stays up for the key holds 11,0 MB, 3,6 MB of
-  it private, and used 0,22 s of processor time in half an hour of Claude working; a refresh is a
-  second process for half a second.
-- `statusai --deck-face` prints the key as SVG.
+- A 429 now holds the fetch off for as long as its `Retry-After` says: no render tries the token
+  that drew it before that time. On 13 October a 429 held every caller off for 300 seconds after a
+  switch, where StatusAI ignored the header and tried again a minute later. The hold is an hour at
+  most, where Claude Code caps it as well, and a 429 without the header is retried as before. See
+  [a 429 that says how long](docs/reference/limits.md#a-429-that-says-how-long).
+- The `⚠` row comes at the first such 429 and names when it lifts:
+  `⚠ usage — HTTP 429 from api.anthropic.com until 12:49:50; the limit rows are 5m old`. That is 15
+  columns more than the same row without it, 95 at the longest; where that does not fit, the
+  reason is shortened with `…`, like any other.
 
-**The repository**
+**Smaller changes**
 
-- `src/Deck.cs` holds the plugin, websocket client included, and `streamdeck/` the plugin's
-  folder as the app wants it. `RenderRows` takes a row's forecast from `Pace()`, which the key
-  draws by as well.
-- A press is a process of its own, `statusai --deck-press`, as a fetch is `statusai --refresh`.
-  Starting Windows Terminal by its alias loads Windows' app model into the process that does it:
-  63 handles and 12 libraries that never go, which is what the plugin was found holding a day
-  after its first press. The plugin waits on that process with its other waits and asks Windows
-  how it ended, since .NET's own way of asking costs the process that asks 13 handles for good. A
-  press leaves the plugin with the handles it had. And the plugin finds the home folder in
-  `%USERPROFILE%`, where a render asks the shell, which would load five of the shell's libraries
-  and 35 handles into the process that stays up.
-- The plugin hands on none of the handles the Stream Deck app starts it with, so a terminal
-  opened by a press does not hold the app's log files open; and it draws its key again when the
-  deck comes back after a lock or a sleep.
-- Thirteen render cases for the key's face: 180 renders of 74 cases.
-  [Test-Deck.ps1](tests/Test-Deck.ps1) runs the exe as a plugin against a stand-in for the Stream
-  Deck app, offline but for one, in 18 cases: its websocket client through the protocol (long
-  frames, fragments, ping and pong, a close from either side, a dropped connection), a deck that
-  goes and comes back, a hundred refreshes and forty presses that leave the handle count where it
-  was, a press with no Windows Terminal to start, and a plugin that is not offline and finds its
-  home folder without the shell. `-Live` adds four: a control, a terminal started
-  with nothing done for it, which has to stay behind; and three that press the key for real, with
-  no terminal open, one open and one minimised, and hold the terminal to being in front each
-  time. Their plugin is started through WMI, where it stands as the app's plugin does.
-- [Deploy.ps1](scripts/Deploy.ps1) keeps an installed plugin's copy of `statusai.exe` in step with
-  the status line's, moving the running copy aside to replace it, and `-Deck` installs the plugin.
-  It ends the plugin's process for the app to start the new copy: the app's own ways of
-  restarting a plugin are turned away outside its developer mode.
-- The figure generator draws the key's two figures from the recorded faces, and the plugin's own
-  pictures with them.
-- [The design record](docs/design/stream-deck.md) has what the Stream Deck app can and cannot do,
-  the four ways of building the key with their measurements, how the refresh rule was chosen, how
-  a press gets its terminal to the front, and what the first day on the device showed.
-- The key is not in the release zip yet: `Package.ps1` does not build the plugin's installer.
+- Before any fetch has worked, on a first run or with the registry emptied, the first failed fetch
+  raises the `⚠` row at once, `⚠ usage — timed out after 3 s; no limit rows yet`, where it waited
+  for the second. With nobody signed in the status line stays quiet, as before.
+- The usage request names the installed Claude Code's version, `claude-code/2.1.296` say, where it
+  always said `claude-code/2.1.90`: the version the status-line payload carries, or else the newest
+  that the folders of the VS Code extension or of the native installer are named for, and `2.1.90`
+  only where there is neither. Nothing is started to find it. `statusai --user-agent` prints what
+  the next request sends. See [the endpoint](docs/reference/limits.md#the-endpoint).
+- A usage response without `limits[]` is drawn from the older `five_hour` and `seven_day` objects
+  with their reset times as well, where both rows said `↻ —` and had no projection. No response
+  captured has lacked `limits[]`. See [response shape](docs/reference/limits.md#response-shape).
+
+**The Stream Deck key, from a build**
+
+- `statusai.exe` is also the plugin behind a key on an Elgato Stream Deck. The key draws the 5h and
+  7d rows with the status line's own cells and colours, their countdowns to the reset and their
+  times to 100%, in Bahnschrift, the DIN typeface Windows comes with. A short press opens a new
+  Windows Terminal tab in the window used last, and a hold of half a second a new window, either of
+  them in front of whatever was there. Both open the terminal's default profile, so the key opens
+  Claude Code where that profile runs it. See [the Stream Deck key](docs/guide/stream-deck.md).
+- It keeps the shared usage up to date while Claude works where no status line runs, in the VS
+  Code extension for instance: once every 62 seconds while a session writes its transcript, and not
+  while Claude is idle, while the key is not visible, or while a terminal's status line is fetching
+  already. After a switch of account it asks once for the new account's figures, Claude working or
+  not, and while a 429 holds the token off it asks nothing. It fetches through
+  `statusai --refresh`, a render's own fetch with nothing drawn, so it shares the 50 seconds and
+  the one fetch at a time with the status line, and the two never add up.
+- When fetching fails, the key greys both meters and says why and how old they are, as the status
+  line's `⚠` row does, cut to fit. A 429 that says how long reads `⚠ 429 until 12:50`, and after a
+  switch the key says `new account` until the new account's figures come.
+- The process that stays up for the key holds 11,0 MB of memory, 3,6 MB of it private, and a
+  refresh is a second process for half a second.
+- The zip does not carry the key yet: `Package.ps1` does not build the plugin's installer. It is
+  installed from a build with `Deploy.ps1 -Deck`, and needs the Stream Deck app 6.5 or later and
+  Windows Terminal. From then on `Deploy.ps1` keeps the plugin's copy of `statusai.exe` in step
+  with the status line's, and warns when the PC has no Bahnschrift, without which the app draws the
+  key in Tahoma and the two times on a line run into each other. See
+  [install](docs/guide/stream-deck.md#install).
+
+To update from 1.0.0, run the [install block](docs/guide/install.md#download) again in the new
+zip's folder, with Claude Code closed. It leaves the `cship.toml` in place as it is, and the one in
+the zip has not changed.
+
+It needs Windows 10 or 11 on x64, and Claude Code in a terminal, signed in with a Claude account for
+the limit rows; the VS Code extension's chat panel shows no status line. The terminal has to draw
+emoji two columns wide, as Windows Terminal does, and be at least 121 columns wide for the token
+grid. cship needs the Microsoft Visual C++ Redistributable, which most PCs already have and the
+install block checks for.
+
+Known limits: numbers are in Dutch notation (`1.234,56`); `statusai.exe` is x64 only; it and
+cship are unsigned, so Windows 11's Smart App Control blocks them where it is on; there is no
+installer or auto-update yet.
 
 ## 1.0.0 - 2026-09-24
 

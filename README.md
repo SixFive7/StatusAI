@@ -90,8 +90,10 @@ Open as many sessions as you like: they share one copy of your usage. A session 
 one when the shared copy is 50 seconds old, and only one session fetches at a time; the others draw
 the shared copy rather than wait. When fetching has failed twice in a row, they try again at most
 once every 50 seconds between them, and draw the shared copy and the warning in the meantime. The
-copy is tied to the account's token: switch accounts, with claude-swap for instance, and the next
-render fetches at once, and the account you left is never drawn as the one you are on.
+copy is tied to the account's token: switch accounts and the next render fetches at once, and the
+account you left is never drawn as the one you are on. If you switch with claude-swap, which is
+optional and never required, the figure it fetched as it switched stands in for that fetch, so the
+switch costs one request fewer.
 
 ### Your limits on a Stream Deck key
 
@@ -102,7 +104,7 @@ countdowns, drawn by the same `statusai.exe`, which the Stream Deck app starts a
 the key for a new Claude Code tab in Windows Terminal, and hold it for a new window; either comes
 up in front of what you were doing. It keeps the figures up to date while Claude works where
 there is no status line, in the VS Code extension for instance, and fetches nothing while Claude
-is idle, but once after you switch accounts. It is not in a release yet:
+is idle, but once after you switch accounts. It is not in the release zip yet:
 [the Stream Deck key](docs/guide/stream-deck.md) says what it shows, what it costs and how to
 install it from a build.
 
@@ -143,10 +145,10 @@ The [install guide](docs/guide/install.md) has each step in full, what to expect
 [what to do when something is missing](docs/guide/install.md#when-something-is-missing), and how to
 take it out again.
 
-This is 1.0.0, the first release, and it has a few known limits. Numbers are in Dutch notation
-(`1.234,56`), the token grid needs a terminal at least 121 columns wide, and there is only an x64
-build. Neither `statusai.exe` nor cship is signed, so Windows 11's Smart App Control blocks them
-where it is on. There is no installer or auto-update yet.
+This is 1.1.0, and it has a few known limits. Numbers are in Dutch notation (`1.234,56`), the token
+grid needs a terminal at least 121 columns wide, and there is only an x64 build. Neither
+`statusai.exe` nor cship is signed, so Windows 11's Smart App Control blocks them where it is on.
+There is no installer or auto-update yet, and the zip does not carry the Stream Deck key.
 
 ## Learn more
 

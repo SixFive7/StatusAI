@@ -130,7 +130,7 @@ You need the Stream Deck app, 6.5 or later (it was built and tried with 7.6), Wi
 and StatusAI [installed](install.md) as your status line. It was tried on a Stream Deck XL; the
 picture is square, and the app scales it to the key of the device it is on.
 
-The key is not in a release yet, so for now it comes from a build of the repository. With the
+The key is not in the release zip yet, so for now it comes from a build of the repository. With the
 [build](install.md#build-from-source) made:
 
 ```powershell
