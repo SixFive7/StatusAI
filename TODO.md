@@ -47,3 +47,13 @@
   and then. Once a release carries the fix, decide whether StatusAI still needs to read the file
   again when it does not parse, and note in the docs which release fixed it.
   - Reported on 13 October 2026: https://github.com/realiti4/claude-swap/issues/461
+- **Teach `Package.ps1` to build the Stream Deck key's installer, so a release can carry the key.**
+  1.1.0's zip holds the status line only; the key is installed from a build with `Deploy.ps1 -Deck`.
+  The installer is a `com.sixfive7.statusai.streamDeckPlugin`: a zip with the
+  `streamdeck/com.sixfive7.statusai.sdPlugin` folder at its root, the release's `statusai.exe` in it
+  and the manifest's `Version` set to the release's.
+  - What it takes: [releasing](docs/development.md#releasing)
+- **Give a build made outside `Package.ps1` a version of its own.** `src/StatusAI.csproj` names no
+  version, so only `Package.ps1` stamps one with `-p:Version`, and every other build reports 1.0.0,
+  the plugin that `Deploy.ps1 -Deck` installs among them. Decide whether the project file carries
+  the version of the last release, or a build says it is not a release.
