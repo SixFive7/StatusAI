@@ -174,7 +174,7 @@ Deck and no app, and Windows PowerShell 5.1 and PowerShell 7 both run it. The we
 | forty presses, and as many handles as before | two presses, then thirty one after the other and ten at once, each a `--deck-press` that is started, waited for and read; the plugin's handle count after the first two at most 4 up on what a control plugin's first program cost it in the same run, 2 where nothing but Windows is loaded, and where it was after the forty |
 | no Windows Terminal: an alert on the key, why in the log | with `%LOCALAPPDATA%` a folder that has no `wt.exe`, each of four holds shows the alert and logs `could not start ...\wt.exe: Windows error 2`; the first costs the plugin at most 4 handles over what a control plugin's first program cost it, and the handle count stays where the first left it |
 | a refresh when Claude writes, one a slot, and none while no key shows | a write under `.claude/projects` asks for one refresh, and only once a key is visible |
-| a new token while nothing is written: one refresh once it is 15 s old, and none while a 429 holds it | with no write at all, a token the shared copy was not fetched with gets one refresh, `offline: ran --refresh for a new token`: not at the first redraw, when it is 8 seconds old, but at the moment it turns 15, which the plugin sets a timer for; none at the next redraw; and with a 429 holding that token off for 3 seconds, none until the hold lifts and one at the first redraw after |
+| a new token while nothing is written: one refresh once it is 15 s old, and none while a 429 holds it | with no write at all, a token the shared copy was not fetched with gets one refresh, `offline: ran --refresh for a new token`: not at the first redraw, when it is 8 seconds old, but at the moment it turns 15, which the plugin sets a timer for; none at the next redraw; and with a 429 holding that token off for 3 seconds, none until the hold lifts and one at the first redraw after, which is the one the case asks for or, where a minute turns in between, the plugin's own on the minute, so the picture and the refresh may come in either order |
 | the deck goes and comes back | nothing drawn or fetched for a key that does not show; the key drawn again, and the refresh that was waiting made once, whether the app names the key before the deck or the deck before the key; the picture sent again when a deck or the system comes back with nothing said about the key |
 | not offline, the home folder is found without the shell | a plugin that is not offline, with a copy of the test home as its `USERPROFILE` and no key showing, has neither `shell32.dll` nor `windows.storage.dll` loaded where one that is offline, its control, has not, and no more than 10 handles over it; the control may have them only beside a library from outside Windows |
 | a hundred refreshes, and as many handles as before | with a slot of no length, a hundred writes are a hundred `--refresh` processes, and the plugin's handle count after them is what it was before |
@@ -201,6 +201,13 @@ the plugin by hand without either. Two things more are offline only. A `sendToPl
 app is answered with its own payload, which is how a case makes the plugin send a frame of any
 length. And `STATUSAI_DECK_SLOT` is taken for the seconds between refreshes, 62 without it,
 which is how a case fits a hundred of them in a few seconds.
+
+The homes are made in `.work/test-deck/run`, which a run removes as it starts and again at its end
+when every case has passed. A case ends with its plugins ended, and waits for what they started, a
+`--refresh` or a `--deck-press`, to end as well: until it does, it has its plugin's home as its
+current directory, and Windows does not remove a folder that a process is in. The removal is tried
+again for five seconds. A run that cannot remove what the last one left ends with exit code 2, and
+one that cannot remove its own says so and ends as its cases did.
 
 Where a case counts what the plugin holds, it holds the plugin against a control taken on the same
 machine in the same run, not against a fixed number. A tool that loads its own libraries into

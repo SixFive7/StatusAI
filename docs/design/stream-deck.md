@@ -137,6 +137,14 @@ prompt. It was chosen over a watch on `.credentials.json`, whose fetch at the mo
 would have joined the burst of requests every switch sets off; see
 [limits.md](../reference/limits.md#when-the-token-changes).
 
+On 14 October the test case that holds the key to this failed now and then. After a 429's hold
+lifts, the refresh comes at the first redraw, and the key draws on each minute as well as when the
+app asks. Where a minute turned between the hold lifting and the redraw the case asked for, the
+key's own redraw on the minute had the refresh, and its line in the log reached the case before the
+picture the case was waiting for. The plugin had started one refresh for the token, as decided; the
+case now takes the picture and the refresh in either order, each once. A redraw on the minute sends
+no picture while the face is the same, but it does look for a token that nothing has fetched with.
+
 ## The key itself
 
 The face is the third of three that were drawn first: the label and the percentage, the ten cells,

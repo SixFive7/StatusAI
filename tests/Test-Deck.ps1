@@ -133,6 +133,40 @@ public static class HandedDown {
 }
 '@
 
+# The programs a process started that are still running, found by the parent's id that Windows keeps
+# for each process, which stays the same after the parent has ended.
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+public static class Started {
+    // PROCESSENTRY32W
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct Entry {
+        public int Size, Usage, Pid; public IntPtr Heap; public int Module, Threads, Parent, Base, Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string Exe;
+    }
+    [DllImport("kernel32.dll")] static extern IntPtr CreateToolhelp32Snapshot(int flags, int pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool Process32FirstW(IntPtr snapshot, ref Entry e);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool Process32NextW(IntPtr snapshot, ref Entry e);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    // the ids of the processes that pid started and that run the program named exe
+    public static int[] By(int pid, string exe) {
+        List<int> ids = new List<int>();
+        IntPtr snapshot = CreateToolhelp32Snapshot(2, 0);                    // TH32CS_SNAPPROCESS
+        if (snapshot == new IntPtr(-1)) return ids.ToArray();
+        try {
+            Entry e = new Entry(); e.Size = Marshal.SizeOf(typeof(Entry));
+            for (bool more = Process32FirstW(snapshot, ref e); more; more = Process32NextW(snapshot, ref e))
+                if (e.Parent == pid && e.Pid != pid && string.Equals(e.Exe, exe, StringComparison.OrdinalIgnoreCase)) ids.Add(e.Pid);
+        } finally { CloseHandle(snapshot); }
+        return ids.ToArray();
+    }
+}
+'@
+
 # ------------------------------------------------------------------ the plugin under test
 $script:Open = New-Object System.Collections.ArrayList   # every session a case opened, for the clean-up
 $script:FirstProgram = $null                             # what a first program costs a plugin, once taken
@@ -402,13 +436,40 @@ function Get-FirstProgramCost {
 
 function Pad([int] $n) { New-Object string ('x', $n) }
 
+# Every session a case opened, closed, and its plugin ended. What the plugin started, a --refresh or
+# a --deck-press, is not ended with it: it is waited for, since until it ends it has the plugin's
+# home as its current directory, and Windows will not remove a folder that a process is in. Offline
+# it ends by itself in a moment; one still running 10 s on is named and left as it is.
 function Close-Sessions {
     foreach ($s in @($script:Open)) {
         try { if ($s.Run -and -not $s.Run.Proc.HasExited) { $s.Run.Proc.Kill(); $s.Run.Proc.WaitForExit(3000) | Out-Null } } catch { }
         try { if ($s.Client) { $s.Client.Close() } } catch { }
         try { $s.Listener.Stop() } catch { }
     }
+    $exe = [System.IO.Path]::GetFileName($script:ExePath)
+    foreach ($s in @($script:Open)) {
+        if (-not $s.Run) { continue }
+        foreach ($id in [Started]::By($s.Run.Proc.Id, $exe)) {
+            try {
+                $p = [System.Diagnostics.Process]::GetProcessById($id)
+                if (-not $p.WaitForExit(10000)) { Write-Host "      process $id, which a plugin started, was still running 10 s after its case" -ForegroundColor Yellow }
+                $p.Dispose()
+            } catch { }                                   # it ended before it could be looked at
+        }
+    }
     $script:Open.Clear()
+}
+
+# The homes of the run, removed. What a case started has ended by then (Close-Sessions), but a file
+# may be open to another program a moment longer, so the removal is tried again for five seconds.
+# The reason, when it still fails; nothing when it is done.
+function Remove-RunRoot {
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        try { Remove-Item -LiteralPath $script:RunRoot -Recurse -Force; return '' }
+        catch { if ($sw.ElapsedMilliseconds -ge 5000) { return $_.Exception.Message } }
+        Start-Sleep -Milliseconds 200
+    }
 }
 
 # ------------------------------------------------------------------ the cases
@@ -619,14 +680,20 @@ $Cases['a new token while nothing is written: one refresh once it is 15 s old, a
     [void] (Expect-Event $s 'setImage' 3000 'T1')
     Expect-Nothing $s 1500 'after another redraw, for a token that has had its refresh'
 
-    # a 429 holds the new token off for 3 s more: nothing until it lifts, then one at the next redraw
+    # A 429 holds the new token off for 3 s more: nothing until it lifts, then one refresh at the first
+    # redraw after. The case asks for a redraw once the hold has lifted, but the plugin draws on each
+    # minute as well, and where a minute turns between the two, its own redraw is the first and has
+    # the refresh. So the picture and the refresh may come in either order, and each comes once.
     $s = Open-Plugin @{} $false (New-SwitchedHome 60 @{ heldUntil = 3 })
     [void] (Show-Key $s 'T2')
     Expect-Nothing $s 1500 'while a 429 holds the new token off'
     Start-Sleep -Milliseconds 2600
     Send-Text $s '{"event":"deviceDidConnect","device":"dev"}'
-    [void] (Expect-Event $s 'setImage' 3000 'T2')
-    [void] (Expect-Log $s $new 3000)
+    $said = Read-Until-Quiet $s 3000 1500
+    $drawn = @($said | Where-Object { $_.json.event -eq 'setImage' -and $_.json.context -eq 'T2' }).Count
+    $asked = @($said | Where-Object { $_.json.event -eq 'logMessage' -and $_.json.payload.message -match $new }).Count
+    $got = 'nothing'; if ($said.Count -gt 0) { $got = @($said | ForEach-Object { Describe $_ }) -join '; ' }
+    Need ($said.Count -eq 2 -and $drawn -eq 1 -and $asked -eq 1) "after the hold lifted and a redraw was asked for, expected the picture and one refresh, got $got"
 }
 
 $Cases['the deck goes and comes back: the key is drawn again, in whichever order the app says so'] = {
@@ -1105,7 +1172,10 @@ function Invoke-Main {
     $script:ExePath = (Resolve-Path -LiteralPath $Exe).Path
     New-Item -ItemType Directory -Force -Path $Scratch | Out-Null
     $script:RunRoot = Join-Path (Resolve-Path -LiteralPath $Scratch).Path 'run'
-    if (Test-Path -LiteralPath $script:RunRoot) { Remove-Item -LiteralPath $script:RunRoot -Recurse -Force }
+    if (Test-Path -LiteralPath $script:RunRoot) {
+        $why = Remove-RunRoot
+        if ($why) { Write-Host "Could not remove what the last run left in $($script:RunRoot): $why" -ForegroundColor Red; return 2 }
+    }
     New-Item -ItemType Directory -Path $script:RunRoot | Out-Null
     Write-Host "statusai    : $script:ExePath"
 
@@ -1136,7 +1206,8 @@ function Invoke-Main {
     $skipped = ''; if ($skip) { $skipped = ", $skip skipped" }
     Write-Host "$($pass + $fail + $skip) cases: $pass pass, $fail fail$skipped" -ForegroundColor $(if ($fail) { 'Red' } else { 'Green' })
     if ($fail) { return 1 }
-    Remove-Item -LiteralPath $script:RunRoot -Recurse -Force
+    $why = Remove-RunRoot
+    if ($why) { Write-Host "Could not remove $($script:RunRoot), which the next run tries again: $why" -ForegroundColor Yellow }
     return 0
 }
 

@@ -5,6 +5,18 @@ under *Unreleased*, and the entries before the first release are by date.
 
 ## Unreleased
 
+**A Stream Deck case that waited for the wrong redraw**
+
+- The case about a new token failed now and then. Once the 429's hold had lifted it asked for a
+  redraw and waited for the picture first, but where a minute turned in between, the key's own
+  redraw on the minute had started the refresh already, and its line in the log came first. The key
+  was right, with one refresh for the token. The case now takes the picture and the refresh in
+  either order, each once.
+- `Test-Deck.ps1` waits for what a case's plugins started, a `--refresh` or a `--deck-press`, before
+  the next case, and tries the removal of its homes again for five seconds. A `--refresh` started as
+  a case ended still had its plugin's home as its current directory, so that a run of that case on
+  its own could not remove the home and stopped with an error.
+
 **Reset times from the older shape of the response**
 
 - A usage response without `limits[]` is drawn from the older top-level `five_hour` and `seven_day`
