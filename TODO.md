@@ -1,10 +1,5 @@
 # TODO
 
-- **Clean up old `.work` folders (`.work/mit-licence`): their copies and clones carry instruction files
-  that Claude Code may load; delete what is no longer needed.**
-  - Added in 2.1.277: https://code.claude.com/docs/en/changelog#2-1-277
-  - Extended in 2.1.281: https://code.claude.com/docs/en/changelog#2-1-281
-  - Remaining differences: https://github.com/anthropics/claude-code/tree/main/mods/agents-md#where-it-still-differs-from-claudemd
 - **Question whether a Velopack update that ends every running `statusai.exe` before it swaps the
   binary would let the status line and the Stream Deck plugin share one installed copy.**
   Today one build is installed twice: the status line runs `~/.local/bin/statusai.exe`, and the
